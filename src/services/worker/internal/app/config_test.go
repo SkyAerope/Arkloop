@@ -33,8 +33,8 @@ func TestLoadConfigFromEnv_Defaults(t *testing.T) {
 	if !slices.Equal(cfg.QueueJobTypes, want.QueueJobTypes) {
 		t.Fatalf("config mismatch: queue_job_types got %#v want %#v", cfg.QueueJobTypes, want.QueueJobTypes)
 	}
-	if cfg.MCPCacheTTLSeconds != 600 {
-		t.Fatalf("config mismatch: mcp_cache_ttl_seconds got %d want 600", cfg.MCPCacheTTLSeconds)
+	if cfg.MCPCacheTTLSeconds != 60 {
+		t.Fatalf("config mismatch: mcp_cache_ttl_seconds got %d want 60", cfg.MCPCacheTTLSeconds)
 	}
 }
 

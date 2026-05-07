@@ -1117,11 +1117,30 @@ func TestLoadDesktopRoutingConfigCanonicalizesGeminiModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadDesktopRoutingConfig: %v", err)
 	}
-	if len(cfg.Routes) != 1 {
-		t.Fatalf("expected one route, got %d", len(cfg.Routes))
+	var seededRoute *routing.ProviderRouteRule
+	for idx := range cfg.Routes {
+		if cfg.Routes[idx].ID == routeID.String() {
+			seededRoute = &cfg.Routes[idx]
+			break
+		}
 	}
-	if cfg.Routes[0].Model != "gemini-2.5-pro" {
-		t.Fatalf("expected canonical gemini model, got %q", cfg.Routes[0].Model)
+	if seededRoute == nil {
+		t.Fatalf("expected seeded route %s, got %d routes", routeID, len(cfg.Routes))
+	}
+	if seededRoute.Model != "gemini-2.5-pro" {
+		t.Fatalf("expected canonical gemini model, got %q", seededRoute.Model)
+	}
+}
+
+func TestLoadDesktopMCPCacheTTLDefault(t *testing.T) {
+	t.Setenv(mcpCacheTTLSecondsEnv, "")
+
+	ttl, err := loadDesktopMCPCacheTTL()
+	if err != nil {
+		t.Fatalf("loadDesktopMCPCacheTTL: %v", err)
+	}
+	if ttl != 600*time.Second {
+		t.Fatalf("unexpected desktop mcp cache ttl: %s", ttl)
 	}
 }
 

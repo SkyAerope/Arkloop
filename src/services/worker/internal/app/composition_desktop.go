@@ -567,8 +567,10 @@ func loadPersonaRegistryFromFS() func() *personas.Registry {
 	}
 }
 
+const desktopDefaultMCPCacheTTLSeconds = 600
+
 func loadDesktopMCPCacheTTL() (time.Duration, error) {
-	ttlSeconds := DefaultConfig().MCPCacheTTLSeconds
+	ttlSeconds := desktopDefaultMCPCacheTTLSeconds
 	if raw, ok := lookupEnv(mcpCacheTTLSecondsEnv); ok {
 		value, err := strconv.Atoi(strings.TrimSpace(raw))
 		if err != nil {
