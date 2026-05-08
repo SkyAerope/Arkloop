@@ -14,6 +14,7 @@ type Props = {
   query: string
   selectedPath?: string
   onOpenFile: (ref: LocalFileResourceRef) => void
+  onPinFile?: (ref: LocalFileResourceRef) => void
 }
 
 function resultPath(entry: LocalFileEntry): string {
@@ -63,7 +64,7 @@ async function searchDirectory(rootPath: string, query: string): Promise<SearchR
   return results
 }
 
-export function LocalFileSearchPanel({ rootPath, query, selectedPath, onOpenFile }: Props) {
+export function LocalFileSearchPanel({ rootPath, query, selectedPath, onOpenFile, onPinFile }: Props) {
   const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query])
   const [state, setState] = useState<{ query: string; status: 'idle' | 'loading' | 'ready' | 'error'; results: SearchResult[] }>({
     query: '',
@@ -120,6 +121,7 @@ export function LocalFileSearchPanel({ rootPath, query, selectedPath, onOpenFile
       {state.results.map((entry) => {
         const isFile = entry.type === 'file'
         const selected = isFile && entry.path === selectedPath
+        const resource: LocalFileResourceRef = { kind: 'local-file', rootPath, path: entry.path, name: entry.name }
         return (
           <button
             key={`${entry.type}:${entry.path}`}
@@ -129,7 +131,11 @@ export function LocalFileSearchPanel({ rootPath, query, selectedPath, onOpenFile
             className={`local-file-search__row${selected ? ' local-file-search__row--selected' : ''}`}
             onClick={() => {
               if (!isFile) return
-              onOpenFile({ kind: 'local-file', rootPath, path: entry.path, name: entry.name })
+              onOpenFile(resource)
+            }}
+            onDoubleClick={() => {
+              if (!isFile) return
+              onPinFile?.(resource)
             }}
           >
             <SearchResultIcon entry={entry} />

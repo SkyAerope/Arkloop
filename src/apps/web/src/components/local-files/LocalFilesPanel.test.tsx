@@ -163,4 +163,55 @@ describe('LocalFilesPanel', () => {
     })
     container.remove()
   })
+
+  it('单击文件更新受控 preview，双击文件触发 pin', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const onPreviewResourceChange = vi.fn()
+    const onPinResource = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <LocalFilesPanel
+          rootPath="/repo"
+          accessToken=""
+          previewResource={null}
+          onPreviewResourceChange={onPreviewResourceChange}
+          onPinResource={onPinResource}
+        />,
+      )
+      await flushMicrotasks()
+    })
+
+    const readmeButton = container.querySelector<HTMLButtonElement>('[data-path="README.md"]')
+    expect(readmeButton).not.toBeNull()
+
+    await act(async () => {
+      readmeButton?.click()
+    })
+
+    expect(onPreviewResourceChange).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'local-file',
+      rootPath: '/repo',
+      path: 'README.md',
+      name: 'README.md',
+    }))
+
+    await act(async () => {
+      readmeButton?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    expect(onPinResource).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'local-file',
+      rootPath: '/repo',
+      path: 'README.md',
+      name: 'README.md',
+    }))
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
 })

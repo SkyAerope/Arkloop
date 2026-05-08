@@ -10,20 +10,38 @@ import './LocalFilesPanel.css'
 type Props = {
   rootPath: string
   accessToken: string
+  previewResource?: LocalFileResourceRef | null
+  onPreviewResourceChange?: (resource: LocalFileResourceRef | null) => void
+  onPinResource?: (resource: LocalFileResourceRef) => void
 }
 
-export function LocalFilesPanel({ rootPath, accessToken }: Props) {
+export function LocalFilesPanel({ rootPath, accessToken, previewResource, onPreviewResourceChange, onPinResource }: Props) {
   const [browserOpen, setBrowserOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [browserWidth, setBrowserWidth] = useState(280)
   const [selection, setSelection] = useState<{ rootPath: string; file: LocalFileResourceRef } | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const selectedFile = selection?.rootPath === rootPath ? selection.file : null
+  const controlledSelection = onPreviewResourceChange !== undefined
+  const selectedFile = controlledSelection
+    ? (previewResource?.rootPath === rootPath ? previewResource : null)
+    : (selection?.rootPath === rootPath ? selection.file : null)
 
   const handleOpenFile = useCallback((ref: LocalFileResourceRef) => {
-    setSelection({ rootPath, file: ref })
-  }, [rootPath])
+    if (controlledSelection) {
+      onPreviewResourceChange(ref)
+    } else {
+      setSelection({ rootPath, file: ref })
+    }
+  }, [controlledSelection, onPreviewResourceChange, rootPath])
+
+  const handleClosePreview = useCallback(() => {
+    if (controlledSelection) {
+      onPreviewResourceChange(null)
+    } else {
+      setSelection(null)
+    }
+  }, [controlledSelection, onPreviewResourceChange])
 
   const handleToggleBrowser = useCallback(() => {
     if (searchOpen) {
@@ -111,6 +129,7 @@ export function LocalFilesPanel({ rootPath, accessToken }: Props) {
                 query={searchQuery}
                 selectedPath={selectedFile?.path}
                 onOpenFile={handleOpenFile}
+                onPinFile={onPinResource}
               />
             </div>
           ) : (
@@ -118,6 +137,7 @@ export function LocalFilesPanel({ rootPath, accessToken }: Props) {
               rootPath={rootPath}
               selectedPath={selectedFile?.path}
               onOpenFile={handleOpenFile}
+              onPinFile={onPinResource}
             />
           )}
         </div>
@@ -132,7 +152,7 @@ export function LocalFilesPanel({ rootPath, accessToken }: Props) {
         ) : null}
         <div className="local-files-panel__preview">
           {selectedFile ? (
-            <ResourcePreviewPanel resource={selectedFile} accessToken={accessToken} onClose={() => setSelection(null)} />
+            <ResourcePreviewPanel resource={selectedFile} accessToken={accessToken} onClose={handleClosePreview} />
           ) : (
             <div className="local-files-panel__empty">No file selected</div>
           )}

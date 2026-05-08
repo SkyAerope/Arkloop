@@ -27,8 +27,9 @@ import { DocumentPanel } from './DocumentPanel'
 import { AgentPanel } from './AgentPanel'
 import { RightPanel, type RightPanelTab } from './RightPanel'
 import { LocalFilesPanel } from './local-files/LocalFilesPanel'
+import { resolveLocalFileIconUrl } from './local-files/fileIconResolver'
 import { ResourcePreviewPanel } from './resource-preview/ResourcePreviewPanel'
-import type { ResourceRef } from './resource-preview/types'
+import type { LocalFileResourceRef, ResourceRef } from './resource-preview/types'
 import { ChatTitleMenu } from './ChatTitleMenu'
 import { MessageList } from './MessageList'
 import { CopSegmentBlocks } from './CopSegmentBlocks'
@@ -197,6 +198,17 @@ function resourceTabId(resource: ResourceRef): string {
   if (resource.kind === 'artifact') return `resource:artifact:${resource.key}`
   if (resource.kind === 'local-file') return `resource:local:${resource.rootPath}:${resource.path}`
   return `resource:workspace:${resource.projectId ?? resource.runId ?? ''}:${resource.path}`
+}
+
+function localFileTabIcon(resource: LocalFileResourceRef | null) {
+  if (!resource) return undefined
+  const iconUrl = resolveLocalFileIconUrl({
+    name: resource.name ?? resource.filename ?? resource.path.split('/').filter(Boolean).at(-1) ?? resource.path,
+    path: resource.path,
+    type: 'file',
+    size: resource.size,
+  })
+  return iconUrl ? <img src={iconUrl} alt="" aria-hidden="true" draggable={false} style={{ width: 15, height: 15, flexShrink: 0 }} /> : undefined
 }
 
 function clampRightPanelWidth(width: number, containerWidth: number): number {
@@ -847,6 +859,7 @@ export const ChatView = memo(function ChatView() {
   const [rightPanelWidth, setRightPanelWidth] = useState(rightPanelDefaultWidth)
   const [rightPanelTabs, setRightPanelTabs] = useState<RightPanelStoredTab[]>([])
   const [activeRightPanelTabId, setActiveRightPanelTabId] = useState<string | null>(null)
+  const [filesPreviewResource, setFilesPreviewResource] = useState<LocalFileResourceRef | null>(null)
   const waitForThreadModeUpdates = useCallback(async () => {
     const pending = [planModeUpdateRef.current, learningModeUpdateRef.current].filter((item): item is Promise<void> => !!item)
     if (pending.length > 0) await Promise.all(pending)
@@ -2307,6 +2320,17 @@ export const ChatView = memo(function ChatView() {
     setActiveRightPanelTabId(tab.id)
   }, [])
 
+  const pinLocalFileResource = useCallback((resource: LocalFileResourceRef) => {
+    setFilesPreviewResource(resource)
+    upsertRightPanelTab({
+      id: resourceTabId(resource),
+      kind: 'resource',
+      title: resourceTitle(resource),
+      resource,
+    })
+    setRightPanelVisible(true)
+  }, [upsertRightPanelTab])
+
   const closeRightPanelTab = useCallback((id: string) => {
     setRightPanelTabs((current) => {
       const index = current.findIndex((item) => item.id === id)
@@ -2379,12 +2403,23 @@ export const ChatView = memo(function ChatView() {
   const rightPanelRenderedTabs = useMemo<RightPanelTab[]>(() => {
     const tabs: RightPanelTab[] = []
     if (workPanelFolder?.trim()) {
+      const filesPreviewTitle = filesPreviewResource ? resourceTitle(filesPreviewResource) : 'Files'
       tabs.push({
         id: 'files',
         kind: 'files',
-        title: 'Files',
+        title: filesPreviewTitle,
         closable: false,
-        content: <LocalFilesPanel rootPath={workPanelFolder} accessToken={accessToken} />,
+        icon: localFileTabIcon(filesPreviewResource),
+        hideTitle: !filesPreviewResource,
+        content: (
+          <LocalFilesPanel
+            rootPath={workPanelFolder}
+            accessToken={accessToken}
+            previewResource={filesPreviewResource}
+            onPreviewResourceChange={setFilesPreviewResource}
+            onPinResource={pinLocalFileResource}
+          />
+        ),
       })
     }
 
@@ -2455,6 +2490,8 @@ export const ChatView = memo(function ChatView() {
     accessToken,
     closePanel,
     closeRightPanelTab,
+    filesPreviewResource,
+    pinLocalFileResource,
     resolvedMessageSources,
     rightPanelTabs,
     workPanelFolder,

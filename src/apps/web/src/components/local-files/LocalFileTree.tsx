@@ -8,6 +8,7 @@ import { localFileDecorationClass, resolveLocalFileIconUrl } from './fileIconRes
 export type LocalFileTreeProps = {
   rootPath: string
   onOpenFile: (ref: LocalFileResourceRef) => void
+  onPinFile?: (ref: LocalFileResourceRef) => void
   selectedPath?: string
   searchQuery?: string
   className?: string
@@ -79,7 +80,7 @@ function entryMatchesSearch(entry: LocalFileEntry, query: string, directories: R
   return childState.entries.some((child) => entryMatchesSearch(child, query, directories))
 }
 
-export function LocalFileTree({ rootPath, onOpenFile, selectedPath, searchQuery = '', className }: LocalFileTreeProps) {
+export function LocalFileTree({ rootPath, onOpenFile, onPinFile, selectedPath, searchQuery = '', className }: LocalFileTreeProps) {
   const [treeState, setTreeState] = useState<TreeState>(() => ({
     rootPath,
     expanded: new Set([ROOT_KEY]),
@@ -180,14 +181,20 @@ export function LocalFileTree({ rootPath, onOpenFile, selectedPath, searchQuery 
     if (!directories[key]) loadDirectory(entry.path)
   }, [directories, loadDirectory, rootPath])
 
-  const openFile = useCallback((entry: LocalFileEntry) => {
-    onOpenFile({
+  const resourceFromEntry = useCallback((entry: LocalFileEntry): LocalFileResourceRef => ({
       kind: 'local-file',
       rootPath,
       path: entry.path,
       name: entry.name,
-    })
-  }, [onOpenFile, rootPath])
+    }), [rootPath])
+
+  const openFile = useCallback((entry: LocalFileEntry) => {
+    onOpenFile(resourceFromEntry(entry))
+  }, [onOpenFile, resourceFromEntry])
+
+  const pinFile = useCallback((entry: LocalFileEntry) => {
+    onPinFile?.(resourceFromEntry(entry))
+  }, [onPinFile, resourceFromEntry])
 
   const renderDirectoryRows = (parentPath: string | undefined, level: number) => {
     const key = directoryKey(parentPath)
@@ -224,6 +231,9 @@ export function LocalFileTree({ rootPath, onOpenFile, selectedPath, searchQuery 
             data-path={entry.path}
             aria-expanded={isDirectory ? isExpanded : undefined}
             onClick={() => (isDirectory ? toggleDirectory(entry) : openFile(entry))}
+            onDoubleClick={() => {
+              if (!isDirectory) pinFile(entry)
+            }}
           >
             <span className="local-file-tree__glyph" aria-hidden="true">
               <LocalFileGlyph entry={entry} expanded={isExpanded} />

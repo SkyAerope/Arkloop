@@ -9,6 +9,8 @@ export type RightPanelTab = {
   kind: 'files' | 'source' | 'code' | 'document' | 'agent' | 'resource'
   content: ReactNode
   closable?: boolean
+  icon?: ReactNode
+  hideTitle?: boolean
 }
 
 type Props = {
@@ -71,8 +73,8 @@ export function RightPanel({ tabs, activeTabId, onSelectTab, onCloseTab }: Props
                 transition: 'background-color 160ms ease, color 160ms ease',
               }}
             >
-              <TabIcon kind={tab.kind} />
-              <span className="right-panel-tab__title">{tab.title}</span>
+              {tab.icon ?? <TabIcon kind={tab.kind} />}
+              {!tab.hideTitle ? <span className="right-panel-tab__title">{tab.title}</span> : null}
               {closable ? (
                 <span
                   role="button"

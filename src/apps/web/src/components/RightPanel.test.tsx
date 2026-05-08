@@ -87,4 +87,28 @@ describe('RightPanel', () => {
     })
     container.remove()
   })
+
+  it('支持只显示图标的工具 tab', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <RightPanel
+          tabs={[{ id: 'files', kind: 'files', title: 'Files', hideTitle: true, content: <div>file tree</div> }]}
+          activeTabId="files"
+          onSelectTab={() => {}}
+        />,
+      )
+    })
+
+    expect(container.querySelector('.right-panel-tab__title')).toBeNull()
+    expect(container.textContent).toContain('file tree')
+
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+  })
 })
