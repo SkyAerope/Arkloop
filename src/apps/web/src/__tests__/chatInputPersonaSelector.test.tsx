@@ -395,4 +395,71 @@ describe('ChatInput persona selector', () => {
     })
     container.remove()
   })
+
+  it('Work 文件夹菜单接近视口底部时向上展开并可滚动', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 360 })
+    localStorage.setItem('arkloop:web:work_recent_folders', JSON.stringify(
+      Array.from({ length: 8 }, (_, index) => `/repo/project-${index + 1}`),
+    ))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LocaleProvider>
+          <PersonaModelBar
+            personas={[]}
+            selectedPersonaKey="normal"
+            selectedModel={null}
+            isNonDefaultMode={false}
+            selectedPersona={null}
+            onModeSelect={() => undefined}
+            onDeactivateMode={() => undefined}
+            onModelChange={() => undefined}
+            thinkingEnabled="off"
+            onThinkingChange={() => undefined}
+            onFileInputClick={() => undefined}
+            appMode="work"
+            variant="welcome"
+            threadHasMessages={false}
+            threadMessagesLoading={false}
+            hideModelPicker
+          />
+        </LocaleProvider>,
+      )
+    })
+
+    const button = findButtonByText(container, 'Work in a folder')
+    expect(button).not.toBeNull()
+    if (!button) return
+
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+      x: 32,
+      y: 320,
+      left: 32,
+      right: 178,
+      top: 320,
+      bottom: 354,
+      width: 146,
+      height: 34,
+      toJSON: () => ({}),
+    })
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const menu = document.body.querySelector<HTMLElement>('.dropdown-menu-up')
+    expect(menu).not.toBeNull()
+    expect(menu?.style.overflowY).toBe('auto')
+    expect(menu?.style.maxHeight).toBe('304px')
+    expect(menu?.textContent).toContain('project-8')
+
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+  })
 })

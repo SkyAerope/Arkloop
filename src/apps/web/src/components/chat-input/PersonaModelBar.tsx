@@ -1,4 +1,5 @@
-import { useRef, useState, useCallback, useEffect } from 'react'
+import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Paperclip, BookOpen, Search, Folder, FolderOpen, X, Check, ListTodo } from 'lucide-react'
 import type { SelectablePersona } from '../../api'
 import { updateThreadSidebarState } from '../../api'
@@ -48,6 +49,14 @@ type Props = {
   onToggleLearningMode?: (currentMode: boolean) => Promise<void>
 }
 
+type FolderMenuPosition = {
+  left: number
+  top?: number
+  bottom?: number
+  maxHeight: number
+  placement: 'up' | 'down'
+}
+
 function readActiveWorkFolder(threadId?: string): string | null {
   return threadId ? readThreadWorkFolder(threadId) : readWorkFolder()
 }
@@ -89,6 +98,7 @@ export function PersonaModelBar({
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [folderMenuOpen, setFolderMenuOpen] = useState(false)
+  const [folderMenuPosition, setFolderMenuPosition] = useState<FolderMenuPosition | null>(null)
   const [workFolder, setWorkFolder] = useState<string | null>(() => readActiveWorkFolder(workThreadId))
   const [recentFolders, setRecentFolders] = useState<string[]>(() => readWorkRecentFolders())
   const isWorkMode = appMode === 'work'
@@ -108,6 +118,26 @@ export function PersonaModelBar({
     void onToggleLearningMode?.(learningModeEnabled)
     setMenuOpen(false)
   }, [learningModeDisabled, learningModeEnabled, onToggleLearningMode])
+  const updateFolderMenuPosition = useCallback(() => {
+    const button = folderBtnRef.current
+    if (!button) return
+    const rect = button.getBoundingClientRect()
+    const gap = 8
+    const viewportPadding = 8
+    const menuMinWidth = 220
+    const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPadding
+    const spaceAbove = rect.top - gap - viewportPadding
+    const placement: FolderMenuPosition['placement'] = spaceBelow >= 220 || spaceBelow >= spaceAbove ? 'down' : 'up'
+    const maxHeight = Math.max(0, placement === 'up' ? spaceAbove : spaceBelow)
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - menuMinWidth - viewportPadding),
+    )
+
+    setFolderMenuPosition(placement === 'up'
+      ? { left, bottom: window.innerHeight - rect.top + gap, maxHeight, placement }
+      : { left, top: rect.bottom + gap, maxHeight, placement })
+  }, [])
 
   // close plus menu on outside click
   useEffect(() => {
@@ -136,6 +166,17 @@ export function PersonaModelBar({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [effectiveFolderMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!effectiveFolderMenuOpen) return
+    updateFolderMenuPosition()
+    window.addEventListener('resize', updateFolderMenuPosition)
+    window.addEventListener('scroll', updateFolderMenuPosition, true)
+    return () => {
+      window.removeEventListener('resize', updateFolderMenuPosition)
+      window.removeEventListener('scroll', updateFolderMenuPosition, true)
+    }
+  }, [effectiveFolderMenuOpen, updateFolderMenuPosition])
 
   // notify parent of menu open/close state changes (for focus management)
   useEffect(() => {
@@ -223,19 +264,21 @@ export function PersonaModelBar({
             </span>
           </button>
 
-          {effectiveFolderMenuOpen && (
+          {effectiveFolderMenuOpen && folderMenuPosition && createPortal((
             <div
               ref={folderMenuRef}
-              className={`absolute left-0 z-50 ${variant === 'welcome' ? 'dropdown-menu' : 'dropdown-menu-up'}`}
+              className={`fixed z-50 ${folderMenuPosition.placement === 'down' ? 'dropdown-menu' : 'dropdown-menu-up'}`}
               style={{
-                ...(variant === 'welcome'
-                  ? { top: 'calc(100% + 8px)' }
-                  : { bottom: 'calc(100% + 8px)' }),
+                left: `${folderMenuPosition.left}px`,
+                top: folderMenuPosition.top === undefined ? undefined : `${folderMenuPosition.top}px`,
+                bottom: folderMenuPosition.bottom === undefined ? undefined : `${folderMenuPosition.bottom}px`,
                 border: '0.5px solid var(--c-border-subtle)',
                 borderRadius: '10px',
                 padding: '4px',
                 background: 'var(--c-bg-menu)',
                 minWidth: '220px',
+                maxHeight: `${folderMenuPosition.maxHeight}px`,
+                overflowY: 'auto',
                 boxShadow: 'var(--c-dropdown-shadow)',
               }}
             >
@@ -257,7 +300,7 @@ export function PersonaModelBar({
                           {folder.split('/').pop() || folder}
                         </span>
                         {workFolder === folder ? (
-                          <Check size={12} style={{ flexShrink: 0, color: '#4691F6' }} />
+                          <Check size={12} style={{ flexShrink: 0, color: 'var(--c-accent)' }} />
                         ) : null}
                       </button>
                     ))}
@@ -296,7 +339,7 @@ export function PersonaModelBar({
                 )}
               </div>
             </div>
-          )}
+          ), document.body)}
         </div>
       )}
 
