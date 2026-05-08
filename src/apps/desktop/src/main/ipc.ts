@@ -681,6 +681,7 @@ type ToolProviderItem = {
   group_name: string
   provider_name: string
   is_active: boolean
+  key_prefix?: string
   base_url?: string
   runtime_state?: string
   runtime_reason?: string
@@ -706,6 +707,13 @@ function findProviderGroup(groups: ToolProviderGroup[], groupName: string): Tool
   return groups.find((group) => group.group_name === groupName)
 }
 
+function secretPreview(keyPrefix?: string): string | undefined {
+  const prefix = keyPrefix?.trim()
+  if (!prefix) return undefined
+  const paddingLength = Math.max(0, 12 - prefix.length)
+  return `${prefix}${'*'.repeat(paddingLength)}`
+}
+
 function connectorsFromProviderGroups(groups: ToolProviderGroup[]): ConnectorsConfig {
   const fetchGroup = findProviderGroup(groups, 'web_fetch')
   const searchGroup = findProviderGroup(groups, 'web_search')
@@ -718,6 +726,14 @@ function connectorsFromProviderGroups(groups: ToolProviderGroup[]): ConnectorsCo
       provider: activeFetch
         ? providerNameToFetch(activeFetch.provider_name)
         : 'none',
+      jinaApiKey: activeFetch?.provider_name === 'web_fetch.jina'
+        ? secretPreview(activeFetch.key_prefix)
+        : undefined,
+      jinaApiKeyStored: activeFetch?.provider_name === 'web_fetch.jina' && Boolean(activeFetch.key_prefix),
+      firecrawlApiKey: activeFetch?.provider_name === 'web_fetch.firecrawl'
+        ? secretPreview(activeFetch.key_prefix)
+        : undefined,
+      firecrawlApiKeyStored: activeFetch?.provider_name === 'web_fetch.firecrawl' && Boolean(activeFetch.key_prefix),
       firecrawlBaseUrl: activeFetch?.provider_name === 'web_fetch.firecrawl'
         ? activeFetch.base_url ?? DEFAULT_CONFIG.connectors.fetch.firecrawlBaseUrl
         : DEFAULT_CONFIG.connectors.fetch.firecrawlBaseUrl,
@@ -726,6 +742,10 @@ function connectorsFromProviderGroups(groups: ToolProviderGroup[]): ConnectorsCo
       provider: activeSearch
         ? providerNameToSearch(activeSearch.provider_name)
         : 'none',
+      tavilyApiKey: activeSearch?.provider_name === 'web_search.tavily'
+        ? secretPreview(activeSearch.key_prefix)
+        : undefined,
+      tavilyApiKeyStored: activeSearch?.provider_name === 'web_search.tavily' && Boolean(activeSearch.key_prefix),
       searxngBaseUrl: activeSearch?.provider_name === 'web_search.searxng'
         ? activeSearch.base_url ?? DEFAULT_CONFIG.connectors.search.searxngBaseUrl
         : DEFAULT_CONFIG.connectors.search.searxngBaseUrl,
@@ -801,9 +821,11 @@ async function applySearchConnector(search: ConnectorsConfig['search']): Promise
   }
   if (search.provider === 'tavily') {
     await activateToolProvider('web_search', 'web_search.tavily')
-    await upsertToolProviderCredential('web_search', 'web_search.tavily', {
-      api_key: search.tavilyApiKey ?? '',
-    })
+    if (!search.tavilyApiKeyStored) {
+      await upsertToolProviderCredential('web_search', 'web_search.tavily', {
+        api_key: search.tavilyApiKey ?? '',
+      })
+    }
     return
   }
   if (search.provider === 'searxng') {
@@ -823,17 +845,22 @@ async function applyFetchConnector(fetch: ConnectorsConfig['fetch']): Promise<vo
   }
   if (fetch.provider === 'jina') {
     await activateToolProvider('web_fetch', 'web_fetch.jina')
-    await upsertToolProviderCredential('web_fetch', 'web_fetch.jina', {
-      api_key: fetch.jinaApiKey ?? '',
-    })
+    if (!fetch.jinaApiKeyStored) {
+      await upsertToolProviderCredential('web_fetch', 'web_fetch.jina', {
+        api_key: fetch.jinaApiKey ?? '',
+      })
+    }
     return
   }
   if (fetch.provider === 'firecrawl') {
     await activateToolProvider('web_fetch', 'web_fetch.firecrawl')
-    await upsertToolProviderCredential('web_fetch', 'web_fetch.firecrawl', {
-      api_key: fetch.firecrawlApiKey ?? '',
+    const credential: Record<string, string> = {
       base_url: fetch.firecrawlBaseUrl ?? '',
-    })
+    }
+    if (!fetch.firecrawlApiKeyStored) {
+      credential.api_key = fetch.firecrawlApiKey ?? ''
+    }
+    await upsertToolProviderCredential('web_fetch', 'web_fetch.firecrawl', credential)
   }
 }
 

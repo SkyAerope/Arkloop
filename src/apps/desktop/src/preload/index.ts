@@ -11,12 +11,15 @@ export type ConnectorsConfig = {
   fetch: {
     provider: FetchProvider
     jinaApiKey?: string
+    jinaApiKeyStored?: boolean
     firecrawlApiKey?: string
+    firecrawlApiKeyStored?: boolean
     firecrawlBaseUrl?: string
   }
   search: {
     provider: SearchProvider
     tavilyApiKey?: string
+    tavilyApiKeyStored?: boolean
     searxngBaseUrl?: string
   }
 }

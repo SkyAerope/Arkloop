@@ -8,13 +8,16 @@ export type SearchProvider = 'none' | 'basic' | 'tavily' | 'searxng'
 export type FetchConnectorConfig = {
   provider: FetchProvider
   jinaApiKey?: string
+  jinaApiKeyStored?: boolean
   firecrawlApiKey?: string
+  firecrawlApiKeyStored?: boolean
   firecrawlBaseUrl?: string
 }
 
 export type SearchConnectorConfig = {
   provider: SearchProvider
   tavilyApiKey?: string
+  tavilyApiKeyStored?: boolean
   searxngBaseUrl?: string
 }
 

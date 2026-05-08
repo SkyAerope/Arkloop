@@ -33,7 +33,7 @@ func toolProvidersEntry(
 		traceID := observability.TraceIDFromContext(r.Context())
 		switch r.Method {
 		case nethttp.MethodGet:
-			listToolProviders(w, r, traceID, authService, membershipRepo, toolProvidersRepo, pool, projectRepo)
+			listToolProviders(w, r, traceID, authService, membershipRepo, toolProvidersRepo, secretsRepo, pool, projectRepo)
 		default:
 			httpkit.WriteMethodNotAllowed(w, r)
 		}
@@ -146,6 +146,7 @@ func listToolProviders(
 	authService *auth.Service,
 	membershipRepo *data.AccountMembershipRepository,
 	toolProvidersRepo *data.ToolProviderConfigsRepository,
+	secretsRepo *data.SecretsRepository,
 	pool data.DB,
 	projectRepo *data.ProjectRepository,
 ) {
@@ -212,7 +213,7 @@ func listToolProviders(
 			var secretConfigured bool
 			if has && cfg.SecretID != nil {
 				secretConfigured = true
-				item.KeyPrefix = cfg.KeyPrefix
+				item.KeyPrefix = visibleToolProviderKeyPrefix(r.Context(), secretsRepo, *cfg.SecretID, cfg.KeyPrefix)
 			}
 			baseURLConfigured := false
 			if has && cfg.BaseURL != nil && strings.TrimSpace(*cfg.BaseURL) != "" {
@@ -249,6 +250,26 @@ func listToolProviders(
 	}
 
 	httpkit.WriteJSON(w, traceID, nethttp.StatusOK, toolProvidersResponse{Groups: groups})
+}
+
+func visibleToolProviderKeyPrefix(
+	ctx context.Context,
+	secretsRepo *data.SecretsRepository,
+	secretID uuid.UUID,
+	storedPrefix *string,
+) *string {
+	if storedPrefix != nil && len([]rune(strings.TrimSpace(*storedPrefix))) >= 12 {
+		return storedPrefix
+	}
+	if secretsRepo == nil {
+		return storedPrefix
+	}
+	secret, err := secretsRepo.DecryptByID(ctx, secretID)
+	if err != nil || secret == nil {
+		return storedPrefix
+	}
+	prefix := computeKeyPrefix(*secret)
+	return &prefix
 }
 
 func activateToolProvider(
