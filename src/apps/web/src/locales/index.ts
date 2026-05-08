@@ -385,6 +385,12 @@ export interface LocaleStrings {
   learningMode: string;
   planMode: string;
   planModePlaceholders: string[];
+  slashCommands: {
+    commandsLabel: string;
+    modesLabel: string;
+    planDesc: string;
+    setupDesc: string;
+  };
   dragToAttach: string;
   // chats search modal
   searchChatsPlaceholder: string;

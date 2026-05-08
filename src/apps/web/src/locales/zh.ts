@@ -399,6 +399,12 @@ export const zh: LocaleStrings = {
     "想清楚需求，设计好方案再动手...",
     "Plan 模式下，我先分析再执行...",
   ],
+  slashCommands: {
+    commandsLabel: "命令",
+    modesLabel: "模式",
+    planDesc: "规划模式",
+    setupDesc: "设置项目",
+  },
   dragToAttach: "请拖动到此处",
   searchChatsPlaceholder: "搜索会话...",
   searchNoResults: "无匹配结果",

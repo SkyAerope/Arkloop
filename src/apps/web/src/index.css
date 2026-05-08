@@ -14,6 +14,26 @@ button:not(:disabled) {
   filter: brightness(1.12);
 }
 
+.plan-mode-chip:hover {
+  background: var(--c-plan-bg) !important;
+}
+
+.plan-mode-icon {
+  grid-area: 1 / 1;
+}
+
+.plan-mode-icon-close {
+  display: none;
+}
+
+.plan-mode-chip:hover .plan-mode-icon-default {
+  display: none;
+}
+
+.plan-mode-chip:hover .plan-mode-icon-close {
+  display: block;
+}
+
 :root {
   color-scheme: dark;
   /* Font variables — overridden by AppearanceContext */
@@ -84,9 +104,9 @@ button:not(:disabled) {
   --c-accent-send-text: #e8e8e3;
   --c-chip-active-bg: var(--c-bg-deep);
   --c-chip-active-text: var(--c-text-secondary);
-  --c-plan-bg: #3C271D;
-  --c-plan-text: #D49A3E;
-  --c-plan-icon: #D49A3E;
+  --c-plan-bg: rgba(220, 185, 92, 0.20);
+  --c-plan-text: #F0C64A;
+  --c-plan-icon: #F0C64A;
   --c-text-body: var(--c-text-primary);
   --c-text-body-weight: 325;
   --c-accent: #FAF9F6;
@@ -231,9 +251,9 @@ button:not(:disabled) {
     --c-accent: #1A1A18;
     --c-chip-active-bg: var(--c-bg-deep);
     --c-chip-active-text: var(--c-text-secondary);
-    --c-plan-bg: #F4ECE4;
-    --c-plan-text: #C18533;
-    --c-plan-icon: #C18533;
+    --c-plan-bg: rgba(220, 185, 92, 0.20);
+    --c-plan-text: #C78B00;
+    --c-plan-icon: #C78B00;
     --c-text-body: var(--c-text-primary);
     --c-text-body-weight: 365;
     --c-pro-bg: #EAF2FC;
@@ -359,9 +379,9 @@ button:not(:disabled) {
   --c-accent: #1A1A18;
   --c-chip-active-bg: var(--c-bg-deep);
   --c-chip-active-text: var(--c-text-secondary);
-  --c-plan-bg: #F4ECE4;
-  --c-plan-text: #C18533;
-  --c-plan-icon: #C18533;
+  --c-plan-bg: rgba(220, 185, 92, 0.20);
+  --c-plan-text: #C78B00;
+  --c-plan-icon: #C78B00;
   --c-text-body: var(--c-text-primary);
   --c-text-body-weight: 365;
   --c-pro-bg: #EAF2FC;

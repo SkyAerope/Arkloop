@@ -401,6 +401,12 @@ export const en: LocaleStrings = {
     "Think through the approach before writing code...",
     "In Plan mode, I analyze first and build second...",
   ],
+  slashCommands: {
+    commandsLabel: "Commands",
+    modesLabel: "Modes",
+    planDesc: "Plan mode",
+    setupDesc: "Set up project",
+  },
   dragToAttach: "Drop files here",
   searchChatsPlaceholder: "Search chats...",
   searchNoResults: "No results",

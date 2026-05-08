@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useMemo, useState, forwardRef, useImperativeHandle, useLayoutEffect } from 'react'
 import { ArrowUp, Mic, X, Check, Loader2, Pencil } from 'lucide-react'
-import type { FormEvent, KeyboardEvent, ClipboardEvent as ReactClipboardEvent } from 'react'
+import type { FormEvent, KeyboardEvent, ClipboardEvent as ReactClipboardEvent, ReactNode } from 'react'
 import { listSelectablePersonas, type SelectablePersona, type UploadedThreadAttachment } from '../api'
 import { useLocale } from '../contexts/LocaleContext'
 import { PastedContentModal } from './PastedContentModal'
@@ -27,8 +27,10 @@ import type { AppMode } from '../storage'
 import {
   AttachmentCard,
   PastedContentCard,
+  SlashCommandPopup,
   hasTransferFiles,
 } from './chat-input'
+import type { SlashCommandGroup, SlashCommandItem } from './chat-input'
 import { useAudioRecorder } from './chat-input/useAudioRecorder'
 import { useAttachments } from './chat-input/useAttachments'
 import { PersonaModelBar } from './chat-input/PersonaModelBar'
@@ -93,6 +95,71 @@ type TextareaSelection = {
   direction: 'forward' | 'backward' | 'none'
 }
 
+type SlashCaretRect = {
+  x: number
+  top: number
+}
+
+type SlashCommandRange = {
+  start: number
+  end: number
+  query: string
+}
+
+const SLASH_POPUP_WIDTH = 300
+const SLASH_POPUP_VIEWPORT_MARGIN = 8
+const SETUP_COMMAND_HEAD_COLOR = 'rgb(159, 186, 231)'
+const SETUP_COMMAND_TEXT_COLOR = 'rgb(64, 117, 208)'
+const SETUP_COMMAND_HOVER_BG = 'rgb(231, 239, 251)'
+const INLINE_SLASH_COMMAND_PATTERN = /\/[A-Za-z][\w-]*(?=\s|$)/g
+const SETUP_COMMAND_PATTERN = /\/setup(?=\s|$)/g
+
+function getSlashCommandRange(value: string, cursor: number): SlashCommandRange | null {
+  if (cursor < 1) return null
+  const start = value.lastIndexOf('/', cursor - 1)
+  if (start < 0) return null
+  const query = value.slice(start + 1, cursor)
+  if (/[\s\n]/.test(query)) return null
+  return { start, end: cursor, query }
+}
+
+function getInlineTokenDeletionRange(value: string, cursor: number): { start: number; end: number } | null {
+  INLINE_SLASH_COMMAND_PATTERN.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = INLINE_SLASH_COMMAND_PATTERN.exec(value)) !== null) {
+    const start = match.index
+    const commandEnd = start + match[0].length
+    const end = value[commandEnd] === ' ' ? commandEnd + 1 : commandEnd
+    if (cursor > start && cursor <= end) {
+      INLINE_SLASH_COMMAND_PATTERN.lastIndex = 0
+      return { start, end }
+    }
+  }
+  INLINE_SLASH_COMMAND_PATTERN.lastIndex = 0
+  return null
+}
+
+function getInlineTokenTextRange(value: string, cursor: number): { start: number; end: number } | null {
+  INLINE_SLASH_COMMAND_PATTERN.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = INLINE_SLASH_COMMAND_PATTERN.exec(value)) !== null) {
+    const start = match.index
+    const end = start + match[0].length
+    if (cursor >= start && cursor <= end) {
+      INLINE_SLASH_COMMAND_PATTERN.lastIndex = 0
+      return { start, end }
+    }
+  }
+  INLINE_SLASH_COMMAND_PATTERN.lastIndex = 0
+  return null
+}
+
+function nearestInlineTokenBoundary(value: string, cursor: number): number | null {
+  const range = getInlineTokenTextRange(value, cursor)
+  if (!range || cursor === range.start || cursor === range.end) return null
+  return cursor - range.start < range.end - cursor ? range.start : range.end
+}
+
 function buildFallbackSelectablePersonas(_selectedPersonaKey: string): SelectablePersona[] {
   return []
 }
@@ -152,6 +219,44 @@ function measureTextareaContentWidth(element: HTMLTextAreaElement, style: CSSSty
   )
 }
 
+function getTextareaCaretClientRect(textarea: HTMLTextAreaElement): SlashCaretRect {
+  const style = window.getComputedStyle(textarea)
+  const rect = textarea.getBoundingClientRect()
+  const mirror = document.createElement('div')
+  const marker = document.createElement('span')
+  const selectionEnd = textarea.selectionEnd
+
+  mirror.style.position = 'fixed'
+  mirror.style.left = `${rect.left}px`
+  mirror.style.top = `${rect.top}px`
+  mirror.style.width = `${textarea.clientWidth}px`
+  mirror.style.minHeight = `${textarea.clientHeight}px`
+  mirror.style.visibility = 'hidden'
+  mirror.style.pointerEvents = 'none'
+  mirror.style.whiteSpace = 'pre-wrap'
+  mirror.style.overflowWrap = 'break-word'
+  mirror.style.boxSizing = style.boxSizing
+  mirror.style.font = readTextareaFont(style)
+  mirror.style.letterSpacing = style.letterSpacing
+  mirror.style.lineHeight = style.lineHeight
+  mirror.style.padding = style.padding
+  mirror.style.border = style.border
+  mirror.style.overflow = 'hidden'
+
+  mirror.append(document.createTextNode(textarea.value.slice(0, selectionEnd)))
+  marker.textContent = '\u200b'
+  mirror.append(marker)
+  mirror.append(document.createTextNode(textarea.value.slice(selectionEnd) || '\u200b'))
+  document.body.append(mirror)
+  const markerRect = marker.getBoundingClientRect()
+  mirror.remove()
+
+  return {
+    x: markerRect.right,
+    top: rect.top,
+  }
+}
+
 function isSameDraftDomain(left: InputDraftScope | null, right: InputDraftScope): boolean {
   if (!left) return false
   return left.page === right.page
@@ -185,6 +290,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   queuedEditLabel,
   onCancelQueuedEdit,
   draftOwnerKey,
+  planMode = false,
+  onTogglePlanMode,
   learningModeEnabled = false,
   learningModeUpdating = false,
   onToggleLearningMode,
@@ -237,6 +344,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [workCompactInputWraps, setWorkCompactInputWraps] = useState(false)
   const [textareaFocusRestoreTick, setTextareaFocusRestoreTick] = useState(0)
   const [selectedModel, setSelectedModel] = useState<string | null>(readSelectedModelFromStorage)
+  const [slashOpen, setSlashOpen] = useState(false)
+  const [slashQuery, setSlashQuery] = useState('')
+  const [slashPosition, setSlashPosition] = useState({ left: SLASH_POPUP_VIEWPORT_MARGIN, bottom: 0 })
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
+  const [slashRange, setSlashRange] = useState<SlashCommandRange | null>(null)
+  const [setupTextHovered, setSetupTextHovered] = useState(false)
   const compactTextareaWidthRef = useRef<number | null>(null)
   const pendingTextareaFocusRef = useRef<TextareaSelection | null>(null)
   const inputLayoutChangingRef = useRef(false)
@@ -380,6 +493,68 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       : isWorkExpandedInput
         ? '6px'
         : '9px'
+  const canUseSlashCommands = appMode === 'work' && !!onTogglePlanMode
+  const slashCommandGroups = useMemo<SlashCommandGroup[]>(() => {
+    if (!canUseSlashCommands) return []
+    return [
+      {
+        label: t.slashCommands.commandsLabel,
+        items: [{
+          id: 'setup',
+          label: 'setup',
+          description: t.slashCommands.setupDesc,
+        }],
+      },
+      {
+        label: t.slashCommands.modesLabel,
+        items: [{
+          id: 'plan',
+          label: t.planMode,
+          description: t.slashCommands.planDesc,
+        }],
+      },
+    ]
+  }, [
+    canUseSlashCommands,
+    t.planMode,
+    t.slashCommands.commandsLabel,
+    t.slashCommands.modesLabel,
+    t.slashCommands.planDesc,
+    t.slashCommands.setupDesc,
+  ])
+  const slashVisibleGroups = useMemo<SlashCommandGroup[]>(() => {
+    const query = slashQuery.trim().toLowerCase()
+    return slashCommandGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          if (!query) return true
+          return item.id.toLowerCase().startsWith(query) || item.label.toLowerCase().startsWith(query)
+        }),
+      }))
+      .filter((group) => group.items.length > 0)
+  }, [slashCommandGroups, slashQuery])
+  const slashVisibleItems = useMemo(
+    () => slashVisibleGroups.flatMap((group) => group.items),
+    [slashVisibleGroups],
+  )
+  const shouldHighlightSetupCommand = SETUP_COMMAND_PATTERN.test(draft)
+  SETUP_COMMAND_PATTERN.lastIndex = 0
+  const setupHighlightStyle = useMemo(() => ({
+    position: 'absolute' as const,
+    inset: 0,
+    pointerEvents: 'none' as const,
+    overflow: 'visible',
+    whiteSpace: 'pre-wrap' as const,
+    overflowWrap: 'break-word' as const,
+    fontFamily: 'inherit',
+    fontSize: '16px',
+    fontWeight: 310,
+    lineHeight: variant === 'chat' ? 1.45 : undefined,
+    letterSpacing: '-0.16px',
+    color: 'var(--c-text-primary)',
+    zIndex: 1,
+  }), [variant])
 
   const readTextareaSelection = useCallback((textarea: HTMLTextAreaElement): TextareaSelection => ({
     start: textarea.selectionStart,
@@ -402,6 +577,88 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     pendingTextareaFocusRef.current = selection
     setTextareaFocusRestoreTick((tick) => tick + 1)
   }, [])
+
+  const updateSlashState = useCallback(() => {
+    const textarea = textareaRef.current
+    if (!textarea || disabled || document.activeElement !== textarea || slashCommandGroups.length === 0) {
+      setSlashOpen(false)
+      return
+    }
+
+    const cursor = textarea.selectionEnd
+    const value = textarea.value
+    const range = getSlashCommandRange(value, cursor)
+    if (!range) {
+      setSlashOpen(false)
+      setSlashRange(null)
+      return
+    }
+
+    const normalizedQuery = range.query.trim().toLowerCase()
+    const exactCommand = normalizedQuery.length > 0 && slashCommandGroups.some((group) => (
+      group.items.some((item) => (
+        item.id.toLowerCase() === normalizedQuery || item.label.toLowerCase() === normalizedQuery
+      ))
+    ))
+    if (exactCommand) {
+      setSlashOpen(false)
+      setSlashRange(null)
+      return
+    }
+
+    const visibleCount = slashCommandGroups.reduce((count, group) => (
+      count + group.items.filter((item) => {
+        if (!normalizedQuery) return true
+        return item.id.toLowerCase().startsWith(normalizedQuery) || item.label.toLowerCase().startsWith(normalizedQuery)
+      }).length
+    ), 0)
+
+    if (visibleCount === 0) {
+      setSlashOpen(false)
+      setSlashRange(null)
+      return
+    }
+
+    const caret = getTextareaCaretClientRect(textarea)
+    const maxLeft = window.innerWidth - SLASH_POPUP_WIDTH - SLASH_POPUP_VIEWPORT_MARGIN
+    setSlashPosition({
+      left: Math.max(SLASH_POPUP_VIEWPORT_MARGIN, Math.min(caret.x, maxLeft)),
+      bottom: caret.top,
+    })
+    setSlashRange(range)
+    setSlashQuery(range.query)
+    setSlashSelectedIndex((index) => Math.min(index, visibleCount - 1))
+    setSlashOpen(true)
+  }, [disabled, slashCommandGroups])
+
+  const selectSlashItem = useCallback((item: SlashCommandItem) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const cursor = textarea.selectionEnd
+    const value = draftRef.current
+    const range = slashRange ?? getSlashCommandRange(value, cursor)
+    if (!range) return
+    const before = value.slice(0, range.start)
+    const after = value.slice(range.end)
+    const leadingSpace = item.id === 'setup' && before.length > 0 && !/\s$/.test(before) ? ' ' : ''
+    const insert = item.id === 'setup' ? `${leadingSpace}/setup ` : ''
+    const nextDraft = before + insert + after.replace(/^\s+/, '')
+    const nextCursor = before.length + insert.length
+
+    resetHistoryCursor()
+    setSlashOpen(false)
+    setSlashRange(null)
+    setSlashSelectedIndex(0)
+    trackedSetDraft(nextDraft)
+    if (item.id === 'plan' && !planMode) void onTogglePlanMode?.(planMode)
+
+    requestAnimationFrame(() => {
+      const target = textareaRef.current
+      if (!target) return
+      target.focus({ preventScroll: true })
+      target.setSelectionRange(nextCursor, nextCursor)
+    })
+  }, [draftRef, onTogglePlanMode, planMode, resetHistoryCursor, slashRange, trackedSetDraft])
 
   const measureWorkInputWraps = useCallback((value: string, textarea: HTMLTextAreaElement) => {
     const style = window.getComputedStyle(textarea)
@@ -506,6 +763,43 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
     writeInputDraftText(draftScope, draft)
   }, [draft, draftScope, draftScopeKey])
+
+  useEffect(() => {
+    updateSlashState()
+  }, [draft, updateSlashState])
+
+  useEffect(() => {
+    if (!slashOpen) return
+    const handleResize = () => updateSlashState()
+    const handleScroll = () => updateSlashState()
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('scroll', handleScroll, true)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('scroll', handleScroll, true)
+    }
+  }, [slashOpen, updateSlashState])
+
+  useEffect(() => {
+    if (!slashOpen) return
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (textareaRef.current?.contains(target)) return
+      if ((target as Element).closest?.('[data-slash-popup]')) return
+      setSlashOpen(false)
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [slashOpen])
+
+  useEffect(() => {
+    if (!slashOpen) return
+    if (slashVisibleItems.length === 0) {
+      setSlashOpen(false)
+      return
+    }
+    setSlashSelectedIndex((index) => Math.min(index, slashVisibleItems.length - 1))
+  }, [slashOpen, slashVisibleItems.length])
 
   const deactivateMode = useCallback(() => {
     setChipExiting(true)
@@ -624,8 +918,80 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     isComposingRef.current || event.isComposing || event.keyCode === 229
   )
 
+  const moveInlineTokenCursor = (target: HTMLTextAreaElement, cursor: number) => {
+    target.setSelectionRange(cursor, cursor)
+    requestAnimationFrame(updateSlashState)
+  }
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     const isComposing = isComposingEvent(e.nativeEvent)
+    const target = e.currentTarget
+    const collapsedSelection = target.selectionStart === target.selectionEnd
+    if (!isComposing && collapsedSelection) {
+      const inlineTokenRange = getInlineTokenTextRange(target.value, target.selectionStart)
+      if (inlineTokenRange) {
+        if (e.key === 'ArrowLeft' && target.selectionStart === inlineTokenRange.end) {
+          e.preventDefault()
+          moveInlineTokenCursor(target, inlineTokenRange.start)
+          return
+        }
+        if (e.key === 'ArrowRight' && target.selectionStart === inlineTokenRange.start) {
+          e.preventDefault()
+          moveInlineTokenCursor(target, inlineTokenRange.end)
+          return
+        }
+        const boundary = nearestInlineTokenBoundary(target.value, target.selectionStart)
+        if (boundary !== null) {
+          moveInlineTokenCursor(target, boundary)
+        }
+      }
+    }
+    if (!isComposing && e.key === 'Backspace') {
+      if (collapsedSelection) {
+        const deletionRange = getInlineTokenDeletionRange(target.value, target.selectionStart)
+        if (deletionRange) {
+          e.preventDefault()
+          const nextDraft = target.value.slice(0, deletionRange.start) + target.value.slice(deletionRange.end)
+          resetHistoryCursor()
+          trackedSetDraft(nextDraft)
+          setSlashOpen(false)
+          setSlashRange(null)
+          requestAnimationFrame(() => {
+            const textarea = textareaRef.current
+            if (!textarea) return
+            textarea.setSelectionRange(deletionRange.start, deletionRange.start)
+          })
+          return
+        }
+      }
+    }
+    if (!isComposing && slashOpen) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashSelectedIndex((index) => (
+          slashVisibleItems.length === 0 ? 0 : (index - 1 + slashVisibleItems.length) % slashVisibleItems.length
+        ))
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSlashSelectedIndex((index) => (
+          slashVisibleItems.length === 0 ? 0 : (index + 1) % slashVisibleItems.length
+        ))
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const item = slashVisibleItems[slashSelectedIndex]
+        if (item) selectSlashItem(item)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashOpen(false)
+        return
+      }
+    }
     if (!isComposing && e.key === 'ArrowUp' && handleHistoryNavigation('up', e.currentTarget)) {
       e.preventDefault()
       return
@@ -696,6 +1062,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     trackedSetDraft(target.value)
   }
 
+  const handleTextareaFocus = () => {
+    setFocused(true)
+    requestAnimationFrame(updateSlashState)
+  }
+
+  const handleTextareaBlur = () => {
+    setFocused(false)
+    window.setTimeout(() => setSlashOpen(false), 150)
+  }
+
+  const handleTextareaCursorChange = (target?: HTMLTextAreaElement) => {
+    requestAnimationFrame(() => {
+      const textarea = target ?? textareaRef.current
+      if (!textarea) return
+      if (textarea.selectionStart === textarea.selectionEnd) {
+        const boundary = nearestInlineTokenBoundary(textarea.value, textarea.selectionStart)
+        if (boundary !== null) {
+          textarea.setSelectionRange(boundary, boundary)
+        }
+      }
+      updateSlashState()
+    })
+  }
+
   const handleCompositionStart = () => {
     isComposingRef.current = true
     composingWorkCompactInputRef.current = isWorkChat ? isWorkCompactInput : null
@@ -710,6 +1100,51 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     resetHistoryCursor()
     requestTextareaFocusRestore(readTextareaSelection(target))
     trackedSetDraft(target.value)
+  }
+
+  const renderSetupHighlightedText = () => {
+    if (!shouldHighlightSetupCommand) return null
+    const nodes: ReactNode[] = []
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+    SETUP_COMMAND_PATTERN.lastIndex = 0
+    while ((match = SETUP_COMMAND_PATTERN.exec(draft)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(draft.slice(lastIndex, match.index))
+      }
+      nodes.push(
+        <span
+          key={`setup-${match.index}`}
+          style={{
+            position: 'relative',
+          }}
+        >
+          {setupTextHovered && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: '-5px',
+                right: '-4px',
+                top: '-1px',
+                bottom: '-2px',
+                borderRadius: '5px',
+                background: SETUP_COMMAND_HOVER_BG,
+                zIndex: 0,
+              }}
+            />
+          )}
+          <span style={{ color: SETUP_COMMAND_HEAD_COLOR, position: 'relative', zIndex: 1 }}>/</span>
+          <span style={{ color: SETUP_COMMAND_TEXT_COLOR, position: 'relative', zIndex: 1 }}>setup</span>
+        </span>,
+      )
+      lastIndex = match.index + match[0].length
+    }
+    if (lastIndex < draft.length) {
+      nodes.push(draft.slice(lastIndex))
+    }
+    SETUP_COMMAND_PATTERN.lastIndex = 0
+    return nodes
   }
 
   const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -913,6 +1348,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       >
         {!isWorkCompactInput && (
           <div
+            onMouseEnter={() => setSetupTextHovered(true)}
+            onMouseLeave={() => setSetupTextHovered(false)}
             style={{
               position: 'relative',
               marginBottom: textareaWrapperMarginBottom,
@@ -921,6 +1358,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 : {}),
             }}
           >
+            {shouldHighlightSetupCommand && (
+              <div aria-hidden="true" style={setupHighlightStyle}>
+                {renderSetupHighlightedText()}
+              </div>
+            )}
             <AutoResizeTextarea
               ref={textareaRef}
               rows={1}
@@ -928,11 +1370,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               value={draft}
               onChange={(e) => handleDraftChange(e.currentTarget)}
               onKeyDown={handleKeyDown}
+              onKeyUp={(e) => handleTextareaCursorChange(e.currentTarget)}
+              onClick={(e) => handleTextareaCursorChange(e.currentTarget)}
               onCompositionStart={handleCompositionStart}
               onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget)}
               onPaste={handleTextareaPaste}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onFocus={handleTextareaFocus}
+              onBlur={handleTextareaBlur}
               placeholder={resolvedPlaceholder}
               disabled={disabled}
               minRows={1}
@@ -942,9 +1386,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 fontSize: '16px',
                 fontWeight: 310,
                 ...(variant === 'chat' ? { lineHeight: 1.45 as const } : {}),
-                color: 'var(--c-text-primary)',
+                color: shouldHighlightSetupCommand ? 'transparent' : 'var(--c-text-primary)',
+                caretColor: 'var(--c-text-primary)',
                 marginTop: '0px',
                 marginBottom: '0px',
+                position: 'relative',
+                zIndex: 2,
                 ...(isWorkExpandedInput ? { display: 'block', padding: 0, border: 'none' } : {}),
                 letterSpacing: '-0.16px',
               }}
@@ -983,6 +1430,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             hideWorkFolderPicker={isWorkCompactInput}
             hideModelPicker={isWorkCompactInput}
             onMenuOpenChange={handleMenuOpenChange}
+            planMode={planMode}
+            onTogglePlanMode={onTogglePlanMode}
             learningModeEnabled={learningModeEnabled}
             learningModeUpdating={learningModeUpdating}
             onToggleLearningMode={onToggleLearningMode}
@@ -1034,14 +1483,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {isWorkCompactInput && (
             <>
               <div
+                onMouseEnter={() => setSetupTextHovered(true)}
+                onMouseLeave={() => setSetupTextHovered(false)}
                 style={{
                   flex: '1 1 auto',
                   minWidth: 0,
                   display: 'flex',
                   alignItems: 'center',
+                  position: 'relative',
                   padding: '0 8px 0 4px',
                 }}
               >
+                {shouldHighlightSetupCommand && (
+                  <div aria-hidden="true" style={setupHighlightStyle}>
+                    {renderSetupHighlightedText()}
+                  </div>
+                )}
                 <AutoResizeTextarea
                   ref={textareaRef}
                   rows={1}
@@ -1049,11 +1506,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   value={draft}
                   onChange={(e) => handleDraftChange(e.currentTarget)}
                   onKeyDown={handleKeyDown}
+                  onKeyUp={(e) => handleTextareaCursorChange(e.currentTarget)}
+                  onClick={(e) => handleTextareaCursorChange(e.currentTarget)}
                   onCompositionStart={handleCompositionStart}
                   onCompositionEnd={(e) => handleCompositionEnd(e.currentTarget)}
                   onPaste={handleTextareaPaste}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setFocused(false)}
+                  onFocus={handleTextareaFocus}
+                  onBlur={handleTextareaBlur}
                   placeholder={resolvedPlaceholder}
                   disabled={disabled}
                   minRows={1}
@@ -1064,11 +1523,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     fontSize: '16px',
                     fontWeight: 310,
                     lineHeight: 1.45 as const,
-                    color: 'var(--c-text-primary)',
+                    color: shouldHighlightSetupCommand ? 'transparent' : 'var(--c-text-primary)',
+                    caretColor: 'var(--c-text-primary)',
                     marginTop: '0px',
                     marginBottom: '0px',
                     padding: 0,
                     border: 'none',
+                    flex: '1 1 auto',
+                    minWidth: 0,
+                    position: 'relative',
+                    zIndex: 2,
                     letterSpacing: '-0.16px',
                   }}
                 />
@@ -1187,6 +1651,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         </div>
       </form>
+
+      {slashOpen && slashVisibleGroups.length > 0 && (
+        <SlashCommandPopup
+          groups={slashVisibleGroups}
+          selectedIndex={slashSelectedIndex}
+          position={slashPosition}
+          onSelect={selectSlashItem}
+          onMouseEnter={setSlashSelectedIndex}
+        />
+      )}
 
       <input
         ref={fileInputRef}

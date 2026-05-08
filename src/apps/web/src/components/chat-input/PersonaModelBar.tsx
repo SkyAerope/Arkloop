@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { Plus, Paperclip, BookOpen, Search, Folder, FolderOpen, X, Check } from 'lucide-react'
+import { Plus, Paperclip, BookOpen, Search, Folder, FolderOpen, X, Check, ListTodo } from 'lucide-react'
 import type { SelectablePersona } from '../../api'
 import { updateThreadSidebarState } from '../../api'
 import { ModelPicker } from '../ModelPicker'
@@ -41,6 +41,8 @@ type Props = {
   hideWorkFolderPicker?: boolean
   hideModelPicker?: boolean
   onMenuOpenChange?: (open: boolean) => void
+  planMode?: boolean
+  onTogglePlanMode?: (currentMode: boolean) => Promise<void>
   learningModeEnabled?: boolean
   learningModeUpdating?: boolean
   onToggleLearningMode?: (currentMode: boolean) => Promise<void>
@@ -72,6 +74,8 @@ export function PersonaModelBar({
   hideWorkFolderPicker,
   hideModelPicker,
   onMenuOpenChange,
+  planMode = false,
+  onTogglePlanMode,
   learningModeEnabled = false,
   learningModeUpdating = false,
   onToggleLearningMode,
@@ -92,7 +96,13 @@ export function PersonaModelBar({
   const effectiveFolderMenuOpen = folderMenuOpen && showWorkFolderPicker
   const currentThread = workThreadId ? threads.find((thread) => thread.id === workThreadId) ?? null : null
   const showLearningMode = learningModeEnabled || Boolean(onToggleLearningMode)
+  const showPlanMode = isWorkMode && planMode && Boolean(onTogglePlanMode)
   const learningModeDisabled = learningModeUpdating || !onToggleLearningMode
+  const togglePlanMode = useCallback(() => {
+    if (!onTogglePlanMode) return
+    void onTogglePlanMode(planMode)
+    setMenuOpen(false)
+  }, [onTogglePlanMode, planMode])
   const toggleLearningMode = useCallback(() => {
     if (learningModeDisabled) return
     void onToggleLearningMode?.(learningModeEnabled)
@@ -422,6 +432,48 @@ export function PersonaModelBar({
       </div>
 
       {/* active mode chip */}
+      {showPlanMode && (
+        <button
+          type="button"
+          onClick={togglePlanMode}
+          className="plan-mode-chip"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            height: '33.5px',
+            padding: '0 8px 0 9px',
+            borderRadius: '8px',
+            background: 'transparent',
+            border: 'none',
+            flexShrink: 0,
+            cursor: 'pointer',
+          }}
+        >
+          <span
+            style={{
+              width: '14px',
+              height: '14px',
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <ListTodo className="plan-mode-icon plan-mode-icon-default" size={14} style={{ color: 'var(--c-plan-icon)' }} />
+            <X className="plan-mode-icon plan-mode-icon-close" size={14} style={{ color: 'var(--c-plan-icon)' }} />
+          </span>
+          <span style={{
+            fontSize: '13px',
+            color: 'var(--c-plan-text)',
+            fontWeight: 450,
+            whiteSpace: 'nowrap',
+            margin: '0 4px',
+          }}>
+            {t.planMode}
+          </span>
+        </button>
+      )}
+
       {showLearningMode && learningModeEnabled && (
         <button
           type="button"
