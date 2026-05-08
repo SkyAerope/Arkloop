@@ -1559,68 +1559,68 @@ export function Sidebar({
         )
       )}
 
-      {/* Nav buttons — always rendered, text clips when sidebar narrows */}
-      <nav className="flex flex-col items-start gap-px pl-[8px] pr-[7px] pt-1">
-        <button
-          onClick={onNewThread}
-          aria-label={newThreadNavLabel}
-          className={navButtonClass}
-          style={navButtonStyle}
-        >
-          <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center">
-            <SquarePen size={16} className="shrink-0 transition-transform duration-100 group-hover:scale-[1.05]" />
-          </span>
-          <span className={navLabelClass}>{newThreadNavLabel}</span>
-        </button>
+      {!(collapsed && isWorkMode) && (
+        <nav className="flex flex-col items-start gap-px pl-[8px] pr-[7px] pt-1">
+          <button
+            onClick={onNewThread}
+            aria-label={newThreadNavLabel}
+            className={navButtonClass}
+            style={navButtonStyle}
+          >
+            <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center">
+              <SquarePen size={16} className="shrink-0 transition-transform duration-100 group-hover:scale-[1.05]" />
+            </span>
+            <span className={navLabelClass}>{newThreadNavLabel}</span>
+          </button>
 
-        <button
-          onClick={() => {
-            endPerfTrace(searchPointerTraceRef.current, {
-              phase: 'click',
-              collapsed,
-              threadCount: threads.length,
-              appMode: appMode ?? 'chat',
-              pathname: location.pathname,
-            })
-            searchPointerTraceRef.current = null
-            recordSearchOpenStart()
-            onOpenSearchOverlay()
-          }}
-          onPointerDown={() => {
-            searchPointerTraceRef.current = beginPerfTrace('sidebar_search_interaction', {
-              phase: 'pointerdown',
-              collapsed,
-              threadCount: threads.length,
-              appMode: appMode ?? 'chat',
-              pathname: location.pathname,
-            })
-          }}
-          onPointerLeave={() => {
-            searchPointerTraceRef.current = null
-          }}
-          aria-label={searchNavLabel}
-          className={navButtonClass}
-          style={navButtonStyle}
-        >
-          <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center">
-            <Search size={16} className="shrink-0 transition-transform duration-100 group-hover:scale-[1.05]" />
-          </span>
-          <span className={navLabelClass}>{searchNavLabel}</span>
-        </button>
+          <button
+            onClick={() => {
+              endPerfTrace(searchPointerTraceRef.current, {
+                phase: 'click',
+                collapsed,
+                threadCount: threads.length,
+                appMode: appMode ?? 'chat',
+                pathname: location.pathname,
+              })
+              searchPointerTraceRef.current = null
+              recordSearchOpenStart()
+              onOpenSearchOverlay()
+            }}
+            onPointerDown={() => {
+              searchPointerTraceRef.current = beginPerfTrace('sidebar_search_interaction', {
+                phase: 'pointerdown',
+                collapsed,
+                threadCount: threads.length,
+                appMode: appMode ?? 'chat',
+                pathname: location.pathname,
+              })
+            }}
+            onPointerLeave={() => {
+              searchPointerTraceRef.current = null
+            }}
+            aria-label={searchNavLabel}
+            className={navButtonClass}
+            style={navButtonStyle}
+          >
+            <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center">
+              <Search size={16} className="shrink-0 transition-transform duration-100 group-hover:scale-[1.05]" />
+            </span>
+            <span className={navLabelClass}>{searchNavLabel}</span>
+          </button>
 
-        <button
-          onClick={() => navigate('/scheduled-jobs')}
-          aria-label={t.scheduledJobs}
-          className={navButtonClass}
-          style={navButtonStyle}
-        >
-          <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center">
-            <Clock size={16} className="shrink-0 transition-transform duration-100 group-hover:scale-[1.05]" />
-          </span>
-          <span className={navLabelClass}>{t.scheduledJobs}</span>
-        </button>
-
-      </nav>
+          <button
+            onClick={() => navigate('/scheduled-jobs')}
+            aria-label={t.scheduledJobs}
+            className={navButtonClass}
+            style={navButtonStyle}
+          >
+            <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center">
+              <Clock size={16} className="shrink-0 transition-transform duration-100 group-hover:scale-[1.05]" />
+            </span>
+            <span className={navLabelClass}>{t.scheduledJobs}</span>
+          </button>
+        </nav>
+      )}
 
       {/* Thread list — hidden when collapsed */}
       <div

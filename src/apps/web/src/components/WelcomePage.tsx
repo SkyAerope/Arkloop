@@ -461,11 +461,12 @@ export function WelcomePage() {
           )}
         </div>
 
-        {/* 居中内容 — paddingTop 带过渡动画，模式切换时平滑移动 */}
         <div
-          className="flex flex-1 flex-col items-center px-5"
+          className="flex flex-1 flex-col items-center"
           style={{
             paddingTop: appMode === 'work' ? '32vh' : '27vh',
+            paddingLeft: 'calc(20px + var(--main-content-axis-padding-left, 0px))',
+            paddingRight: 'calc(20px + var(--main-content-axis-padding-right, 0px))',
             transition: 'padding-top 0.38s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
@@ -518,7 +519,7 @@ export function WelcomePage() {
 
         <div className="w-full max-w-[675px]">
           <ChatInput
-            key={`welcome:${appMode}:${isSearchMode ? 'search' : 'default'}`}
+            key={`welcome:${isSearchMode ? 'search' : 'default'}`}
             ref={chatInputRef}
             onSubmit={handleSubmit}
             placeholder={isSearchMode ? '今天有什么想搜索的吗？' : t.chatPlaceholder}

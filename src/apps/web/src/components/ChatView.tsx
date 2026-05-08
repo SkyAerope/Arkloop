@@ -2939,7 +2939,10 @@ export const ChatView = memo(function ChatView() {
           style={{
             maxWidth: isWorkMode ? 1000 : 800,
             margin: '0 auto',
-            padding: `50px ${messageHorizontalPadding} var(--chat-input-area-height)`,
+            paddingTop: '50px',
+            paddingRight: `calc(${messageHorizontalPadding} + var(--main-content-axis-padding-right, 0px))`,
+            paddingBottom: 'var(--chat-input-area-height)',
+            paddingLeft: `calc(${messageHorizontalPadding} + var(--main-content-axis-padding-left, 0px))`,
             gap: isWorkMode ? 0 : undefined,
             transition: `padding ${rightPanelLayoutTransitionCss}`,
           }}
@@ -3044,7 +3047,10 @@ export const ChatView = memo(function ChatView() {
           '--chat-input-horizontal-padding': inputHorizontalPadding,
           maxWidth: isWorkMode ? 1000 : 1200,
           margin: '0 auto',
-          padding: '12px var(--chat-input-horizontal-padding) 8px',
+          paddingTop: '12px',
+          paddingRight: 'calc(var(--chat-input-horizontal-padding) + var(--main-content-axis-padding-right, 0px))',
+          paddingBottom: '8px',
+          paddingLeft: 'calc(var(--chat-input-horizontal-padding) + var(--main-content-axis-padding-left, 0px))',
           position: 'absolute',
           bottom: 0,
           left: 0,
@@ -3066,8 +3072,8 @@ export const ChatView = memo(function ChatView() {
           <div
             className="pointer-events-none absolute flex flex-col gap-2"
             style={{
-              left: 'var(--chat-input-horizontal-padding)',
-              right: 'var(--chat-input-horizontal-padding)',
+              left: 'calc(var(--chat-input-horizontal-padding) + var(--main-content-axis-padding-left, 0px))',
+              right: 'calc(var(--chat-input-horizontal-padding) + var(--main-content-axis-padding-right, 0px))',
               bottom: 'calc(100% + 6px)',
               zIndex: 30,
             }}
