@@ -10,7 +10,8 @@ import type {
 } from './storage'
 import type { WebSearchPhaseStep } from './components/CopTimeline'
 import { isWebFetchToolName } from './agentEventProcessing'
-import { exploreGroupLabel, isExploreFileOp, type ExploreGroupRef } from './toolPresentation'
+import { exploreGroupLabel, isExploreFileOp, presentationForTool, type ExploreGroupRef } from './toolPresentation'
+import { planDisplayNameFromResult } from './planMetadata'
 import {
   DEFAULT_SEARCHING_LABEL,
   COMPLETED_SEARCHING_LABEL,
@@ -83,6 +84,7 @@ const AUXILIARY_RENDERED_TOOL_NAMES = new Set([
   'browser',
 ])
 const IMAGE_GENERATE_TOOL_NAME = 'image_generate'
+const EXIT_PLAN_MODE_TOOL_NAME = 'exit_plan_mode'
 
 function sortBySeq<T extends { seq?: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
@@ -213,6 +215,8 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
 }
 
 function summarizeGenericResult(result: unknown): { output?: string; emptyLabel?: string } {
+  const planName = planDisplayNameFromResult(result)
+  if (planName) return { output: planName }
   if (result == null) return { emptyLabel: 'Completed; no displayable output returned' }
   if (typeof result === 'string') {
     const trimmed = result.trim()
@@ -592,11 +596,14 @@ export function copTimelinePayloadForSegment(
         const preview = previewEntries.length > 0
           ? `${call.toolName} ${previewEntries.map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`).join(' ')}`
           : call.toolName
+        const presentation = presentationForTool(call.toolName, call.arguments)
+        const isExitPlanMode = call.toolName === EXIT_PLAN_MODE_TOOL_NAME
+        const genericDisplay = call.displayDescription || presentation.description
         return {
           id: call.toolCallId,
           toolName: call.toolName,
-          label: isImageGenerate ? genericImageGenerateInput(call.arguments, statusLabel) : call.displayDescription || preview,
-          ...(isImageGenerate ? { displayDescription: statusLabel } : {}),
+          label: isExitPlanMode ? '' : (isImageGenerate ? genericImageGenerateInput(call.arguments, statusLabel) : genericDisplay || preview),
+          ...(isExitPlanMode ? { displayDescription: genericDisplay } : isImageGenerate ? { displayDescription: statusLabel } : {}),
           output: resultSummary.output,
           emptyLabel: resultSummary.emptyLabel,
           status,

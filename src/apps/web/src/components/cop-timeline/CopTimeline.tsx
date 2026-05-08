@@ -21,6 +21,7 @@ import {
 import { AssistantThinkingMarkdown } from './ThinkingBlock'
 import { CopTimelineSegment } from './CopTimelineSegment'
 import { CopTimelineUnifiedRow } from './CopUnifiedRow'
+import { localizeTimelineLabel } from './labels'
 
 export type { WebSearchPhaseStep } from './types'
 
@@ -68,7 +69,7 @@ export function CopTimeline({
   baseUrl?: string
   typography?: 'default' | 'work'
 }) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const reduceMotion = useReducedMotion()
   const timelineSegments = segments.filter((s) => !isTopLevelOnlySegment(s))
   const segmentDotTop = (segment: CopSubSegment) => isSingleImageToolSegment(segment) ? COP_TIMELINE_DOT_TOP : 8
@@ -166,6 +167,7 @@ export function CopTimeline({
     if (isComplete) return 'Completed'
     return thinkingHint ? `${thinkingHint}...` : 'Working...'
   })()
+  const localizedHeaderLabel = localizeTimelineLabel(headerLabel, locale)
 
   const seededStatusAnimation =
     timelineLive || !!shimmer || headerPhaseKey === 'thinking-pending' || headerPhaseKey === 'thinking-live'
@@ -225,7 +227,7 @@ export function CopTimeline({
             }}
           >
             <CopTimelineHeaderLabel
-              text={headerLabel}
+              text={localizedHeaderLabel}
               phaseKey={headerPhaseKey}
               shimmer={!!shimmer}
               incremental={headerUsesIncrementalTypewriter}

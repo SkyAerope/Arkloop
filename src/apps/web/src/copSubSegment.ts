@@ -1,6 +1,7 @@
 import type { CopBlockItem } from './assistantTurnSegments'
-import { normalizeToolName, compactCommandLine } from './toolPresentation'
+import { normalizeToolName, compactCommandLine, presentationForTool } from './toolPresentation'
 import { isWebSearchToolName, webSearchQueriesFromArguments } from './webSearchTimelineFromAgentEvent'
+import { planDisplayNameFromArgs } from './planMetadata'
 
 export type CopSegmentCategory = 'explore' | 'exec' | 'edit' | 'agent' | 'fetch' | 'search' | 'image' | 'generic'
 
@@ -157,7 +158,8 @@ export function segmentCompletedTitle(seg: CopSubSegment): string {
       const editCall = calls[0]
       const filePath = (editCall?.arguments?.file_path as string | undefined) ?? ''
       const action = normalizeToolName(editCall?.toolName ?? '') === 'write_file' ? 'Wrote' : 'Edited'
-      return filePath ? `${action} ${basename(filePath)}` : `${action} file`
+      const subject = editCall ? planDisplayNameFromArgs(editCall.arguments ?? {}) : null
+      return subject || filePath ? `${action} ${subject ?? basename(filePath)}` : `${action} file`
     }
     case 'agent': {
       const n = calls.length
@@ -168,7 +170,9 @@ export function segmentCompletedTitle(seg: CopSubSegment): string {
     case 'image': return imageGenerateCallsTitle(calls) ?? imageGenerateTitle('success')
     case 'generic': {
       if (calls.length === 1) {
-        const t = calls[0]!.toolName
+        const call = calls[0]!
+        if (call.toolName === 'exit_plan_mode') return presentationForTool(call.toolName, call.arguments).description
+        const t = call.toolName
         // Map known generic tool names to readable labels
         const label: Record<string, string> = {
           todo_write: 'Updated todos',
@@ -212,6 +216,8 @@ function getReadPath(c: CallItem['call']): string {
 }
 
 function getEditPath(c: CallItem['call']): string {
+  const planName = planDisplayNameFromArgs(c.arguments ?? {})
+  if (planName) return planName
   const p = c.arguments?.file_path
   return typeof p === 'string' ? p : ''
 }
@@ -517,6 +523,9 @@ export function aggregateMainTitle(
 
   // complete 态
   const allCalls = collectCalls(segments)
+  if (allCalls.length === 1 && allCalls[0]!.toolName === 'exit_plan_mode') {
+    return presentationForTool(allCalls[0]!.toolName, allCalls[0]!.arguments).description
+  }
   if (allCalls.length === 0) {
     // 退化路径：没有真实 call（例如 segments 仅作为 title 占位），沿用旧 segment.title 行为
     if (segments.length > 1) return `${segments.length} steps completed`

@@ -26,7 +26,7 @@ export function useThinkingElapsedSeconds(active: boolean, startedAtMs?: number)
 
 export function formatThinkingHeaderLabel(thinkingHint: string | undefined, elapsedSeconds: number, t: ReturnType<typeof useLocale>['t']): string {
   if (thinkingHint && thinkingHint.trim() !== '') {
-    return `${thinkingHint} for ${elapsedSeconds}s`
+    return `${thinkingHint} ${elapsedSeconds}s`
   }
   return t.copTimelineThinkingForSeconds(elapsedSeconds)
 }

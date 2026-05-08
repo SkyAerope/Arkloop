@@ -5,8 +5,10 @@ import hljs from 'highlight.js/lib/common'
 import type { FileOpRef } from '../../storage'
 import { CopThoughtSummaryRow } from './ThinkingBlock'
 import type { ExploreGroupRef } from '../../toolPresentation'
+import { useLocale } from '../../contexts/LocaleContext'
 import { COP_TIMELINE_CONTENT_PADDING_LEFT_PX, TypewriterText } from './utils'
 import { CopTimelineUnifiedRow } from './CopUnifiedRow'
+import { localizeTimelineLabel } from './labels'
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 const EXPLORE_VIEWPORT_BOTTOM_PAD = 10
@@ -115,7 +117,8 @@ function ToolTitle({ title, live, status: _status, highlightedSuffix }: { title:
 }
 
 export function FileOpToolCard({ op }: { op: FileOpRef }) {
-  const title = op.displayDescription || op.label || op.toolName
+  const { locale } = useLocale()
+  const title = localizeTimelineLabel(op.displayDescription || op.label || op.toolName, locale)
   const filePath = op.filePath || op.displayDetail || ''
   const lines = previewLines(op.output || op.errorMessage)
   const cardTitle = op.pattern || op.displaySubject || (filePath ? basename(filePath) : title)
@@ -168,11 +171,12 @@ function areFileOpToolRowPropsEqual(prev: FileOpToolRowProps, next: FileOpToolRo
 }
 
 export const FileOpToolRow = memo(function FileOpToolRow({ op, live }: FileOpToolRowProps) {
+  const { locale } = useLocale()
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
   const stabilizeLocalExpansionScroll = useStabilizeLocalExpansionScroll()
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const title = op.displayDescription || op.label || op.toolName
+  const title = localizeTimelineLabel(op.displayDescription || op.label || op.toolName, locale)
   const filePath = op.filePath || op.displayDetail || ''
   const lines = useMemo(() => previewLines(op.output || op.errorMessage), [op.output, op.errorMessage])
   const cardTitle = op.pattern || op.displaySubject || (filePath ? basename(filePath) : title)
@@ -271,6 +275,7 @@ export const FileOpToolRow = memo(function FileOpToolRow({ op, live }: FileOpToo
 }, areFileOpToolRowPropsEqual)
 
 export function ExploreTimelineRow({ group, live, segmentLive, headerVariant = 'tool', attachedThinkingRows }: { group: ExploreGroupRef; live?: boolean; segmentLive?: boolean; headerVariant?: 'tool' | 'segment'; attachedThinkingRows?: Array<{ id: string; markdown: string; live?: boolean; durationSec?: number; startedAtMs?: number }> }) {
+  const { locale } = useLocale()
   const reduceMotion = useReducedMotion()
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
@@ -370,10 +375,10 @@ export function ExploreTimelineRow({ group, live, segmentLive, headerVariant = '
               lineHeight: 'var(--c-cop-row-line-height)',
             }}
           >
-            <TypewriterText text={group.label} live={live && group.status === 'running'} className={live && group.status === 'running' ? 'thinking-shimmer-dim' : undefined} />
+            <TypewriterText text={localizeTimelineLabel(group.label, locale)} live={live && group.status === 'running'} className={live && group.status === 'running' ? 'thinking-shimmer-dim' : undefined} />
           </span>
         ) : (
-          <ToolTitle title={group.label} live={live && group.status === 'running'} status={group.status} />
+          <ToolTitle title={localizeTimelineLabel(group.label, locale)} live={live && group.status === 'running'} status={group.status} />
         )}
         {hasItems && (expanded ? <ChevronDown size={headerVariant === 'segment' ? 13 : 12} style={{ flexShrink: 0, color: 'currentColor' }} /> : <ChevronRight size={headerVariant === 'segment' ? 13 : 12} style={{ flexShrink: 0, color: 'currentColor' }} />)}
       </button>
@@ -451,11 +456,12 @@ export function ExploreTimelineRow({ group, live, segmentLive, headerVariant = '
 }
 
 export function EditTimelineSegment({ op, attachedThinkingRows }: { op: FileOpRef; live?: boolean; attachedThinkingRows?: Array<{ id: string; markdown: string; live?: boolean; durationSec?: number; startedAtMs?: number }> }) {
+  const { locale } = useLocale()
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
   const stabilizeLocalExpansionScroll = useStabilizeLocalExpansionScroll()
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const title = op.displayDescription || op.label || op.toolName
+  const title = localizeTimelineLabel(op.displayDescription || op.label || op.toolName, locale)
   const diff = summarizeDiff(op.output || op.errorMessage)
 
   return (

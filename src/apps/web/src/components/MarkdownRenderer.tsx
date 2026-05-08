@@ -18,7 +18,7 @@ import { MindmapBlock } from './MindmapBlock'
 import { MermaidBlock } from './MermaidBlock'
 import { GeoGebraBlock } from './GeoGebraBlock'
 import { WorkspaceResource, type WorkspaceFileRef } from './WorkspaceResource'
-import { DocumentCard } from './DocumentCard'
+import { DocumentCard, DocumentResourceCard } from './DocumentCard'
 import { useActiveArtifactKey } from '../contexts/panels'
 import { recordPerfCount, recordPerfValue } from '../perfDebug'
 import { handleExternalAnchorClick } from '../openExternal'
@@ -51,6 +51,18 @@ const WINDOWS_ABSOLUTE_URL_RE = /^[a-zA-Z]:[\\/]/
 function isDocumentArtifact(artifact: ArtifactRef): boolean {
   if (artifact.display === 'panel') return true
   return !artifact.mime_type.startsWith('image/') && artifact.mime_type !== 'text/html'
+}
+
+function isDocumentResource(resource: ResourceRef): boolean {
+  const mimeType = 'mimeType' in resource ? (resource.mimeType ?? '') : ''
+  if (mimeType && !mimeType.startsWith('image/') && mimeType !== 'text/html') return true
+  const name = resourceTitle(resource).toLowerCase()
+  return /\.(md|txt|pdf|json|csv|log|ya?ml|xml|sql|go|py|tsx?|jsx?|sh)$/.test(name)
+}
+
+function childText(children: ReactNode): string {
+  const text = extractTextFromChildren(children).trim()
+  return text.replace(/\s+/g, ' ')
 }
 
 // \[...\] → $$...$$ , \(...\) → $...$
@@ -298,6 +310,26 @@ function ResourceOpenButton({
   )
 }
 
+function ResourceDocumentCard({
+  resource,
+  children,
+  onOpen,
+}: {
+  resource: ResourceRef
+  children?: ReactNode
+  onOpen: (trigger: HTMLButtonElement) => void
+}) {
+  const title = childText(children) || resourceTitle(resource)
+  return (
+    <div style={{ margin: '8px 0' }}>
+      <DocumentResourceCard
+        title={title}
+        onClick={onOpen}
+      />
+    </div>
+  )
+}
+
 // artifact: 协议感知的 img 渲染器
 function ArtifactAwareImg({ src, alt }: { src?: string; alt?: string }) {
   const { artifacts, accessToken, runId, workFolder, onOpenDocument, onOpenResource, activePanelArtifactKey } = useContext(ArtifactsContext)
@@ -406,18 +438,6 @@ function ArtifactAwareLink({ href, children }: { href?: string; children?: React
 
     if (!artifact || !accessToken) return <>{children}</>
 
-    if (onOpenResource) {
-      const resource = artifactToResourceRef(artifact)
-      return (
-        <ResourceOpenButton
-          resource={resource}
-          onOpen={(event) => onOpenResource(resource, { trigger: event.currentTarget, artifacts, runId })}
-        >
-          {children}
-        </ResourceOpenButton>
-      )
-    }
-
     // LLM 可能用 [text](artifact:key) 而非 ![text](artifact:key)，统一按 mime_type 分派
     if (artifact.mime_type.startsWith('image/')) {
       return <ArtifactImage artifact={artifact} accessToken={accessToken} />
@@ -429,12 +449,44 @@ function ArtifactAwareLink({ href, children }: { href?: string; children?: React
     if (onOpenDocument && isDocumentArtifact(artifact)) {
       return <div style={{ margin: '8px 0' }}><DocumentCard artifact={artifact} onClick={(trigger) => onOpenDocument(artifact, { trigger, artifacts, runId })} active={activePanelArtifactKey === artifact.key} /></div>
     }
+    if (onOpenResource && isDocumentArtifact(artifact)) {
+      const resource = artifactToResourceRef(artifact)
+      return (
+        <ResourceDocumentCard
+          resource={resource}
+          onOpen={(trigger) => onOpenResource(resource, { trigger, artifacts, runId })}
+        >
+          {children}
+        </ResourceDocumentCard>
+      )
+    }
+    if (onOpenResource) {
+      const resource = artifactToResourceRef(artifact)
+      return (
+        <ResourceOpenButton
+          resource={resource}
+          onOpen={(event) => onOpenResource(resource, { trigger: event.currentTarget, artifacts, runId })}
+        >
+          {children}
+        </ResourceOpenButton>
+      )
+    }
     return <ArtifactDownload artifact={artifact} accessToken={accessToken} />
   }
 
   if (href?.startsWith(WORKSPACE_URI_PREFIX)) {
     const resource = resourceUriToResourceRef(href, { runId, workFolder })
     if (resource && onOpenResource) {
+      if (isDocumentResource(resource)) {
+        return (
+          <ResourceDocumentCard
+            resource={resource}
+            onOpen={(trigger) => onOpenResource(resource, { trigger, runId })}
+          >
+            {children}
+          </ResourceDocumentCard>
+        )
+      }
       return (
         <ResourceOpenButton
           resource={resource}
@@ -452,6 +504,16 @@ function ArtifactAwareLink({ href, children }: { href?: string; children?: React
   if (href) {
     const resource = resourceUriToResourceRef(href, { runId, workFolder })
     if (resource && onOpenResource) {
+      if (isDocumentResource(resource)) {
+        return (
+          <ResourceDocumentCard
+            resource={resource}
+            onOpen={(trigger) => onOpenResource(resource, { trigger, runId })}
+          >
+            {children}
+          </ResourceDocumentCard>
+        )
+      }
       return (
         <ResourceOpenButton
           resource={resource}

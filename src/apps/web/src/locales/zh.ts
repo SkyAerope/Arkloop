@@ -556,16 +556,16 @@ export const zh: LocaleStrings = {
   // message actions: short labels use EN in zh bundle
   copyAction: "Copy",
   assistantCopDefaultTitle: "Processing…",
-  assistantStreamThinkingPlaceholder: "Thinking",
-  copTimelineLiveProgress: "In process",
-  copTimelineThinkingDoneNoDuration: "Thought",
-  copTimelineThoughtForSeconds: (sec: number) => `Thought for ${sec}s`,
-  copTimelineThinkingForSeconds: (sec: number) => `Thinking for ${sec}s`,
+  assistantStreamThinkingPlaceholder: "思考中",
+  copTimelineLiveProgress: "进行中",
+  copTimelineThinkingDoneNoDuration: "已思考",
+  copTimelineThoughtForSeconds: (sec: number) => `已思考 ${sec}s`,
+  copTimelineThinkingForSeconds: (sec: number) => `思考中 ${sec}s`,
   copTimelineShowMoreSources: (count: number) => `再显示 ${count} 条`,
   copTimelineShowFewerSources: '收起',
   copThinkShowMore: 'Show more',
   copThinkShowLess: 'Show less',
-  copThinkingInlineTitle: 'Thinking',
+  copThinkingInlineTitle: '思考中',
   copThinkCardTitle: 'Think',
   copThinkingHints: [
     'Finding the right words',
@@ -584,7 +584,7 @@ export const zh: LocaleStrings = {
     'Taking a closer look',
     'Turning this over',
   ] as const,
-  copThinkingDone: 'Done',
+  copThinkingDone: '已完成',
   editAction: "Edit",
   // model config
   models: {

@@ -16,6 +16,9 @@ import { TypewriterText, COP_TIMELINE_CONTENT_PADDING_LEFT_PX } from './utils'
 import { timelineStepDisplayLabel } from './types'
 import { SourceListCard } from './SourceList'
 import { QueryPill } from './utils'
+import { useLocale } from '../../contexts/LocaleContext'
+import { localizeTimelineLabel } from './labels'
+import type { Locale } from '../../locales'
 
 const EXPLORE_BOTTOM_PAD = 10
 
@@ -48,6 +51,7 @@ export function CopTimelineSegment({
   baseUrl?: string
   typography?: 'default' | 'work'
 }) {
+  const { locale } = useLocale()
   const reduceMotion = useReducedMotion()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [hovered, setHovered] = useState(false)
@@ -98,7 +102,7 @@ export function CopTimelineSegment({
   const exploreCard = segment.category === 'explore'
   const endsWithNarrative = compactNarrativeEnd && !exploreCard && segment.items.at(-1)?.kind === 'assistant_text'
 
-  const headerLabel = segment.title
+  const headerLabel = localizeTimelineLabel(segment.title, locale)
   const headerLive = isOpen && isLive
 
   // Compute diff suffix for edit segments (colored +/-)
@@ -125,7 +129,7 @@ export function CopTimelineSegment({
     return (
       <div style={{ position: 'relative', paddingTop: flattenSingleItem ? 0 : 6, paddingLeft: editOnly || exploreCard || flattenSingleItem ? 0 : COP_TIMELINE_CONTENT_PADDING_LEFT_PX, paddingBottom: flattenSingleItem || endsWithNarrative ? 0 : EXPLORE_BOTTOM_PAD }}>
         {flattenSingleItem && segment.items.length === 1 ? (
-          renderItem(segment.items[0]!, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)
+          renderItem(segment.items[0]!, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
         ) : exploreCard ? (
           <div
             style={{
@@ -138,7 +142,7 @@ export function CopTimelineSegment({
           >
             {segment.items.map((item) => (
               <div key={itemTypeId(item)} style={{ position: 'relative', padding: '3px 0' }}>
-                {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)}
+                {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
               </div>
             ))}
           </div>
@@ -146,7 +150,7 @@ export function CopTimelineSegment({
           segment.items.map((item, index) => (
             <div key={itemTypeId(item)} style={{ position: 'relative' }}>
               {editOnly ? (
-                renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)
+                renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
               ) : (
                 <CopTimelineUnifiedRow
                   isFirst={index === 0}
@@ -157,7 +161,7 @@ export function CopTimelineSegment({
                   paddingBottom={8}
                   horizontalMotion={false}
                 >
-                  {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)}
+                  {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
                 </CopTimelineUnifiedRow>
               )}
             </div>
@@ -236,7 +240,7 @@ export function CopTimelineSegment({
                   key={itemTypeId(item)}
                   style={{ position: 'relative', padding: '3px 0' }}
                 >
-                  {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)}
+                  {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
                 </div>
               ))}
             </div>
@@ -247,7 +251,7 @@ export function CopTimelineSegment({
                 style={{ position: 'relative' }}
               >
                 {editOnly ? (
-                  renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)
+                  renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
                 ) : (
                   <CopTimelineUnifiedRow
                     isFirst={index === 0}
@@ -258,7 +262,7 @@ export function CopTimelineSegment({
                     paddingBottom={8}
                     horizontalMotion={false}
                   >
-                    {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography)}
+                    {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
                   </CopTimelineUnifiedRow>
                 )}
               </div>
@@ -308,6 +312,7 @@ function renderItem(
   accessToken?: string,
   baseUrl?: string,
   typography: 'default' | 'work' = 'default',
+  locale: Locale = 'zh',
 ): React.ReactNode {
   if (item.kind === 'thinking') {
     return (
@@ -369,7 +374,7 @@ function renderItem(
     return (
       <div>
         <div style={{ fontSize: 'var(--c-cop-row-font-size)', color: 'var(--c-cop-row-fg)', lineHeight: 'var(--c-cop-row-line-height)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <TypewriterText text={timelineStepDisplayLabel(step)} className={step.status === 'active' ? 'thinking-shimmer-dim' : undefined} live={live} />
+          <TypewriterText text={localizeTimelineLabel(timelineStepDisplayLabel(step), locale)} className={step.status === 'active' ? 'thinking-shimmer-dim' : undefined} live={live} />
         </div>
         {step.kind === 'searching' && step.queries && step.queries.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>

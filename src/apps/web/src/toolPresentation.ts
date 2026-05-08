@@ -1,4 +1,5 @@
 import type { FileOpRef } from './storage'
+import { planDisplayNameFromArgs } from './planMetadata'
 
 export type ToolDisplayKind =
   | 'explore'
@@ -159,7 +160,7 @@ export function presentationForTool(toolNameInput: string, args: Record<string, 
     case 'write_file': {
       kind = 'edit'
       const path = stringArg(args, 'file_path')
-      subject = path ? basename(path) : undefined
+      subject = planDisplayNameFromArgs(args) ?? (path ? basename(path) : undefined)
       detail = path || undefined
       description = subject ? `${toolName === 'write_file' ? 'Wrote' : 'Edited'} ${truncate(subject, 48)}` : (toolName === 'write_file' ? 'Wrote file' : 'Edited file')
       break
@@ -180,6 +181,14 @@ export function presentationForTool(toolNameInput: string, args: Record<string, 
     case 'load_skill': {
       kind = 'explore'
       description = toolName === 'load_skill' ? 'Loaded skill' : 'Loaded tools'
+      break
+    }
+    case 'enter_plan_mode': {
+      description = 'Enter Plan Mode'
+      break
+    }
+    case 'exit_plan_mode': {
+      description = 'Exit Plan Mode'
       break
     }
     default:

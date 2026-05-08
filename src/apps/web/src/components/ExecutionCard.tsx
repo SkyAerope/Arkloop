@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
 import { useLocale } from '../contexts/LocaleContext'
 import { useTypewriter } from '../hooks/useTypewriter'
+import { presentationForTool } from '../toolPresentation'
 import { CopyIconButton } from './CopyIconButton'
+import { localizeTimelineLabel } from './cop-timeline/labels'
 
 type Status = 'running' | 'success' | 'failed' | 'completed'
 
@@ -34,6 +36,9 @@ function maskFor(edge: ScrollEdge): string | undefined {
 }
 
 function toolKindLabel(toolName: string): string {
+  if (!toolName) return ''
+  const presentation = presentationForTool(toolName)
+  if (presentation.description !== toolName) return presentation.description
   switch (toolName) {
     case 'grep': return 'grep'
     case 'glob': return 'glob'
@@ -125,7 +130,7 @@ function StatusBadge({ status }: { status: Status }) {
 }
 
 export function ExecutionCard({ variant, toolName, label, displayDescription, code, output, emptyLabel, errorMessage, status, smooth = false }: Props) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const [expanded, setExpanded] = useState(false)
   const [cmdHovered, setCmdHovered] = useState(false)
   const [outHovered, setOutHovered] = useState(false)
@@ -133,9 +138,18 @@ export function ExecutionCard({ variant, toolName, label, displayDescription, co
   const outputRef = useRef<HTMLDivElement>(null)
   const [scrollEdge, setScrollEdge] = useState<ScrollEdge>('none')
 
-  const preview = variant === 'shell'
+  const rawPreview = variant === 'shell'
     ? (displayDescription || extractCommandPreview(code) || t.shellRan)
     : (displayDescription || label || '')
+  const preview = variant === 'fileop'
+    ? localizeTimelineLabel(rawPreview, locale)
+    : rawPreview
+  const rawKindLabel = variant === 'shell'
+    ? 'shell'
+    : (displayDescription || toolKindLabel(toolName || ''))
+  const kindLabel = variant === 'fileop'
+    ? localizeTimelineLabel(rawKindLabel, locale)
+    : rawKindLabel
   // 只在有 displayDescription 时追加命令缩写，避免与 extractCommandPreview 重复
   const commandHeads = variant === 'shell' && displayDescription ? abbreviateCommandHeads(code) : ''
   const statusWord = variant === 'shell'
@@ -268,8 +282,8 @@ export function ExecutionCard({ variant, toolName, label, displayDescription, co
             }}
             >
               {/* Label */}
-              <div style={{ padding: '6px 10px 2px', fontSize: '10px', color: 'var(--c-text-muted)', fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {variant === 'shell' ? 'shell' : toolKindLabel(toolName || '')}
+              <div style={{ padding: '6px 10px 2px', fontSize: '10px', color: 'var(--c-text-muted)', fontFamily: MONO, textTransform: variant === 'shell' ? 'uppercase' : 'none', letterSpacing: variant === 'shell' ? '0.05em' : 0 }}>
+                {kindLabel}
               </div>
 
               {/* Input: shell 命令 / fileop 参数摘要 */}

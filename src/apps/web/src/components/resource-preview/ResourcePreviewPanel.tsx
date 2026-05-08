@@ -6,6 +6,8 @@ import { BrowserResourcePanel } from './BrowserResourcePanel'
 import { loadPreviewResource } from './loader'
 import { PreviewResourceView } from './PreviewResourceView'
 import type { PreviewResource, ResourceRef } from './types'
+import { extractPlanNameFromMarkdown, isPlanMarkdownPath } from '../../planMetadata'
+import { useLocale } from '../../contexts/LocaleContext'
 
 type ViewMode = 'preview' | 'source'
 
@@ -35,6 +37,7 @@ function getResourceFilename(resource: ResourceRef): string {
 }
 
 export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, onClose, onResourceChange }: Props) {
+  const { locale } = useLocale()
   const [mode, setMode] = useState<ViewMode>('preview')
   const [state, setState] = useState<{
     resource: ResourceRef | null
@@ -76,8 +79,14 @@ export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, 
   const current = state.resource === resource ? state : { resource, loaded: null, error: null }
   const loaded = current.loaded
   const canToggleSource = loaded?.text !== undefined
-  const filename = loaded?.filename ?? getResourceFilename(resource)
+  const rawFilename = loaded?.filename ?? getResourceFilename(resource)
+  const filename = loaded?.text && isPlanMarkdownPath(rawFilename)
+    ? extractPlanNameFromMarkdown(loaded.text) ?? rawFilename
+    : rawFilename
   const meta = loaded ? [loaded.mimeType, formatSize(loaded.size)].filter(Boolean).join(' · ') : ''
+  const previewLabel = locale === 'zh' ? '预览' : 'Preview'
+  const sourceLabel = locale === 'zh' ? '源码' : 'Source'
+  const closeLabel = locale === 'zh' ? '关闭' : 'Close'
 
   return (
     <div style={{ height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-bg-page)' }}>
@@ -98,14 +107,14 @@ export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, 
               options={[
                 {
                   value: 'preview',
-                  title: 'Preview',
-                  ariaLabel: 'Preview',
+                  title: previewLabel,
+                  ariaLabel: previewLabel,
                   label: <Eye size={14} />,
                 },
                 {
                   value: 'source',
-                  title: 'Source',
-                  ariaLabel: 'Source',
+                  title: sourceLabel,
+                  ariaLabel: sourceLabel,
                   label: <Code size={14} />,
                 },
               ]}
@@ -115,8 +124,8 @@ export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, 
             <button
               type="button"
               onClick={onClose}
-              title="Close"
-              aria-label="Close preview"
+              title={closeLabel}
+              aria-label={closeLabel}
               style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, borderRadius: 8, background: 'transparent', color: 'var(--c-text-secondary)', cursor: 'pointer' }}
               onMouseEnter={(event) => { event.currentTarget.style.background = 'var(--c-bg-deep)' }}
               onMouseLeave={(event) => { event.currentTarget.style.background = 'transparent' }}
@@ -132,7 +141,7 @@ export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, 
         ) : loaded ? (
           <PreviewResourceView resource={loaded} accessToken={accessToken} artifacts={artifacts} runId={runId} mode={mode} />
         ) : (
-          <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>Loading</div>
+          <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>{locale === 'zh' ? '加载中' : 'Loading'}</div>
         )}
       </div>
     </div>
