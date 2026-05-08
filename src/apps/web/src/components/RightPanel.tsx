@@ -28,6 +28,8 @@ type Props = {
   activeTabId: string | null
   onSelectTab: (id: string) => void
   onCloseTab?: (id: string) => void
+  tabOrder?: string[]
+  onTabOrderChange?: (ids: string[]) => void
   addOptions?: RightPanelAddOption[]
   addLabel?: string
   emptyLabel?: string
@@ -44,7 +46,21 @@ type DropIndicator = {
   side: 'before' | 'after'
 }
 
-export function RightPanel({ tabs, activeTabId, onSelectTab, onCloseTab, addOptions = [], addLabel, emptyLabel }: Props) {
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index])
+}
+
+export function RightPanel({
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onCloseTab,
+  tabOrder,
+  onTabOrderChange,
+  addOptions = [],
+  addLabel,
+  emptyLabel,
+}: Props) {
   const { t } = useLocale()
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -69,21 +85,25 @@ export function RightPanel({ tabs, activeTabId, onSelectTab, onCloseTab, addOpti
     })
   }, [])
 
-  useEffect(() => {
-    setOrderedTabIds((current) => {
-      const ids = tabs.map((tab) => tab.id)
-      const kept = current.filter((id) => ids.includes(id))
-      const added = ids.filter((id) => !kept.includes(id))
-      return [...kept, ...added]
-    })
+  const normalizeOrder = useCallback((current: string[]) => {
+    const ids = tabs.map((tab) => tab.id)
+    const kept = current.filter((id) => ids.includes(id))
+    const added = ids.filter((id) => !kept.includes(id))
+    return [...kept, ...added]
   }, [tabs])
+
+  const currentTabOrder = tabOrder ?? orderedTabIds
+  const normalizedCurrentTabOrder = useMemo(() => normalizeOrder(currentTabOrder), [currentTabOrder, normalizeOrder])
+
+  useEffect(() => {
+    if (!tabOrder) return
+    if (!sameStringArray(normalizedCurrentTabOrder, tabOrder)) onTabOrderChange?.(normalizedCurrentTabOrder)
+  }, [normalizedCurrentTabOrder, onTabOrderChange, tabOrder])
 
   const orderedTabs = useMemo(() => {
     const byId = new Map(tabs.map((tab) => [tab.id, tab]))
-    const ordered = orderedTabIds.map((id) => byId.get(id)).filter((tab): tab is RightPanelTab => !!tab)
-    const missing = tabs.filter((tab) => !orderedTabIds.includes(tab.id))
-    return [...ordered, ...missing]
-  }, [orderedTabIds, tabs])
+    return normalizedCurrentTabOrder.map((id) => byId.get(id)).filter((tab): tab is RightPanelTab => !!tab)
+  }, [normalizedCurrentTabOrder, tabs])
 
   useEffect(() => {
     updateScrollFade()
@@ -97,15 +117,18 @@ export function RightPanel({ tabs, activeTabId, onSelectTab, onCloseTab, addOpti
 
   const moveTab = (dragId: string, targetId: string, side: DropIndicator['side']) => {
     if (dragId === targetId) return
-    setOrderedTabIds((current) => {
-      if (!current.includes(dragId) || !current.includes(targetId)) return current
-      const next = current.filter((id) => id !== dragId)
-      const targetIndex = next.indexOf(targetId)
-      if (targetIndex < 0) return current
-      const insertIndex = side === 'after' ? targetIndex + 1 : targetIndex
-      next.splice(insertIndex, 0, dragId)
-      return next
-    })
+    const current = normalizedCurrentTabOrder
+    if (!current.includes(dragId) || !current.includes(targetId)) return
+    const next = current.filter((id) => id !== dragId)
+    const targetIndex = next.indexOf(targetId)
+    if (targetIndex < 0) return
+    const insertIndex = side === 'after' ? targetIndex + 1 : targetIndex
+    next.splice(insertIndex, 0, dragId)
+    if (tabOrder) {
+      onTabOrderChange?.(next)
+    } else {
+      setOrderedTabIds(next)
+    }
   }
 
   const handleTrackWheel = (event: WheelEvent<HTMLDivElement>) => {

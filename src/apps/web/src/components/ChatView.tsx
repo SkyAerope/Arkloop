@@ -154,9 +154,11 @@ import {
   writeMessageAgentEvents,
   type MessageAgentEvent,
   readInputDraftAttachments,
+  readThreadRightPanelState,
   readThreadWorkFolder,
   readThreadReasoningMode,
   writeInputDraftAttachments,
+  writeThreadRightPanelState,
   readRunThinkingHint,
   writeRunThinkingHint,
 } from '../storage'
@@ -247,6 +249,14 @@ type RightPanelStoredTab =
   | { id: string; kind: 'document'; title: string; document: DocumentPanelState }
   | { id: string; kind: 'agent'; title: string; agent: SubAgentRef }
   | { id: string; kind: 'resource'; title: string; resource: ResourceRef; artifacts?: ArtifactRef[]; runId?: string }
+
+function browserTabSeqFromTabs(tabs: Array<{ id: string }>): number {
+  return tabs.reduce((max, tab) => {
+    const match = /^web:(\d+)$/.exec(tab.id)
+    if (!match) return max
+    return Math.max(max, Number(match[1]))
+  }, 0)
+}
 
 type LiveRunPaneProps = {
   isWorkMode: boolean
@@ -867,11 +877,14 @@ export const ChatView = memo(function ChatView() {
   const [rightPanelWidth, setRightPanelWidth] = useState(rightPanelMinWidth)
   const [rightPanelTabs, setRightPanelTabs] = useState<RightPanelStoredTab[]>([])
   const [activeRightPanelTabId, setActiveRightPanelTabId] = useState<string | null>(null)
+  const [rightPanelTabOrder, setRightPanelTabOrder] = useState<string[]>([])
   const [webPanelResource, setWebPanelResource] = useState<BrowserResourceRef | null>(null)
   const [extraBrowserTabs, setExtraBrowserTabs] = useState<Array<{ id: string; resource: BrowserResourceRef | null }>>([])
   const [filesPreviewResource, setFilesPreviewResource] = useState<LocalFileResourceRef | null>(null)
   const browserTabSeqRef = useRef(0)
   const localFileTabSeqRef = useRef(0)
+  const restoredRightPanelThreadRef = useRef<string | null>(null)
+  const skipRightPanelSaveRef = useRef(false)
   const isPanelOpenRef = useRef(false)
   const effectiveRightPanelTabIdRef = useRef<string | null>(null)
   const waitForThreadModeUpdates = useCallback(async () => {
@@ -984,6 +997,8 @@ export const ChatView = memo(function ChatView() {
     closePanel,
     closeShareModal,
   } = usePanels()
+  const closePanelRef = useRef(closePanel)
+  useEffect(() => { closePanelRef.current = closePanel }, [closePanel])
   const threadsRef = useRef(threads)
   useEffect(() => { threadsRef.current = threads }, [threads])
   const location = useLocation()
@@ -2265,6 +2280,37 @@ export const ChatView = memo(function ChatView() {
   const isPanelOpen = rightPanelVisible
 
   useEffect(() => {
+    skipRightPanelSaveRef.current = true
+    const previousThreadId = restoredRightPanelThreadRef.current
+    if (!threadId) {
+      restoredRightPanelThreadRef.current = null
+      setRightPanelVisible(false)
+      setActiveRightPanelTabId(null)
+      setRightPanelTabOrder([])
+      setWebPanelResource(null)
+      setExtraBrowserTabs([])
+      setFilesPreviewResource(null)
+      setRightPanelTabs([])
+      closePanelRef.current()
+      browserTabSeqRef.current = 0
+      return
+    }
+    if (previousThreadId !== threadId) {
+      setRightPanelTabs([])
+      closePanelRef.current()
+    }
+    const saved = readThreadRightPanelState(threadId, { workFolder: workPanelFolder })
+    restoredRightPanelThreadRef.current = threadId
+    setRightPanelVisible(saved?.visible ?? false)
+    setActiveRightPanelTabId(saved?.activeTabId ?? null)
+    setRightPanelTabOrder(saved?.tabOrder ?? [])
+    setWebPanelResource(saved?.web ?? null)
+    setExtraBrowserTabs(saved?.browserTabs ?? [])
+    setFilesPreviewResource(saved?.filesPreview ?? null)
+    browserTabSeqRef.current = saved ? browserTabSeqFromTabs(saved.browserTabs) : 0
+  }, [threadId, workPanelFolder])
+
+  useEffect(() => {
     if (activePanel) setRightPanelVisible(true)
   }, [activePanel])
 
@@ -2617,6 +2663,31 @@ export const ChatView = memo(function ChatView() {
     : rightPanelRenderedTabs[0]?.id ?? null
   isPanelOpenRef.current = isPanelOpen
   effectiveRightPanelTabIdRef.current = effectiveRightPanelTabId
+
+  useEffect(() => {
+    if (skipRightPanelSaveRef.current) {
+      skipRightPanelSaveRef.current = false
+      return
+    }
+    if (!threadId || restoredRightPanelThreadRef.current !== threadId) return
+    writeThreadRightPanelState(threadId, {
+      visible: rightPanelVisible,
+      activeTabId: effectiveRightPanelTabId,
+      tabOrder: rightPanelTabOrder,
+      web: webPanelResource,
+      browserTabs: extraBrowserTabs,
+      filesPreview: filesPreviewResource,
+    }, { workFolder: workPanelFolder })
+  }, [
+    effectiveRightPanelTabId,
+    extraBrowserTabs,
+    filesPreviewResource,
+    rightPanelTabOrder,
+    rightPanelVisible,
+    threadId,
+    webPanelResource,
+    workPanelFolder,
+  ])
 
   const rightPanelAddOptions = useMemo(() => [
     {
@@ -3357,6 +3428,8 @@ export const ChatView = memo(function ChatView() {
           activeTabId={effectiveRightPanelTabId}
           onSelectTab={setActiveRightPanelTabId}
           onCloseTab={closeRightPanelTab}
+          tabOrder={rightPanelTabOrder}
+          onTabOrderChange={setRightPanelTabOrder}
           addOptions={rightPanelAddOptions}
           addLabel={t.rightPanel.newTab}
           emptyLabel={t.rightPanel.empty}

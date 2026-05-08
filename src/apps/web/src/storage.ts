@@ -6,6 +6,8 @@ import type { UploadedThreadAttachment } from './api'
 import type { FontFamily, CodeFontFamily, FontSize, ThemePreset, ThemeDefinition, ThemeBackgroundImage } from './themes/types'
 import type { AssistantTurnSegment, AssistantTurnUi, CopBlockItem, TurnToolCallRef } from './assistantTurnSegments'
 import type { AgentUIEvent } from './agent-ui/contract'
+import type { BrowserResourceRef, LocalFileResourceRef } from './components/resource-preview/types'
+import { browserFaviconUrl, browserTitleFromUrl, normalizeBrowserUrl } from './components/resource-preview/browserIdentity'
 import {
   normalizeAgentEventData,
   normalizeAgentEventToolName,
@@ -1881,9 +1883,127 @@ export function writeLegacyThreadModesForMigration(modes: Record<string, AppMode
 
 const WORK_FOLDER_KEY = 'arkloop:web:work_folder'
 const WORK_RECENT_FOLDERS_KEY = 'arkloop:web:work_recent_folders'
+const THREAD_RIGHT_PANEL_PREFIX = 'arkloop:web:right_panel:'
+
+export type ThreadRightPanelBrowserTab = {
+  id: string
+  resource: BrowserResourceRef | null
+}
+
+export type ThreadRightPanelState = {
+  visible: boolean
+  activeTabId: string | null
+  tabOrder: string[]
+  web: BrowserResourceRef | null
+  browserTabs: ThreadRightPanelBrowserTab[]
+  filesPreview: LocalFileResourceRef | null
+}
 
 function threadWorkFolderKey(threadId: string): string {
   return `arkloop:web:work_folder:${threadId}`
+}
+
+function threadRightPanelKey(threadId: string): string {
+  return `${THREAD_RIGHT_PANEL_PREFIX}${threadId}`
+}
+
+function sanitizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function sanitizeBrowserResource(value: unknown): BrowserResourceRef | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (record.kind !== 'browser') return null
+  const normalizedUrl = typeof record.url === 'string' ? normalizeBrowserUrl(record.url) : null
+  if (!normalizedUrl) return null
+  const title = sanitizeOptionalString(record.title) ?? browserTitleFromUrl(normalizedUrl)
+  return {
+    kind: 'browser',
+    source: 'browser',
+    url: normalizedUrl,
+    title,
+    faviconUrl: sanitizeOptionalString(record.faviconUrl) ?? browserFaviconUrl(normalizedUrl),
+  }
+}
+
+function sanitizeLocalFileResource(value: unknown, workFolder?: string | null): LocalFileResourceRef | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (record.kind !== 'local-file') return null
+  if (typeof record.rootPath !== 'string' || typeof record.path !== 'string') return null
+  const rootPath = record.rootPath.trim()
+  const path = record.path.trim()
+  if (!rootPath || !path) return null
+  if (workFolder?.trim() && rootPath !== workFolder.trim()) return null
+  return {
+    kind: 'local-file',
+    source: 'local-file',
+    rootPath,
+    path,
+    name: sanitizeOptionalString(record.name),
+    filename: sanitizeOptionalString(record.filename),
+    mimeType: sanitizeOptionalString(record.mimeType),
+    size: Number.isFinite(record.size) ? Number(record.size) : undefined,
+  }
+}
+
+function sanitizeRightPanelState(value: unknown, options?: { workFolder?: string | null }): ThreadRightPanelState | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  const activeTabId = typeof record.activeTabId === 'string' && record.activeTabId.trim() ? record.activeTabId.trim() : null
+  const tabOrder = Array.isArray(record.tabOrder)
+    ? record.tabOrder.filter((id): id is string => typeof id === 'string' && id.trim() !== '').map((id) => id.trim())
+    : []
+  const browserTabs = Array.isArray(record.browserTabs)
+    ? record.browserTabs
+        .map((item): ThreadRightPanelBrowserTab | null => {
+          if (!item || typeof item !== 'object') return null
+          const tab = item as Record<string, unknown>
+          if (typeof tab.id !== 'string' || !/^web:\d+$/.test(tab.id)) return null
+          return { id: tab.id, resource: sanitizeBrowserResource(tab.resource) }
+        })
+        .filter((item): item is ThreadRightPanelBrowserTab => !!item)
+    : []
+
+  return {
+    visible: record.visible === true,
+    activeTabId,
+    tabOrder: Array.from(new Set(tabOrder)),
+    web: sanitizeBrowserResource(record.web),
+    browserTabs,
+    filesPreview: sanitizeLocalFileResource(record.filesPreview, options?.workFolder),
+  }
+}
+
+export function readThreadRightPanelState(threadId: string, options?: { workFolder?: string | null }): ThreadRightPanelState | null {
+  if (!canUseLocalStorage() || !threadId) return null
+  try {
+    const raw = localStorage.getItem(threadRightPanelKey(threadId))
+    if (!raw) return null
+    return sanitizeRightPanelState(JSON.parse(raw), options)
+  } catch {
+    try { localStorage.removeItem(threadRightPanelKey(threadId)) } catch { /* ignore */ }
+    return null
+  }
+}
+
+export function writeThreadRightPanelState(threadId: string, state: ThreadRightPanelState, options?: { workFolder?: string | null }): void {
+  if (!canUseLocalStorage() || !threadId) return
+  const sanitized = sanitizeRightPanelState(state, options)
+  if (!sanitized) return
+  try {
+    localStorage.setItem(threadRightPanelKey(threadId), JSON.stringify(sanitized))
+  } catch { /* ignore */ }
+}
+
+export function clearThreadRightPanelState(threadId: string): void {
+  if (!canUseLocalStorage() || !threadId) return
+  try {
+    localStorage.removeItem(threadRightPanelKey(threadId))
+  } catch { /* ignore */ }
 }
 
 function addToRecents(folder: string): void {
