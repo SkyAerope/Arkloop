@@ -30,6 +30,7 @@ import { resolveLocalFileIconUrl } from './local-files/fileIconResolver'
 import { ResourcePreviewPanel } from './resource-preview/ResourcePreviewPanel'
 import { BrowserSiteIcon } from './resource-preview/BrowserSiteIcon'
 import type { BrowserResourceRef, LocalFileResourceRef, ResourceRef } from './resource-preview/types'
+import { resourceTitle } from './resource-preview/resourceUri'
 import { ChatTitleMenu } from './ChatTitleMenu'
 import { MessageList } from './MessageList'
 import { CopSegmentBlocks } from './CopSegmentBlocks'
@@ -188,13 +189,6 @@ function isInterruptedRunStatus(status: string | null | undefined): boolean {
 function chooseThinkingHint(hints: readonly string[]): string {
   if (hints.length === 0) return ''
   return hints[Math.floor(Math.random() * hints.length)] ?? hints[0] ?? ''
-}
-
-function resourceTitle(resource: ResourceRef): string {
-  if (resource.kind === 'artifact') return resource.title ?? resource.filename ?? 'Artifact'
-  if (resource.kind === 'browser') return resource.title ?? new URL(resource.url).hostname
-  if (resource.kind === 'local-file') return resource.name ?? resource.path.split('/').pop() ?? resource.path
-  return resource.name ?? resource.path.split('/').pop() ?? resource.path
 }
 
 function resourceTabId(resource: ResourceRef): string {
@@ -2679,29 +2673,37 @@ export const ChatView = memo(function ChatView() {
   isPanelOpenRef.current = isPanelOpen
   effectiveRightPanelTabIdRef.current = effectiveRightPanelTabId
 
+  const rightPanelSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     if (skipRightPanelSaveRef.current) {
       skipRightPanelSaveRef.current = false
       return
     }
     if (!threadId || restoredRightPanelThreadRef.current !== threadId) return
-    writeThreadRightPanelState(threadId, {
-      visible: rightPanelVisible,
-      activeTabId: effectiveRightPanelTabId,
-      tabOrder: rightPanelTabOrder,
-      web: webPanelResource,
-      browserTabs: extraBrowserTabs,
-      resourceTabs: rightPanelTabs
-        .filter((tab): tab is Extract<RightPanelStoredTab, { kind: 'resource' }> & { resource: Exclude<ResourceRef, BrowserResourceRef> } => (
-          tab.kind === 'resource' && tab.resource.kind !== 'browser'
-        ))
-        .map((tab) => ({
-          id: tab.id,
-          title: tab.title,
-          resource: tab.resource,
-        })),
-      filesPreview: filesPreviewResource,
-    }, { workFolder: workPanelFolder })
+    if (rightPanelSaveTimerRef.current) clearTimeout(rightPanelSaveTimerRef.current)
+    rightPanelSaveTimerRef.current = setTimeout(() => {
+      writeThreadRightPanelState(threadId, {
+        visible: rightPanelVisible,
+        activeTabId: effectiveRightPanelTabId,
+        tabOrder: rightPanelTabOrder,
+        web: webPanelResource,
+        browserTabs: extraBrowserTabs,
+        resourceTabs: rightPanelTabs
+          .filter((tab): tab is Extract<RightPanelStoredTab, { kind: 'resource' }> & { resource: Exclude<ResourceRef, BrowserResourceRef> } => (
+            tab.kind === 'resource' && tab.resource.kind !== 'browser'
+          ))
+          .map((tab) => ({
+            id: tab.id,
+            title: tab.title,
+            resource: tab.resource,
+          })),
+        filesPreview: filesPreviewResource,
+      }, { workFolder: workPanelFolder })
+    }, 300)
+    return () => {
+      if (rightPanelSaveTimerRef.current) clearTimeout(rightPanelSaveTimerRef.current)
+    }
   }, [
     effectiveRightPanelTabId,
     extraBrowserTabs,

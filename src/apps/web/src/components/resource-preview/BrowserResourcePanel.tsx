@@ -186,48 +186,37 @@ export function BrowserResourcePanel({ resource, onClose, onResourceChange }: Pr
     onResourceChange?.(nextResource)
   }, [currentUrl, history, historyIndex, onResourceChange])
 
-  const selectHistoryEntry = useCallback((url: string) => {
-    const index = history.findIndex((item) => item.url === url)
-    const entry = history[index]
-    if (!entry) {
-      navigateTo(url)
-      return
-    }
+  const navigateToHistoryIndex = useCallback((nextIndex: number) => {
+    const entry = history[nextIndex]
+    if (!entry) return
     if (entry.url === currentUrl) return
     setCurrentUrl(entry.url)
     setAddress(displayBrowserUrl(entry.url))
     setFrameSrc(entry.url)
     setFrameKey((key) => key + 1)
     setLoading(true)
-    setHistoryIndex(index)
+    setHistoryIndex(nextIndex)
     onResourceChange?.({ kind: 'browser', url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl })
-  }, [currentUrl, history, navigateTo, onResourceChange])
+  }, [history, currentUrl, onResourceChange])
+
+  const selectHistoryEntry = useCallback((url: string) => {
+    const index = history.findIndex((item) => item.url === url)
+    if (index < 0) {
+      navigateTo(url)
+      return
+    }
+    navigateToHistoryIndex(index)
+  }, [history, navigateTo, navigateToHistoryIndex])
 
   const goBack = useCallback(() => {
-    const nextIndex = Math.max(0, historyIndex - 1)
-    const entry = history[nextIndex]
-    if (!entry) return
-    setCurrentUrl(entry.url)
-    setAddress(displayBrowserUrl(entry.url))
-    setFrameSrc(entry.url)
-    setFrameKey((key) => key + 1)
-    setLoading(true)
-    setHistoryIndex(nextIndex)
-    onResourceChange?.({ kind: 'browser', url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl })
-  }, [history, historyIndex, onResourceChange])
+    if (historyIndex === 0) return
+    navigateToHistoryIndex(historyIndex - 1)
+  }, [historyIndex, navigateToHistoryIndex])
 
   const goForward = useCallback(() => {
-    const nextIndex = Math.min(history.length - 1, historyIndex + 1)
-    const entry = history[nextIndex]
-    if (!entry) return
-    setCurrentUrl(entry.url)
-    setAddress(displayBrowserUrl(entry.url))
-    setFrameSrc(entry.url)
-    setFrameKey((key) => key + 1)
-    setLoading(true)
-    setHistoryIndex(nextIndex)
-    onResourceChange?.({ kind: 'browser', url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl })
-  }, [history, historyIndex, onResourceChange])
+    if (historyIndex >= history.length - 1) return
+    navigateToHistoryIndex(historyIndex + 1)
+  }, [historyIndex, history.length, navigateToHistoryIndex])
 
   const reload = useCallback((hard = false) => {
     if (!currentUrl) return

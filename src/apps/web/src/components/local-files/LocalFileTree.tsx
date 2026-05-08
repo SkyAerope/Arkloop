@@ -30,6 +30,21 @@ const treeIndentBase = 5
 const treeIndentStep = 12
 const treeMetaOffset = 24
 const directoryCache = new Map<string, DirectoryState>()
+const directoryCacheInsertOrder: string[] = []
+const MAX_CACHE_ENTRIES = 200
+
+function cacheSet(key: string, value: DirectoryState): void {
+  if (directoryCache.has(key)) {
+    directoryCache.set(key, value)
+    return
+  }
+  while (directoryCacheInsertOrder.length >= MAX_CACHE_ENTRIES) {
+    const oldest = directoryCacheInsertOrder.shift()
+    if (oldest) directoryCache.delete(oldest)
+  }
+  directoryCache.set(key, value)
+  directoryCacheInsertOrder.push(key)
+}
 
 function cacheKey(rootPath: string, subPath?: string): string {
   return `${rootPath}\n${directoryKey(subPath)}`
@@ -131,7 +146,7 @@ export function LocalFileTree({ rootPath, onOpenFile, onPinFile, selectedPath, s
     fs.listDir(rootPath, subPath)
       .then((result) => {
         const nextState: DirectoryState = { status: 'ready', entries: sortEntries(result.entries) }
-        directoryCache.set(cacheKey(rootPath, subPath), nextState)
+        cacheSet(cacheKey(rootPath, subPath), nextState)
         setTreeState((current) => ({
           ...current,
           directories: {
