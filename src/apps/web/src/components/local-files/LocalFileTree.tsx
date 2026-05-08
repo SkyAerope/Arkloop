@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, File, Folder, FolderOpen } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { getDesktopApi, type LocalFileEntry } from '@arkloop/shared/desktop'
+import type { LocalFileResourceRef } from '../resource-preview/types'
 import './LocalFileTree.css'
-
-export type LocalFileResourceRef = {
-  kind: 'local-file'
-  rootPath: string
-  path: string
-  name?: string
-}
+import { localFileDecorationClass, resolveLocalFileIconUrl } from './fileIconResolver'
 
 export type LocalFileTreeProps = {
   rootPath: string
   onOpenFile: (ref: LocalFileResourceRef) => void
+  selectedPath?: string
+  searchQuery?: string
   className?: string
 }
 
@@ -28,14 +25,36 @@ type TreeState = {
 }
 
 const ROOT_KEY = ''
+const treeIndentBase = 5
+const treeIndentStep = 12
+const treeMetaOffset = 24
+const directoryCache = new Map<string, DirectoryState>()
+
+function cacheKey(rootPath: string, subPath?: string): string {
+  return `${rootPath}\n${directoryKey(subPath)}`
+}
+
+function cachedDirectories(rootPath: string): Record<string, DirectoryState> {
+  if (!rootPath) return {}
+  const state = directoryCache.get(cacheKey(rootPath))
+  return state ? { [ROOT_KEY]: state } : { [ROOT_KEY]: { status: 'loading', entries: [] } }
+}
+
+function LocalFileGlyph({ entry, expanded }: { entry: LocalFileEntry; expanded: boolean }) {
+  if (entry.type === 'dir') {
+    return expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+  }
+
+  const iconUrl = resolveLocalFileIconUrl(entry)
+  return iconUrl ? (
+    <img className="local-file-tree__icon-image" src={iconUrl} alt="" draggable={false} aria-hidden="true" />
+  ) : (
+    <span className="local-file-tree__icon-fallback" aria-hidden="true" />
+  )
+}
 
 function directoryKey(path: string | undefined): string {
   return path?.replace(/^\/+|\/+$/g, '') ?? ROOT_KEY
-}
-
-function displayRootName(rootPath: string): string {
-  const normalized = rootPath.replace(/[\\/]+$/g, '')
-  return normalized.split(/[\\/]/).pop() || normalized || rootPath
 }
 
 function displayPath(rootPath: string, path?: string): string {
@@ -51,14 +70,22 @@ function sortEntries(entries: LocalFileEntry[]): LocalFileEntry[] {
   })
 }
 
-export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTreeProps) {
+function entryMatchesSearch(entry: LocalFileEntry, query: string, directories: Record<string, DirectoryState>): boolean {
+  if (!query) return true
+  if (entry.name.toLowerCase().includes(query)) return true
+  if (entry.type !== 'dir') return false
+  const childState = directories[directoryKey(entry.path)]
+  if (!childState || childState.status !== 'ready') return false
+  return childState.entries.some((child) => entryMatchesSearch(child, query, directories))
+}
+
+export function LocalFileTree({ rootPath, onOpenFile, selectedPath, searchQuery = '', className }: LocalFileTreeProps) {
   const [treeState, setTreeState] = useState<TreeState>(() => ({
-    rootPath: '',
+    rootPath,
     expanded: new Set([ROOT_KEY]),
-    directories: {},
+    directories: cachedDirectories(rootPath),
   }))
 
-  const rootLabel = useMemo(() => displayRootName(rootPath), [rootPath])
   const expanded = useMemo(
     () => (treeState.rootPath === rootPath ? treeState.expanded : new Set([ROOT_KEY])),
     [rootPath, treeState.expanded, treeState.rootPath],
@@ -68,6 +95,7 @@ export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTree
     [rootPath, treeState.directories, treeState.rootPath],
   )
   const rootState = directories[ROOT_KEY]
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
   const loadDirectory = useCallback((subPath?: string) => {
     const key = directoryKey(subPath)
@@ -76,12 +104,13 @@ export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTree
     setTreeState((current) => {
       const sameRoot = current.rootPath === rootPath
       const directoriesForRoot = sameRoot ? current.directories : {}
+      const cached = directoryCache.get(cacheKey(rootPath, subPath))
       return {
         rootPath,
         expanded: sameRoot ? current.expanded : new Set([ROOT_KEY]),
         directories: {
           ...directoriesForRoot,
-          [key]: { status: 'loading', entries: directoriesForRoot[key]?.entries ?? [] },
+          [key]: { status: 'loading', entries: cached?.entries ?? directoriesForRoot[key]?.entries ?? [] },
         },
       }
     })
@@ -100,11 +129,13 @@ export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTree
 
     fs.listDir(rootPath, subPath)
       .then((result) => {
+        const nextState: DirectoryState = { status: 'ready', entries: sortEntries(result.entries) }
+        directoryCache.set(cacheKey(rootPath, subPath), nextState)
         setTreeState((current) => ({
           ...current,
           directories: {
             ...current.directories,
-            [key]: { status: 'ready', entries: sortEntries(result.entries) },
+            [key]: nextState,
           },
         }))
       })
@@ -161,10 +192,10 @@ export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTree
   const renderDirectoryRows = (parentPath: string | undefined, level: number) => {
     const key = directoryKey(parentPath)
     const state = directories[key]
-    const entries = state?.entries ?? []
-    const indent = level * 16 + 24
+    const entries = (state?.entries ?? []).filter((entry) => entryMatchesSearch(entry, normalizedSearchQuery, directories))
+    const indent = treeIndentBase + level * treeIndentStep + treeMetaOffset
 
-    if (!state || state.status === 'loading') {
+    if (!state || (state.status === 'loading' && entries.length === 0)) {
       return <div className="local-file-tree__meta" style={{ paddingLeft: indent }}>Loading</div>
     }
 
@@ -180,25 +211,26 @@ export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTree
       const entryDirectoryKey = directoryKey(entry.path)
       const isExpanded = expanded.has(entryDirectoryKey)
       const isDirectory = entry.type === 'dir'
-      const Icon = isDirectory ? (isExpanded ? FolderOpen : Folder) : File
+      const decorationClass = localFileDecorationClass(entry)
+      const selectedClass = !isDirectory && entry.path === selectedPath ? 'local-file-tree__row--selected' : ''
 
       return (
-        <div key={`${entry.type}:${entry.path}`}>
+        <div key={`${entry.type}:${entry.path}`} className="local-file-tree__item">
           <button
             type="button"
-            className="local-file-tree__row"
-            style={{ paddingLeft: level * 16 + 6 }}
+            className={['local-file-tree__row', decorationClass, selectedClass].filter(Boolean).join(' ')}
+            style={{ paddingLeft: treeIndentBase + level * treeIndentStep }}
             title={displayPath(rootPath, entry.path)}
             data-path={entry.path}
+            aria-expanded={isDirectory ? isExpanded : undefined}
             onClick={() => (isDirectory ? toggleDirectory(entry) : openFile(entry))}
           >
-            <span className="local-file-tree__twisty" aria-hidden="true">
-              {isDirectory ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : null}
+            <span className="local-file-tree__glyph" aria-hidden="true">
+              <LocalFileGlyph entry={entry} expanded={isExpanded} />
             </span>
-            <Icon className="local-file-tree__icon" size={14} aria-hidden="true" />
             <span className="local-file-tree__name">{entry.name}</span>
           </button>
-          {isDirectory && isExpanded ? renderDirectoryRows(entry.path, level + 1) : null}
+          {isDirectory && (isExpanded || normalizedSearchQuery) ? renderDirectoryRows(entry.path, level + 1) : null}
         </div>
       )
     })
@@ -207,16 +239,9 @@ export function LocalFileTree({ rootPath, onOpenFile, className }: LocalFileTree
   return (
     <section className={['local-file-tree', className].filter(Boolean).join(' ')} aria-label="Local files">
       {rootPath ? (
-        <>
-          <div className="local-file-tree__root" title={rootPath}>
-            <FolderOpen size={14} aria-hidden="true" />
-            <span className="local-file-tree__root-name">{rootLabel}</span>
-            <span className="local-file-tree__root-path">{rootPath}</span>
-          </div>
-          <div className="local-file-tree__body">
-            {rootState ? renderDirectoryRows(undefined, 0) : null}
-          </div>
-        </>
+        <div className="local-file-tree__body">
+          {rootState ? renderDirectoryRows(undefined, 0) : null}
+        </div>
       ) : (
         <div className="local-file-tree__meta local-file-tree__meta--standalone">No folder selected</div>
       )}

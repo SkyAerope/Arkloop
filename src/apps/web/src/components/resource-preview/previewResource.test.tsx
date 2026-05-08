@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PreviewResourceView } from './PreviewResourceView'
 import { getPreviewRendererKind } from './rendererKind'
 import { buildWorkspaceResourceUrl, loadPreviewResource } from './loader'
+import { guessMimeType, normalizeMimeType } from './mime'
 import type { PreviewResource, ResourceRef } from './types'
 
 vi.mock('@arkloop/shared/desktop', () => ({
@@ -43,6 +44,11 @@ describe('resource preview renderer registry', () => {
     expect(getPreviewRendererKind(preview('workspace-file', 'image/png', 'chart.png'))).toBe('image')
     expect(getPreviewRendererKind(preview('local-file', 'text/html', 'index.html'))).toBe('iframe')
     expect(getPreviewRendererKind(preview('artifact', 'application/octet-stream', 'model.bin'))).toBe('binary')
+  })
+
+  it('按文件名修正 octet-stream 文本文件', () => {
+    expect(guessMimeType('go.work')).toBe('text/plain')
+    expect(normalizeMimeType('application/octet-stream', 'go.work')).toBe('text/plain')
   })
 
   it('组件暴露可测的 renderer 标记', () => {

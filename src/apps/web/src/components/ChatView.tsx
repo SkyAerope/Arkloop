@@ -26,7 +26,7 @@ import { CodeExecutionPanel } from './CodeExecutionPanel'
 import { DocumentPanel } from './DocumentPanel'
 import { AgentPanel } from './AgentPanel'
 import { RightPanel, type RightPanelTab } from './RightPanel'
-import { LocalFileTree } from './local-files/LocalFileTree'
+import { LocalFilesPanel } from './local-files/LocalFilesPanel'
 import { ResourcePreviewPanel } from './resource-preview/ResourcePreviewPanel'
 import type { ResourceRef } from './resource-preview/types'
 import { ChatTitleMenu } from './ChatTitleMenu'
@@ -165,6 +165,8 @@ const chatInputPadding = { panelClosed: 'clamp(24px, 5vw, 60px)', panelOpen: 'cl
 const rightPanelDefaultWidth = 760
 const rightPanelMinWidth = 420
 const chatViewMinWidth = 520
+const rightPanelLayoutTransition = { duration: 0.22, ease: [0.16, 1, 0.3, 1] } as const
+const rightPanelLayoutTransitionCss = '220ms cubic-bezier(0.16, 1, 0.3, 1)'
 
 function errorNoticeKey(error: AppError): string {
   let details = ''
@@ -951,7 +953,6 @@ export const ChatView = memo(function ChatView() {
     openCodePanel: openCodePanelState,
     openDocumentPanel: openDocumentPanelState,
     openAgentPanel: openAgentPanelState,
-    openResourcePanel,
     closePanel,
     closeShareModal,
   } = usePanels()
@@ -2322,6 +2323,9 @@ export const ChatView = memo(function ChatView() {
         if (activeId !== id) return activeId
         return next[index]?.id ?? next[index - 1]?.id ?? (workPanelFolder?.trim() ? 'files' : null)
       })
+      if (next.length === 0 && !workPanelFolder?.trim()) {
+        setRightPanelVisible(false)
+      }
       return next
     })
   }, [activePanel, closePanel, setCodePanelExecution, setDocumentPanelArtifact, setSourcePanelMessageId, workPanelFolder])
@@ -2380,7 +2384,7 @@ export const ChatView = memo(function ChatView() {
         kind: 'files',
         title: 'Files',
         closable: false,
-        content: <LocalFileTree rootPath={workPanelFolder} onOpenFile={openResourcePanel} />,
+        content: <LocalFilesPanel rootPath={workPanelFolder} accessToken={accessToken} />,
       })
     }
 
@@ -2451,7 +2455,6 @@ export const ChatView = memo(function ChatView() {
     accessToken,
     closePanel,
     closeRightPanelTab,
-    openResourcePanel,
     resolvedMessageSources,
     rightPanelTabs,
     workPanelFolder,
@@ -2462,19 +2465,31 @@ export const ChatView = memo(function ChatView() {
     : rightPanelRenderedTabs[0]?.id ?? null
 
   const openCodePanel = useCallback((ce: CodeExecution) => {
+    const tabId = `code:${ce.id}`
     if (codePanelExecution?.id === ce.id) {
-      setRightPanelVisible(true)
-      setActiveRightPanelTabId(`code:${ce.id}`)
+      if (isPanelOpen && effectiveRightPanelTabId === tabId) {
+        closeRightPanelTab(tabId)
+        setRightPanelVisible(false)
+      } else {
+        setRightPanelVisible(true)
+        setActiveRightPanelTabId(tabId)
+      }
       return
     }
     openCodePanelState(ce)
-  }, [codePanelExecution?.id, openCodePanelState])
+  }, [closeRightPanelTab, codePanelExecution?.id, effectiveRightPanelTabId, isPanelOpen, openCodePanelState])
 
   const openDocumentPanel = useCallback((artifact: ArtifactRef, options?: { trigger?: HTMLElement | null; artifacts?: ArtifactRef[]; runId?: string }) => {
     stabilizeDocumentPanelScroll(options?.trigger)
+    const tabId = `document:${artifact.key}`
     if (documentPanelArtifact?.artifact.key === artifact.key) {
-      setRightPanelVisible(true)
-      setActiveRightPanelTabId(`document:${artifact.key}`)
+      if (isPanelOpen && effectiveRightPanelTabId === tabId) {
+        closeRightPanelTab(tabId)
+        setRightPanelVisible(false)
+      } else {
+        setRightPanelVisible(true)
+        setActiveRightPanelTabId(tabId)
+      }
       return
     }
     openDocumentPanelState({
@@ -2482,7 +2497,7 @@ export const ChatView = memo(function ChatView() {
       artifacts: options?.artifacts ?? [],
       runId: options?.runId,
     })
-  }, [documentPanelArtifact?.artifact.key, openDocumentPanelState, stabilizeDocumentPanelScroll])
+  }, [closeRightPanelTab, documentPanelArtifact?.artifact.key, effectiveRightPanelTabId, isPanelOpen, openDocumentPanelState, stabilizeDocumentPanelScroll])
 
   // COP step 计数：timeline 中所有非 finished 的点
   const dedupedTopLevelCodeExecutions = useMemo(() => {
@@ -2821,7 +2836,10 @@ export const ChatView = memo(function ChatView() {
       <div className="relative flex flex-1 min-h-0 min-w-0">
         <div
           className="relative flex flex-1 min-w-0 flex-col"
-          style={{ minWidth: isPanelOpen ? chatViewMinWidth : 0 }}
+          style={{
+            minWidth: isPanelOpen ? chatViewMinWidth : 0,
+            transition: `min-width ${rightPanelLayoutTransitionCss}`,
+          }}
         >
           <ChatTitleMenu />
           <div className="pointer-events-none absolute inset-x-0 top-[60px] z-10 h-10" style={{ background: 'linear-gradient(to bottom, var(--c-bg-page-gradient-stop, var(--c-bg-page)), transparent)' }} />
@@ -2838,6 +2856,7 @@ export const ChatView = memo(function ChatView() {
             margin: '0 auto',
             padding: `50px ${messageHorizontalPadding} var(--chat-input-area-height)`,
             gap: isWorkMode ? 0 : undefined,
+            transition: `padding ${rightPanelLayoutTransitionCss}`,
           }}
           className="flex w-full flex-col gap-6"
         >
@@ -2947,6 +2966,7 @@ export const ChatView = memo(function ChatView() {
           right: 0,
           zIndex: 10,
           background: 'linear-gradient(to bottom, transparent 0%, var(--c-bg-page-gradient-stop, var(--c-bg-page)) 24px)',
+          transition: `padding ${rightPanelLayoutTransitionCss}`,
         } as React.CSSProperties}
         className="flex w-full flex-col items-center gap-2"
       >
@@ -3031,9 +3051,10 @@ export const ChatView = memo(function ChatView() {
           opacity: isPanelOpen ? 1 : 0,
           pointerEvents: isPanelOpen ? 'auto' : 'none',
         }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
+        transition={rightPanelLayoutTransition}
         style={{
           borderLeft: isPanelOpen ? '0.5px solid var(--c-border-subtle)' : 'none',
+          willChange: 'width, opacity',
         }}
       >
         <div

@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import { CopyIconButton } from './CopyIconButton'
 import type { Components, Options, UrlTransform } from 'react-markdown'
 import { defaultUrlTransform } from 'react-markdown'
@@ -728,9 +730,10 @@ type Props = {
   typography?: TypographyMode
   /** 下一兄弟为 COP 等块时去掉末段底距，避免正文→COP 过大缝隙 */
   trimTrailingMargin?: boolean
+  allowHtml?: boolean
 }
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content, disableMath, streaming = false, webSources, artifacts, accessToken, runId, onOpenDocument, compact = false, typography = 'default', trimTrailingMargin = false }: Props) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, disableMath, streaming = false, webSources, artifacts, accessToken, runId, onOpenDocument, compact = false, typography = 'default', trimTrailingMargin = false, allowHtml = false }: Props) {
   const sourceCount = webSources?.length ?? 0
   const artifactCount = artifacts?.length ?? 0
   const shouldThrottleStreamingMath = streaming && !disableMath && containsLikelyMath(content)
@@ -769,10 +772,13 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, disabl
   }, [streaming, effectiveDisableMath])
 
   const rehypePlugins = useMemo<NonNullable<Options['rehypePlugins']>>(
-    () => (effectiveDisableMath
-      ? asyncPlugins
-      : [[rehypeKatex, { throwOnError: false, output: 'htmlAndMathml' }], ...asyncPlugins]),
-    [asyncPlugins, effectiveDisableMath],
+    () => {
+      const htmlPlugins: NonNullable<Options['rehypePlugins']> = allowHtml ? [rehypeRaw, rehypeSanitize] : []
+      return effectiveDisableMath
+        ? [...htmlPlugins, ...asyncPlugins]
+        : [...htmlPlugins, [rehypeKatex, { throwOnError: false, output: 'htmlAndMathml' }], ...asyncPlugins]
+    },
+    [allowHtml, asyncPlugins, effectiveDisableMath],
   )
 
   const activePanelArtifactKey = useActiveArtifactKey()
@@ -799,6 +805,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, disabl
       typography,
       disableMath: !!disableMath,
       streaming,
+      allowHtml,
       throttledMath: shouldThrottleStreamingMath,
       hasWebSources: sourceCount > 0,
       hasArtifacts: artifactCount > 0,
@@ -808,8 +815,9 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, disabl
       typography,
       disableMath: !!disableMath,
       streaming,
+      allowHtml,
     })
-  }, [artifactCount, compact, content.length, disableMath, renderContent.length, shouldThrottleStreamingMath, sourceCount, streaming, typography])
+  }, [allowHtml, artifactCount, compact, content.length, disableMath, renderContent.length, shouldThrottleStreamingMath, sourceCount, streaming, typography])
 
   return (
     <ArtifactsContext.Provider value={artifactsValue}>

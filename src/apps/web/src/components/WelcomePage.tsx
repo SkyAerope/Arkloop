@@ -40,6 +40,7 @@ import {
 import { useCredits } from '../contexts/credits'
 
 const welcomeRightPanelWidth = 520
+const welcomeRightPanelTransitionCss = '220ms cubic-bezier(0.16, 1, 0.3, 1)'
 
 function normalizeError(error: unknown, fallback: string): AppError {
   if (isApiError(error)) {
@@ -565,12 +566,14 @@ export function WelcomePage() {
         {showDebugPanel && <DebugTrigger />}
       </div>
       <div
-        className="shrink-0 overflow-hidden bg-[var(--c-bg-page)] transition-[width,opacity] duration-200"
+        className="shrink-0 overflow-hidden bg-[var(--c-bg-page)]"
         style={{
           width: rightPanelVisible ? welcomeRightPanelWidth : 0,
           opacity: rightPanelVisible ? 1 : 0,
           borderLeft: rightPanelVisible ? '0.5px solid var(--c-border-subtle)' : 'none',
           pointerEvents: rightPanelVisible ? 'auto' : 'none',
+          transition: `width ${welcomeRightPanelTransitionCss}, opacity ${welcomeRightPanelTransitionCss}`,
+          willChange: 'width, opacity',
         }}
       >
         <RightPanel tabs={[]} activeTabId={null} onSelectTab={() => {}} />

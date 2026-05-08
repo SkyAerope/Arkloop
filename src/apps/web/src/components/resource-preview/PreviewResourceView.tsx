@@ -1,26 +1,16 @@
 import { memo, type ReactNode } from 'react'
 import { FileIcon } from 'lucide-react'
 import { ArtifactIframe } from '../ArtifactIframe'
-import { MarkdownRenderer } from '../MarkdownRenderer'
 import type { PreviewResource } from './types'
-import { isJsonMime } from './mime'
 import { getPreviewRendererKind, type PreviewRendererKind } from './rendererKind'
+import { MarkdownDocumentRenderer } from './MarkdownDocumentRenderer'
+import { SourceDocumentRenderer } from './SourceDocumentRenderer'
 
 function formatSize(size: number | undefined): string {
   if (size === undefined) return ''
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / 1024 / 1024).toFixed(1)} MB`
-}
-
-function textForDisplay(resource: PreviewResource): string {
-  if (!resource.text) return ''
-  if (!isJsonMime(resource.mimeType, resource.filename)) return resource.text
-  try {
-    return JSON.stringify(JSON.parse(resource.text), null, 2)
-  } catch {
-    return resource.text
-  }
 }
 
 function Frame({ children, kind }: { children: ReactNode; kind: PreviewRendererKind }) {
@@ -42,24 +32,9 @@ function Frame({ children, kind }: { children: ReactNode; kind: PreviewRendererK
 
 function TextPreview({ resource, kind }: { resource: PreviewResource; kind: 'json' | 'code' | 'text' }) {
   return (
-    <Frame kind={kind}>
-      <pre
-        style={{
-          margin: 0,
-          padding: 12,
-          maxHeight: 420,
-          overflow: 'auto',
-          color: 'var(--c-text-primary)',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-          fontSize: 12,
-          lineHeight: 1.6,
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        <code>{textForDisplay(resource)}</code>
-      </pre>
-    </Frame>
+    <div data-preview-renderer={kind}>
+      <SourceDocumentRenderer content={resource.text ?? ''} filename={resource.filename} mimeType={resource.mimeType} />
+    </div>
   )
 }
 
@@ -84,17 +59,22 @@ function BinaryPreview({ resource }: { resource: PreviewResource }) {
 type Props = {
   resource: PreviewResource
   accessToken?: string
+  mode?: 'preview' | 'source'
 }
 
-function PreviewResourceContent({ resource, accessToken }: { resource: PreviewResource; accessToken: string }) {
+function SourcePreview({ resource }: { resource: PreviewResource }) {
+  return <SourceDocumentRenderer content={resource.text ?? ''} filename={resource.filename} mimeType={resource.mimeType} />
+}
+
+function PreviewResourceContent({ resource, accessToken, mode }: { resource: PreviewResource; accessToken: string; mode: 'preview' | 'source' }) {
   const kind = getPreviewRendererKind(resource)
 
+  if (mode === 'source' && resource.text !== undefined) {
+    return <SourcePreview resource={resource} />
+  }
+
   if (kind === 'markdown') {
-    return (
-      <div data-preview-renderer="markdown">
-        <MarkdownRenderer content={resource.text ?? ''} artifacts={[]} accessToken={accessToken} compact />
-      </div>
-    )
+    return <MarkdownDocumentRenderer content={resource.text ?? ''} accessToken={accessToken} />
   }
 
   if (kind === 'iframe') {
@@ -138,6 +118,6 @@ function PreviewResourceContent({ resource, accessToken }: { resource: PreviewRe
   return <BinaryPreview resource={resource} />
 }
 
-export const PreviewResourceView = memo(function PreviewResourceView({ resource, accessToken = '' }: Props) {
-  return <PreviewResourceContent resource={resource} accessToken={accessToken} />
+export const PreviewResourceView = memo(function PreviewResourceView({ resource, accessToken = '', mode = 'preview' }: Props) {
+  return <PreviewResourceContent resource={resource} accessToken={accessToken} mode={mode} />
 })

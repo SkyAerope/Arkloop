@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
-import { FileText } from 'lucide-react'
+import { Code, Eye, FileText, X } from 'lucide-react'
+import { SettingsSegmentedControl } from '../settings/_SettingsSegmentedControl'
 import { loadPreviewResource } from './loader'
 import { PreviewResourceView } from './PreviewResourceView'
 import type { PreviewResource, ResourceRef } from './types'
 
+type ViewMode = 'preview' | 'source'
+
 type Props = {
   resource: ResourceRef
   accessToken: string
+  onClose?: () => void
 }
 
 function releaseResource(resource: PreviewResource | null): void {
@@ -20,7 +24,13 @@ function formatSize(size?: number): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function ResourcePreviewPanel({ resource, accessToken }: Props) {
+function getResourceFilename(resource: ResourceRef): string {
+  const pathName = 'path' in resource ? resource.path.split('/').filter(Boolean).at(-1) : undefined
+  return resource.filename ?? ('name' in resource ? resource.name : undefined) ?? ('title' in resource ? resource.title : undefined) ?? pathName ?? 'Preview'
+}
+
+export function ResourcePreviewPanel({ resource, accessToken, onClose }: Props) {
+  const [mode, setMode] = useState<ViewMode>('preview')
   const [state, setState] = useState<{
     resource: ResourceRef | null
     loaded: PreviewResource | null
@@ -38,6 +48,7 @@ export function ResourcePreviewPanel({ resource, accessToken }: Props) {
           return
         }
         created = next
+        setMode('preview')
         setState({ resource, loaded: next, error: null })
       })
       .catch((err: unknown) => {
@@ -53,28 +64,66 @@ export function ResourcePreviewPanel({ resource, accessToken }: Props) {
   }, [resource, accessToken])
 
   const current = state.resource === resource ? state : { resource, loaded: null, error: null }
-
-  if (current.error) {
-    return <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>{current.error}</div>
-  }
-
-  if (!current.loaded) {
-    return <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>Loading</div>
-  }
-
   const loaded = current.loaded
+  const canToggleSource = loaded?.text !== undefined
+  const filename = loaded?.filename ?? getResourceFilename(resource)
+  const meta = loaded ? [loaded.mimeType, formatSize(loaded.size)].filter(Boolean).join(' · ') : ''
 
   return (
     <div style={{ height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--c-bg-page)' }}>
-      <div style={{ height: 42, flexShrink: 0, borderBottom: '0.5px solid var(--c-border-subtle)', display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', minWidth: 0 }}>
-        <FileText size={15} color="var(--c-text-tertiary)" />
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ color: 'var(--c-text-primary)', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{loaded.filename}</span>
-          <span style={{ color: 'var(--c-text-muted)', fontSize: 11 }}>{[loaded.mimeType, formatSize(loaded.size)].filter(Boolean).join(' · ')}</span>
+      <div style={{ minHeight: 66, flexShrink: 0, borderBottom: '0.5px solid var(--c-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 18px', minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <FileText size={17} color="var(--c-text-tertiary)" />
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ color: 'var(--c-text-primary)', fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{filename}</span>
+            {meta ? <span style={{ color: 'var(--c-text-muted)', fontSize: 12 }}>{meta}</span> : null}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          {canToggleSource && (
+            <SettingsSegmentedControl<ViewMode>
+              value={mode}
+              onChange={setMode}
+              density="icon"
+              options={[
+                {
+                  value: 'preview',
+                  title: 'Preview',
+                  ariaLabel: 'Preview',
+                  label: <Eye size={14} />,
+                },
+                {
+                  value: 'source',
+                  title: 'Source',
+                  ariaLabel: 'Source',
+                  label: <Code size={14} />,
+                },
+              ]}
+            />
+          )}
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close"
+              aria-label="Close preview"
+              style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, borderRadius: 8, background: 'transparent', color: 'var(--c-text-secondary)', cursor: 'pointer' }}
+              onMouseEnter={(event) => { event.currentTarget.style.background = 'var(--c-bg-deep)' }}
+              onMouseLeave={(event) => { event.currentTarget.style.background = 'transparent' }}
+            >
+              <X size={16} />
+            </button>
+          ) : null}
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
-        <PreviewResourceView resource={loaded} accessToken={accessToken} />
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        {current.error ? (
+          <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>{current.error}</div>
+        ) : loaded ? (
+          <PreviewResourceView resource={loaded} accessToken={accessToken} mode={mode} />
+        ) : (
+          <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>Loading</div>
+        )}
       </div>
     </div>
   )

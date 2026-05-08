@@ -2,7 +2,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { LocalFileTree, type LocalFileResourceRef } from './LocalFileTree'
+import type { LocalFileResourceRef } from '../resource-preview/types'
+import { LocalFileTree } from './LocalFileTree'
 
 function flushMicrotasks(): Promise<void> {
   return Promise.resolve()
@@ -31,6 +32,18 @@ function renderTree(rootPath: string, onOpenFile: (ref: LocalFileResourceRef) =>
   })
 
   return { container, root, onOpenFile }
+}
+
+function renderSearchTree(rootPath: string, searchQuery: string) {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+
+  act(() => {
+    root.render(<LocalFileTree rootPath={rootPath} searchQuery={searchQuery} onOpenFile={vi.fn()} />)
+  })
+
+  return { container, root }
 }
 
 async function cleanup(root: Root, container: HTMLElement) {
@@ -141,7 +154,7 @@ describe('LocalFileTree', () => {
     await cleanup(root, container)
   })
 
-  it('显示 rootPath，并在文件行保留完整路径标题', async () => {
+  it('不显示 rootPath，但在文件行保留完整路径标题', async () => {
     const listDir = vi.fn().mockResolvedValue({
       entries: [
         { name: 'app.tsx', path: 'src/app.tsx', type: 'file' },
@@ -154,8 +167,56 @@ describe('LocalFileTree', () => {
       await flushMicrotasks()
     })
 
-    expect(container.textContent).toContain('/Users/dev/project')
+    expect(container.textContent).not.toContain('/Users/dev/project')
     expect(container.querySelector('[data-path="src/app.tsx"]')?.getAttribute('title')).toBe('/Users/dev/project/src/app.tsx')
+
+    await cleanup(root, container)
+  })
+
+  it('按文件名和目录名渲染图标与基础装饰', async () => {
+    const listDir = vi.fn().mockResolvedValue({
+      entries: [
+        { name: 'src', path: 'src', type: 'dir' },
+        { name: 'node_modules', path: 'node_modules', type: 'dir' },
+        { name: 'package.json', path: 'package.json', type: 'file' },
+      ],
+    })
+    installDesktopFs(listDir)
+
+    const { container, root } = renderTree('/repo')
+    await act(async () => {
+      await flushMicrotasks()
+    })
+
+    expect(container.querySelector('[data-path="src"]')?.className).toContain('local-file-tree__row--accent')
+    expect(container.querySelector('[data-path="node_modules"]')?.className).toContain('local-file-tree__row--muted')
+    expect(container.querySelector('[data-path="src"] .local-file-tree__icon-image')).toBeNull()
+
+    await act(async () => {
+      await flushMicrotasks()
+    })
+
+    expect(container.querySelectorAll('.local-file-tree__icon-image').length).toBeGreaterThan(0)
+
+    await cleanup(root, container)
+  })
+
+  it('按 searchQuery 过滤已加载文件', async () => {
+    const listDir = vi.fn().mockResolvedValue({
+      entries: [
+        { name: 'README.md', path: 'README.md', type: 'file' },
+        { name: 'package.json', path: 'package.json', type: 'file' },
+      ],
+    })
+    installDesktopFs(listDir)
+
+    const { container, root } = renderSearchTree('/repo', 'read')
+    await act(async () => {
+      await flushMicrotasks()
+    })
+
+    expect(container.textContent).toContain('README.md')
+    expect(container.textContent).not.toContain('package.json')
 
     await cleanup(root, container)
   })

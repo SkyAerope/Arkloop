@@ -20,6 +20,9 @@ const EXT_MIME: Record<string, string> = {
   jsx: 'text/javascript',
   sh: 'text/x-shellscript',
   go: 'text/plain',
+  mod: 'text/plain',
+  sum: 'text/plain',
+  work: 'text/plain',
   yml: 'text/yaml',
   yaml: 'text/yaml',
   xml: 'application/xml',
@@ -39,7 +42,9 @@ export function guessMimeType(path: string): string {
 
 export function normalizeMimeType(value: string | null | undefined, filename: string): string {
   const raw = (value ?? '').split(';', 1)[0].trim().toLowerCase()
-  return raw || guessMimeType(filename)
+  const guessed = guessMimeType(filename)
+  if (!raw || (raw === 'application/octet-stream' && guessed !== 'application/octet-stream')) return guessed
+  return raw
 }
 
 export function isTextMime(mimeType: string): boolean {
@@ -64,4 +69,3 @@ export function isCodeMime(mimeType: string, filename: string): boolean {
   if (isMarkdownMime(mimeType, filename) || isJsonMime(mimeType, filename)) return false
   return mimeType !== 'text/plain'
 }
-
