@@ -73,7 +73,7 @@ func (e *DesktopEngine) prewarmMCPDiscovery(ctx context.Context, accountID uuid.
 			return
 		}
 		startedAt := time.Now()
-		_, meta, diag, err := e.mcpDiscoveryCache.GetWithMeta(ctx, e.db, target.AccountID, target.ProfileRef, target.WorkspaceRef)
+		_, _, _, err := e.mcpDiscoveryCache.GetWithMeta(ctx, e.db, target.AccountID, target.ProfileRef, target.WorkspaceRef)
 		durationMs := time.Since(startedAt).Milliseconds()
 		if err != nil {
 			slog.WarnContext(ctx, "desktop_mcp_prewarm_failed",
@@ -85,16 +85,6 @@ func (e *DesktopEngine) prewarmMCPDiscovery(ctx context.Context, accountID uuid.
 			)
 			continue
 		}
-		slog.DebugContext(ctx, "desktop_mcp_prewarm_completed",
-			"account_id", target.AccountID.String(),
-			"profile_ref", target.ProfileRef,
-			"workspace_ref", target.WorkspaceRef,
-			"duration_ms", durationMs,
-			"cache_hit", meta.Hit,
-			"cache_ttl_seconds", int64(meta.TTL/time.Second),
-			"server_count", len(diag.Servers),
-			"tool_count", diag.ToolCount,
-		)
 	}
 }
 

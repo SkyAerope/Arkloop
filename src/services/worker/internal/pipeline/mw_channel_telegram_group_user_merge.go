@@ -26,9 +26,7 @@ func NewChannelTelegramGroupUserMergeMiddleware() RunMiddleware {
 		if ct != "telegram" && ct != "qq" {
 			return next(ctx, rc)
 		}
-		slog.DebugContext(ctx, "channel_group_user_merge", "msgs_before", len(rc.Messages), "ids_before", len(rc.ThreadMessageIDs))
 		msgs, ids, lastScan := mergeAllTelegramGroupUserBursts(rc.Messages, rc.ThreadMessageIDs)
-		slog.DebugContext(ctx, "channel_group_user_merge", "msgs_after", len(msgs), "ids_after", len(ids))
 		rc.Messages = msgs
 		rc.ThreadMessageIDs = ids
 		if len(lastScan) > 0 {

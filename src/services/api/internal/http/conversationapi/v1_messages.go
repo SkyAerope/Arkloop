@@ -41,7 +41,6 @@ func createThreadMessage(
 		}
 
 		traceID := observability.TraceIDFromContext(r.Context())
-		slog.Debug("createThreadMessage", "thread_id", threadID)
 		if authService == nil {
 			httpkit.WriteAuthNotConfigured(w, traceID)
 			return
@@ -70,7 +69,6 @@ func createThreadMessage(
 			httpkit.WriteError(w, nethttp.StatusUnprocessableEntity, "validation.error", "request validation failed", traceID, map[string]any{"reason": err.Error()})
 			return
 		}
-		slog.Debug("createThreadMessage: payload normalized", "projection_len", len(projection), "has_content_json", len(contentJSON) > 0)
 
 		thread, err := threadRepo.GetByID(r.Context(), threadID)
 		if err != nil {
@@ -83,10 +81,8 @@ func createThreadMessage(
 			httpkit.WriteError(w, nethttp.StatusNotFound, "threads.not_found", "thread not found", traceID, nil)
 			return
 		}
-		slog.Debug("createThreadMessage: thread found", "thread_id", threadID, "account_id", thread.AccountID)
 
 		authorized := authorizeThreadOrAudit(w, r, traceID, actor, "messages.create", thread, auditWriter)
-		slog.Debug("createThreadMessage: authorization check", "authorized", authorized)
 		if !authorized {
 			return
 		}
@@ -99,7 +95,6 @@ func createThreadMessage(
 		}
 
 		// Use thread.AccountID so messages stay on the thread's account even if token claims drift.
-		slog.Debug("createThreadMessage: calling CreateStructured", "account_id", thread.AccountID, "thread_id", threadID, "role", "user", "projection_len", len(projection))
 		message, err := messageRepo.CreateStructured(r.Context(), thread.AccountID, threadID, "user", projection, contentJSON, &actor.UserID)
 		if err != nil {
 			slog.Error("createThreadMessage: CreateStructured failed", "thread_id", threadID, "error", err)
@@ -111,7 +106,6 @@ func createThreadMessage(
 			writeInternalError(w, traceID, err)
 			return
 		}
-		slog.Debug("createThreadMessage: success", "message_id", message.ID)
 
 		if err := threadRepo.Touch(r.Context(), threadID); err != nil {
 			slog.Warn("createThreadMessage: Touch failed", "thread_id", threadID, "error", err)

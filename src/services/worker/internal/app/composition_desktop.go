@@ -217,7 +217,6 @@ func ComposeDesktopEngine(ctx context.Context, db data.DesktopDB, bus eventbus.E
 		slog.InfoContext(ctx, "desktop: lsp enabled", "servers", len(lspCfg.Servers))
 	}
 	authToken := strings.TrimSpace(os.Getenv("ARKLOOP_DESKTOP_TOKEN"))
-	slog.Debug("composition_desktop", "sandboxAddr", sandboxAddr, "authTokenConfigured", authToken != "")
 	shellExec := runtime.NewDynamicShellExecutor(sandboxAddr, authToken, fileTracker)
 
 	// 已有持久化或用户已选模式时不覆盖；否则按当前 sandbox 可用性设默认。
@@ -225,10 +224,8 @@ func ComposeDesktopEngine(ctx context.Context, db data.DesktopDB, bus eventbus.E
 	if cur != "vm" && cur != "local" {
 		if sandboxAddr != "" {
 			desktop.SetExecutionMode("vm")
-			slog.Debug("composition_desktop: sandbox available, setting mode to vm")
 		} else {
 			desktop.SetExecutionMode("local")
-			slog.Debug("composition_desktop: no sandbox, setting mode to local")
 		}
 	}
 

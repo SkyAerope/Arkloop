@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -195,7 +194,6 @@ func (r *MessageRepository) CreateStructuredWithMetadata(
 	metadataJSON json.RawMessage,
 	createdByUserID *uuid.UUID,
 ) (Message, error) {
-	slog.Debug("CreateStructuredWithMetadata", "accountID", accountID, "threadID", threadID, "role", role, "content_len", len(content))
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -267,10 +265,8 @@ func (r *MessageRepository) CreateStructuredWithMetadata(
 		)
 	})
 	if err != nil {
-		slog.Debug("CreateStructuredWithMetadata query error", "error", err, "errorType", fmt.Sprintf("%T", err))
 		return Message{}, err
 	}
-	slog.Debug("CreateStructuredWithMetadata success", "messageID", message.ID)
 
 	return message, nil
 }

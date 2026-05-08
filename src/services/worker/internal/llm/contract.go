@@ -561,14 +561,12 @@ type StreamLlmRequest struct {
 
 func (r StreamLlmRequest) ToDataJSON() map[string]any {
 	payload := map[string]any{
-		"llm_call_id":    r.LlmCallID,
-		"provider_kind":  r.ProviderKind,
-		"api_mode":       r.APIMode,
-		"payload":        mapOrEmpty(r.PayloadJSON),
-		"redacted_hints": mapOrEmpty(r.RedactedHints),
+		"llm_call_id":   r.LlmCallID,
+		"provider_kind": r.ProviderKind,
+		"api_mode":      r.APIMode,
 	}
-	if len(r.InputJSON) > 0 {
-		payload["input"] = r.InputJSON
+	if len(r.RedactedHints) > 0 {
+		payload["redacted_hints"] = r.RedactedHints
 	}
 	if r.BaseURL != nil {
 		payload["base_url"] = *r.BaseURL
