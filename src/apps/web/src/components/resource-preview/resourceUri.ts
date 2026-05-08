@@ -1,10 +1,11 @@
 import type { ArtifactRef } from '../../storage'
-import type { ArtifactResourceRef, LocalFileResourceRef, ResourceRef, WorkspaceFileResourceRef } from './types'
+import type { ArtifactResourceRef, BrowserResourceRef, LocalFileResourceRef, ResourceRef, WorkspaceFileResourceRef } from './types'
 import { filenameFromPath, guessMimeType, normalizeMimeType } from './mime'
 
 export const ARTIFACT_URI_PREFIX = 'artifact:'
 export const WORKSPACE_URI_PREFIX = 'workspace:'
 export const FILE_URI_PREFIX = 'file:'
+export const BROWSER_URI_PREFIX = 'browser:'
 
 function normalizeWorkspacePath(path: string): string {
   const trimmed = path.trim()
@@ -35,6 +36,30 @@ export function workspaceUriToResourceRef(uri: string, options: { runId?: string
     mimeType: normalizeMimeType(guessMimeType(path), filename),
     runId: options.runId,
     projectId: options.projectId,
+  }
+}
+
+function normalizeBrowserUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `http://${raw}`
+  try {
+    const parsed = new URL(withScheme)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+export function browserUriToResourceRef(uri: string): BrowserResourceRef | null {
+  if (!uri.startsWith(BROWSER_URI_PREFIX)) return null
+  const url = normalizeBrowserUrl(uri.slice(BROWSER_URI_PREFIX.length))
+  if (!url) return null
+  return {
+    kind: 'browser',
+    url,
+    title: new URL(url).hostname,
   }
 }
 
@@ -138,11 +163,12 @@ export function resourceUriToResourceRef(
     if (!artifact) return null
     return artifactToResourceRef(artifact)
   }
-  return workspaceUriToResourceRef(uri, options) ?? filePathToResourceRef(uri, options)
+  return browserUriToResourceRef(uri) ?? workspaceUriToResourceRef(uri, options) ?? filePathToResourceRef(uri, options)
 }
 
 export function resourceTitle(resource: ResourceRef): string {
   if (resource.kind === 'artifact') return resource.title ?? resource.filename ?? 'Artifact'
+  if (resource.kind === 'browser') return resource.title ?? resource.url
   if (resource.kind === 'local-file') return resource.name ?? resource.filename ?? filenameFromPath(resource.path)
   return resource.name ?? resource.filename ?? filenameFromPath(resource.path)
 }

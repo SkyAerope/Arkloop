@@ -358,6 +358,7 @@ export type ArkloopDesktopApi = {
     quit: () => Promise<void>
     getOsUsername: () => Promise<string>
     openExternal: (url: string) => Promise<void>
+    fetchPageMetadata: (url: string) => Promise<{ title?: string }>
   }
   notifications: {
     show: (input: { title: string; body?: string }) => Promise<{ ok: boolean }>
@@ -553,6 +554,7 @@ const api: ArkloopDesktopApi = {
     quit: () => ipcRenderer.invoke('arkloop:app:quit'),
     getOsUsername: () => ipcRenderer.invoke('arkloop:app:os-username'),
     openExternal: (url: string) => ipcRenderer.invoke('arkloop:app:open-external', url),
+    fetchPageMetadata: (url: string) => ipcRenderer.invoke('arkloop:app:fetch-page-metadata', url),
   },
 
   notifications: {

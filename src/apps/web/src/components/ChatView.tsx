@@ -28,7 +28,8 @@ import { RightPanel, type RightPanelTab } from './RightPanel'
 import { LocalFilesPanel } from './local-files/LocalFilesPanel'
 import { resolveLocalFileIconUrl } from './local-files/fileIconResolver'
 import { ResourcePreviewPanel } from './resource-preview/ResourcePreviewPanel'
-import type { LocalFileResourceRef, ResourceRef } from './resource-preview/types'
+import { BrowserSiteIcon } from './resource-preview/BrowserSiteIcon'
+import type { BrowserResourceRef, LocalFileResourceRef, ResourceRef } from './resource-preview/types'
 import { ChatTitleMenu } from './ChatTitleMenu'
 import { MessageList } from './MessageList'
 import { CopSegmentBlocks } from './CopSegmentBlocks'
@@ -189,12 +190,14 @@ function chooseThinkingHint(hints: readonly string[]): string {
 
 function resourceTitle(resource: ResourceRef): string {
   if (resource.kind === 'artifact') return resource.title ?? resource.filename ?? 'Artifact'
+  if (resource.kind === 'browser') return resource.title ?? new URL(resource.url).hostname
   if (resource.kind === 'local-file') return resource.name ?? resource.path.split('/').pop() ?? resource.path
   return resource.name ?? resource.path.split('/').pop() ?? resource.path
 }
 
 function resourceTabId(resource: ResourceRef): string {
   if (resource.kind === 'artifact') return `resource:artifact:${resource.key}`
+  if (resource.kind === 'browser') return `resource:browser:${resource.url}`
   if (resource.kind === 'local-file') return `resource:local:${resource.rootPath}:${resource.path}`
   return `resource:workspace:${resource.projectId ?? resource.runId ?? ''}:${resource.path}`
 }
@@ -864,6 +867,7 @@ export const ChatView = memo(function ChatView() {
   const [rightPanelWidth, setRightPanelWidth] = useState(rightPanelMinWidth)
   const [rightPanelTabs, setRightPanelTabs] = useState<RightPanelStoredTab[]>([])
   const [activeRightPanelTabId, setActiveRightPanelTabId] = useState<string | null>(null)
+  const [webPanelResource, setWebPanelResource] = useState<BrowserResourceRef | null>(null)
   const [filesPreviewResource, setFilesPreviewResource] = useState<LocalFileResourceRef | null>(null)
   const localFileTabSeqRef = useRef(0)
   const isPanelOpenRef = useRef(false)
@@ -2347,6 +2351,11 @@ export const ChatView = memo(function ChatView() {
   }, [upsertRightPanelTab])
 
   const closeRightPanelTab = useCallback((id: string) => {
+    if (id === 'web') {
+      setWebPanelResource(null)
+      setActiveRightPanelTabId('web')
+      return
+    }
     setRightPanelTabs((current) => {
       const index = current.findIndex((item) => item.id === id)
       if (index < 0) return current
@@ -2360,11 +2369,8 @@ export const ChatView = memo(function ChatView() {
       const next = current.filter((item) => item.id !== id)
       setActiveRightPanelTabId((activeId) => {
         if (activeId !== id) return activeId
-        return next[index]?.id ?? next[index - 1]?.id ?? (workPanelFolder?.trim() ? 'files' : null)
+        return next[index]?.id ?? next[index - 1]?.id ?? (workPanelFolder?.trim() ? 'files' : 'web')
       })
-      if (next.length === 0 && !workPanelFolder?.trim()) {
-        setRightPanelVisible(false)
-      }
       return next
     })
   }, [activePanel, closePanel, setCodePanelExecution, setDocumentPanelArtifact, setSourcePanelMessageId, workPanelFolder])
@@ -2406,6 +2412,11 @@ export const ChatView = memo(function ChatView() {
 
   useEffect(() => {
     if (resourcePanelResource) {
+      if (resourcePanelResource.kind === 'browser') {
+        setWebPanelResource(resourcePanelResource)
+        setActiveRightPanelTabId('web')
+        return
+      }
       const tabId = resourceTabId(resourcePanelResource)
       setRightPanelTabs((current) => {
         const index = current.findIndex((item) => item.id === tabId)
@@ -2429,6 +2440,23 @@ export const ChatView = memo(function ChatView() {
 
   const rightPanelRenderedTabs = useMemo<RightPanelTab[]>(() => {
     const tabs: RightPanelTab[] = []
+    tabs.push({
+      id: 'web',
+      kind: 'web',
+      title: webPanelResource ? resourceTitle(webPanelResource) : 'Web',
+      closable: !!webPanelResource,
+      hideTitle: !webPanelResource,
+      icon: <BrowserSiteIcon url={webPanelResource?.url} faviconUrl={webPanelResource?.faviconUrl} />,
+      content: (
+        <ResourcePreviewPanel
+          resource={webPanelResource ?? { kind: 'browser', url: '', title: 'Web' }}
+          accessToken={accessToken}
+          onResourceChange={(resource) => {
+            if (resource.kind === 'browser') setWebPanelResource(resource)
+          }}
+        />
+      ),
+    })
     if (workPanelFolder?.trim()) {
       const filesPreviewTitle = filesPreviewResource ? resourceTitle(filesPreviewResource) : 'Files'
       tabs.push({
@@ -2451,6 +2479,7 @@ export const ChatView = memo(function ChatView() {
     }
 
     for (const tab of rightPanelTabs) {
+      if (tab.kind === 'resource' && tab.resource.kind === 'browser') continue
       if (tab.kind === 'source') {
         const sources = resolvedMessageSources.get(tab.messageId)
         if (!sources || sources.length === 0) continue
@@ -2516,7 +2545,11 @@ export const ChatView = memo(function ChatView() {
           id: tab.id,
           kind: tab.kind,
           title: tab.title,
-          icon: tab.resource.kind === 'local-file' ? localFileTabIcon(tab.resource) : undefined,
+          icon: tab.resource.kind === 'local-file'
+            ? localFileTabIcon(tab.resource)
+            : tab.resource.kind === 'browser'
+              ? <BrowserSiteIcon url={tab.resource.url} faviconUrl={tab.resource.faviconUrl} />
+              : undefined,
           content: (
             <ResourcePreviewPanel
               resource={tab.resource}
@@ -2538,6 +2571,7 @@ export const ChatView = memo(function ChatView() {
     pinLocalFileResource,
     resolvedMessageSources,
     rightPanelTabs,
+    webPanelResource,
     workPanelFolder,
   ])
 
@@ -2584,6 +2618,12 @@ export const ChatView = memo(function ChatView() {
 
   const openResourcePanel = useCallback((resource: ResourceRef, options?: { trigger?: HTMLElement | null; artifacts?: ArtifactRef[]; runId?: string }) => {
     stabilizeDocumentPanelScroll(options?.trigger)
+    if (resource.kind === 'browser') {
+      setWebPanelResource(resource)
+      setRightPanelVisible(true)
+      setActiveRightPanelTabId('web')
+      return
+    }
     const tabId = resourceTabId(resource)
     if (resourcePanelResource && resourceTabId(resourcePanelResource) === tabId) {
       if (isPanelOpenRef.current && effectiveRightPanelTabIdRef.current === tabId) {

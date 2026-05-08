@@ -26,6 +26,7 @@ import { StreamingMarkdown } from './streaming-markdown/StreamingMarkdown'
 import type { ResourceRef } from './resource-preview/types'
 import {
   ARTIFACT_URI_PREFIX,
+  BROWSER_URI_PREFIX,
   FILE_URI_PREFIX,
   WORKSPACE_URI_PREFIX,
   artifactToResourceRef,
@@ -204,8 +205,8 @@ const artifactSanitizeSchema = {
   ...defaultSchema,
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), 'artifact', 'workspace', 'file'],
-    src: [...(defaultSchema.protocols?.src ?? []), 'artifact', 'workspace', 'file'],
+    href: [...(defaultSchema.protocols?.href ?? []), 'artifact', 'browser', 'workspace', 'file'],
+    src: [...(defaultSchema.protocols?.src ?? []), 'artifact', 'browser', 'workspace', 'file'],
   },
 }
 
@@ -225,6 +226,7 @@ function preprocessBareArtifactRefs(content: string, artifacts: ArtifactRef[]): 
 const artifactUrlTransform: UrlTransform = (url) => {
   if (
     url.startsWith(ARTIFACT_URI_PREFIX) ||
+    url.startsWith(BROWSER_URI_PREFIX) ||
     url.startsWith(WORKSPACE_URI_PREFIX) ||
     url.startsWith(FILE_URI_PREFIX) ||
     url.startsWith('/workspace/') ||
@@ -272,7 +274,11 @@ function ResourceOpenButton({
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpen(event)
+      }}
       style={{
         display: 'inline',
         padding: 0,
@@ -390,6 +396,10 @@ function ArtifactAwareImg({ src, alt }: { src?: string; alt?: string }) {
 function ArtifactAwareLink({ href, children }: { href?: string; children?: ReactNode }) {
   const { artifacts, accessToken, runId, workFolder, onOpenDocument, onOpenResource, activePanelArtifactKey } = useContext(ArtifactsContext)
 
+  if (href?.startsWith(BROWSER_URI_PREFIX) && !onOpenResource) {
+    return <>{children}</>
+  }
+
   if (href?.startsWith(ARTIFACT_URI_PREFIX)) {
     const key = href.slice(ARTIFACT_URI_PREFIX.length)
     const artifact = findArtifactByKey(artifacts, key)
@@ -479,6 +489,7 @@ function hasStandaloneBlockPreview(children: ReactNode): boolean {
   const href = typeof child.props?.href === 'string' ? child.props.href : ''
   if (
     href.startsWith(ARTIFACT_URI_PREFIX) ||
+    href.startsWith(BROWSER_URI_PREFIX) ||
     href.startsWith(WORKSPACE_URI_PREFIX) ||
     href.startsWith(FILE_URI_PREFIX) ||
     href.startsWith('/workspace/')

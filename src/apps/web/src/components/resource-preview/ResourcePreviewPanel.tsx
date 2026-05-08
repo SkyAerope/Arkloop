@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Code, Eye, FileText, X } from 'lucide-react'
 import { SettingsSegmentedControl } from '../settings/_SettingsSegmentedControl'
 import type { ArtifactRef } from '../../storage'
+import { BrowserResourcePanel } from './BrowserResourcePanel'
 import { loadPreviewResource } from './loader'
 import { PreviewResourceView } from './PreviewResourceView'
 import type { PreviewResource, ResourceRef } from './types'
@@ -14,6 +15,7 @@ type Props = {
   artifacts?: ArtifactRef[]
   runId?: string
   onClose?: () => void
+  onResourceChange?: (resource: ResourceRef) => void
 }
 
 function releaseResource(resource: PreviewResource | null): void {
@@ -32,7 +34,7 @@ function getResourceFilename(resource: ResourceRef): string {
   return resource.filename ?? ('name' in resource ? resource.name : undefined) ?? ('title' in resource ? resource.title : undefined) ?? pathName ?? 'Preview'
 }
 
-export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, onClose }: Props) {
+export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, onClose, onResourceChange }: Props) {
   const [mode, setMode] = useState<ViewMode>('preview')
   const [state, setState] = useState<{
     resource: ResourceRef | null
@@ -41,6 +43,7 @@ export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, 
   }>({ resource: null, loaded: null, error: null })
 
   useEffect(() => {
+    if (resource.kind === 'browser') return
     const controller = new AbortController()
     let created: PreviewResource | null = null
 
@@ -65,6 +68,10 @@ export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, 
       releaseResource(created)
     }
   }, [resource, accessToken])
+
+  if (resource.kind === 'browser') {
+    return <BrowserResourcePanel resource={resource} onClose={onClose} onResourceChange={onResourceChange} />
+  }
 
   const current = state.resource === resource ? state : { resource, loaded: null, error: null }
   const loaded = current.loaded

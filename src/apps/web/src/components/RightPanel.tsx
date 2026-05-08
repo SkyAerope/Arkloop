@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
-import { FileText, FolderOpen, X } from 'lucide-react'
+import { FileText, FolderOpen, Globe2, X } from 'lucide-react'
 import { iconButtonSmCls } from './buttonStyles'
 import './RightPanel.css'
 
 export type RightPanelTab = {
   id: string
   title: string
-  kind: 'files' | 'source' | 'code' | 'document' | 'agent' | 'resource'
+  kind: 'web' | 'files' | 'source' | 'code' | 'document' | 'agent' | 'resource'
   content: ReactNode
   closable?: boolean
   icon?: ReactNode
@@ -21,6 +21,7 @@ type Props = {
 }
 
 function TabIcon({ kind }: { kind: RightPanelTab['kind'] }) {
+  if (kind === 'web') return <Globe2 size={14} />
   if (kind === 'files') return <FolderOpen size={14} />
   return <FileText size={14} />
 }

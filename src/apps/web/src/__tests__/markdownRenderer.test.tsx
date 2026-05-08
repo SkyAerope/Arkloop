@@ -301,6 +301,49 @@ describe('MarkdownRenderer', () => {
     }
   })
 
+  it('browser URI 点击应打开 browser resource，普通 HTTP 链接仍保持外部链接', async () => {
+    const originalArkloop = window.arkloop
+    const openExternal = vi.fn().mockResolvedValue(undefined)
+    window.arkloop = { app: { openExternal } }
+    const onOpenResource = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(
+          <LocaleProvider>
+            <MarkdownRenderer
+              content="[预览](browser:http://localhost:5173/app) [外链](https://example.com)"
+              onOpenResource={onOpenResource}
+            />
+          </LocaleProvider>,
+        )
+      })
+
+      const button = container.querySelector('button')
+      expect(button).not.toBeNull()
+      expect(container.querySelector('a[href="https://example.com"]')).not.toBeNull()
+
+      await act(async () => {
+        button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+
+      const resource = onOpenResource.mock.calls[0]?.[0] as ResourceRef
+      expect(resource).toMatchObject({
+        kind: 'browser',
+        url: 'http://localhost:5173/app',
+        title: 'localhost',
+      })
+      expect(openExternal).not.toHaveBeenCalled()
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+      window.arkloop = originalArkloop
+    }
+  })
+
   it('Windows work folder 内的绝对文件路径点击应打开 local-file resource', async () => {
     const onOpenResource = vi.fn()
     const container = document.createElement('div')

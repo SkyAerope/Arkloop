@@ -135,5 +135,7 @@ export async function loadPreviewResource(
       return loadArtifact(ref, options)
     case 'workspace-file':
       return loadWorkspaceFile(ref, options)
+    case 'browser':
+      throw new Error('browser resources are rendered by the browser panel')
   }
 }

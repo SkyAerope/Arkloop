@@ -1,4 +1,4 @@
-export type ResourceSource = 'local-file' | 'artifact' | 'workspace-file'
+export type ResourceSource = 'local-file' | 'artifact' | 'workspace-file' | 'browser'
 
 export type LocalFileResourceRef = {
   kind: 'local-file'
@@ -33,7 +33,15 @@ export type WorkspaceFileResourceRef = {
   projectId?: string
 }
 
-export type ResourceRef = LocalFileResourceRef | ArtifactResourceRef | WorkspaceFileResourceRef
+export type BrowserResourceRef = {
+  kind: 'browser'
+  source?: 'browser'
+  url: string
+  title?: string
+  faviconUrl?: string
+}
+
+export type ResourceRef = LocalFileResourceRef | ArtifactResourceRef | WorkspaceFileResourceRef | BrowserResourceRef
 
 export type PreviewResource = {
   source: ResourceSource

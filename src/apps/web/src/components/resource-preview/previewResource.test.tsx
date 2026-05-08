@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { PreviewResourceView } from './PreviewResourceView'
+import { ResourcePreviewPanel } from './ResourcePreviewPanel'
 import { getPreviewRendererKind } from './rendererKind'
 import { buildWorkspaceResourceUrl, loadPreviewResource } from './loader'
 import { guessMimeType, normalizeMimeType } from './mime'
@@ -14,6 +17,11 @@ vi.mock('@arkloop/shared/api', () => ({
   apiBaseUrl: () => 'http://api.test',
 }))
 
+beforeEach(() => {
+  localStorage.setItem?.('arkloop:web:browser-renderer', '')
+  delete (globalThis as typeof globalThis & { __desktopApi?: unknown }).__desktopApi
+})
+
 function preview(source: PreviewResource['source'], mimeType: string, filename: string): PreviewResource {
   return {
     source,
@@ -26,6 +34,12 @@ function preview(source: PreviewResource['source'], mimeType: string, filename: 
     filename,
     text: 'hello',
   }
+}
+
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
 describe('resource preview renderer registry', () => {
@@ -60,6 +74,247 @@ describe('resource preview renderer registry', () => {
 
     expect(html).toContain('data-preview-renderer="json"')
     expect(html).toContain('hello')
+  })
+
+  it('browser resource 使用独立 iframe renderer', async () => {
+    const originalOpen = window.open
+    const openMock = vi.fn()
+    window.open = openMock as typeof window.open
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(
+          <ResourcePreviewPanel
+            accessToken="token"
+            resource={{ kind: 'browser', url: 'http://localhost:5173/app', title: 'localhost' }}
+          />,
+        )
+      })
+
+      const iframe = container.querySelector('iframe.browser-panel__frame') as HTMLIFrameElement | null
+      const input = container.querySelector('input.browser-panel__address-input') as HTMLInputElement | null
+      expect(iframe).not.toBeNull()
+      expect(iframe?.getAttribute('src')).toBe('http://localhost:5173/app')
+      expect(input?.placeholder).toBe('Search or enter URL')
+      expect(openMock).not.toHaveBeenCalled()
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+      window.open = originalOpen
+    }
+  })
+
+  it('browser 空状态不渲染 about:blank 或历史记录', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(
+          <ResourcePreviewPanel
+            accessToken="token"
+            resource={{ kind: 'browser', url: '', title: 'Web' }}
+          />,
+        )
+      })
+
+      const input = container.querySelector('input.browser-panel__address-input') as HTMLInputElement | null
+      expect(input?.value).toBe('')
+      expect(container.querySelector('iframe.browser-panel__frame')).toBeNull()
+      expect(container.textContent).not.toContain('about:blank')
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('browser history 点击已有记录不会重复写入', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(
+          <ResourcePreviewPanel
+            accessToken="token"
+            resource={{ kind: 'browser', url: 'http://localhost:5173/app', title: 'localhost' }}
+          />,
+        )
+      })
+
+      const form = container.querySelector('form.browser-panel__address') as HTMLFormElement | null
+      const input = container.querySelector('input.browser-panel__address-input') as HTMLInputElement | null
+      expect(form).not.toBeNull()
+      expect(input).not.toBeNull()
+
+      await act(async () => {
+        setInputValue(input!, 'https://example.com')
+        form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+
+      const historyButton = (url: string) => (
+        Array.from(container.querySelectorAll<HTMLButtonElement>('.browser-panel__history-list button'))
+          .find((button) => button.title === url)
+      )
+
+      await act(async () => {
+        historyButton('http://localhost:5173/app')?.click()
+      })
+      await act(async () => {
+        historyButton('https://example.com/')?.click()
+      })
+      await act(async () => {
+        historyButton('http://localhost:5173/app')?.click()
+      })
+
+      const historyButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.browser-panel__history-list button'))
+      expect(historyButtons.filter((button) => button.title === 'http://localhost:5173/app')).toHaveLength(1)
+      expect(historyButtons.filter((button) => button.title === 'https://example.com/')).toHaveLength(1)
+      expect(container.querySelector('iframe.browser-panel__frame')?.getAttribute('src')).toBe('http://localhost:5173/app')
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('browser 导航会回报当前页面 identity 并渲染 favicon', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const onResourceChange = vi.fn()
+
+    try {
+      await act(async () => {
+        root.render(
+          <ResourcePreviewPanel
+            accessToken="token"
+            resource={{ kind: 'browser', url: '', title: 'Web' }}
+            onResourceChange={onResourceChange}
+          />,
+        )
+      })
+
+      const form = container.querySelector('form.browser-panel__address') as HTMLFormElement | null
+      const input = container.querySelector('input.browser-panel__address-input') as HTMLInputElement | null
+
+      await act(async () => {
+        setInputValue(input!, 'example.com')
+        form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      })
+
+      expect(onResourceChange).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'browser',
+        url: 'http://example.com/',
+        title: 'example.com',
+      }))
+      expect(onResourceChange.mock.calls[0]?.[0]?.faviconUrl).toContain('google.com/s2/favicons')
+      expect(container.querySelector('form.browser-panel__address img')).not.toBeNull()
+      expect(container.querySelector('.browser-panel__history-list img')).not.toBeNull()
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('browser 使用 desktop metadata 更新标题', async () => {
+    const host = globalThis as typeof globalThis & { __desktopApi?: unknown }
+    host.__desktopApi = {
+      app: {
+        fetchPageMetadata: vi.fn().mockResolvedValue({ title: 'Example Domain' }),
+      },
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const onResourceChange = vi.fn()
+
+    try {
+      await act(async () => {
+        root.render(
+          <ResourcePreviewPanel
+            accessToken="token"
+            resource={{ kind: 'browser', url: 'https://example.com', title: 'example.com' }}
+            onResourceChange={onResourceChange}
+          />,
+        )
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(onResourceChange).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Example Domain',
+        url: 'https://example.com/',
+      }))
+      expect(container.querySelector('.browser-panel__history-list')?.textContent).toContain('Example Domain')
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('browser history 持久化到前端状态', async () => {
+    const first = document.createElement('div')
+    document.body.appendChild(first)
+    const firstRoot = createRoot(first)
+
+    await act(async () => {
+      firstRoot.render(<ResourcePreviewPanel accessToken="token" resource={{ kind: 'browser', url: '', title: 'Web' }} />)
+    })
+    const firstForm = first.querySelector('form.browser-panel__address') as HTMLFormElement
+    const firstInput = first.querySelector('input.browser-panel__address-input') as HTMLInputElement
+    await act(async () => {
+      setInputValue(firstInput, 'example.com')
+      firstForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    await act(async () => {
+      firstRoot.unmount()
+    })
+    first.remove()
+
+    const second = document.createElement('div')
+    document.body.appendChild(second)
+    const secondRoot = createRoot(second)
+    try {
+      await act(async () => {
+        secondRoot.render(<ResourcePreviewPanel accessToken="token" resource={{ kind: 'browser', url: '', title: 'Web' }} />)
+      })
+
+      expect(second.querySelector('.browser-panel__history-list')?.textContent).toContain('example.com')
+    } finally {
+      await act(async () => {
+        secondRoot.unmount()
+      })
+      second.remove()
+    }
+  })
+
+  it('browser 地址栏显示中文域名', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(
+          <ResourcePreviewPanel
+            accessToken="token"
+            resource={{ kind: 'browser', url: 'http://xn--yeto2zmxe103c.fun/', title: '清风小栈.fun' }}
+          />,
+        )
+      })
+
+      const input = container.querySelector('input.browser-panel__address-input') as HTMLInputElement | null
+      expect(input?.value).toBe('http://清风小栈.fun/')
+    } finally {
+      act(() => root.unmount())
+      container.remove()
+    }
   })
 })
 

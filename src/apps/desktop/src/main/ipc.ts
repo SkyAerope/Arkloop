@@ -69,8 +69,29 @@ const DESKTOP_EXPORT_BUNDLE_FILE_SET = new Set([
 const DESKTOP_GITHUB_REPO = 'qqqqqf-q/Arkloop'
 const DESKTOP_GITHUB_URL = `https://github.com/${DESKTOP_GITHUB_REPO}`
 const LONG_RUNNING_MEMORY_REQUEST_TIMEOUT_MS = 120_000
+const PAGE_METADATA_TIMEOUT_MS = 8_000
 
 const memoryRebuildInFlight = new Map<string, Promise<unknown>>()
+
+function decodeHtmlEntities(input: string): string {
+  return input
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_match, value: string) => String.fromCodePoint(Number(value)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, value: string) => String.fromCodePoint(Number.parseInt(value, 16)))
+}
+
+function extractHtmlTitle(html: string): string | undefined {
+  const match = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)
+  const title = match?.[1]
+    ?.replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return title ? decodeHtmlEntities(title).slice(0, 180) : undefined
+}
 
 type DesktopBundleFile = 'config.json' | 'data.sqlite' | 'themes.json'
 
@@ -417,6 +438,38 @@ export function registerIpcHandlers(
     }
     const { shell } = require('electron') as typeof import('electron')
     await shell.openExternal(url)
+  })
+
+  ipcMain.handle('arkloop:app:fetch-page-metadata', async (_event, url: string) => {
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      throw new Error(`Invalid URL: ${url}`)
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error(`Blocked protocol: ${parsed.protocol}`)
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), PAGE_METADATA_TIMEOUT_MS)
+    try {
+      const response = await fetch(parsed.toString(), {
+        signal: controller.signal,
+        headers: {
+          accept: 'text/html,application/xhtml+xml',
+          'user-agent': 'Arkloop Desktop',
+        },
+      })
+      const contentType = response.headers.get('content-type') ?? ''
+      if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+        return {}
+      }
+      const html = await response.text()
+      return { title: extractHtmlTitle(html) }
+    } finally {
+      clearTimeout(timeout)
+    }
   })
 
   ipcMain.handle('arkloop:app:os-username', () => {

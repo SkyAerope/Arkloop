@@ -166,6 +166,8 @@ var registry = []ToolMeta{
 			"Reference outputs with the real resource you have:\n" +
 			"  • /tmp/output/ files appear in result.artifacts → reference as artifact:<key>\n" +
 			"  • files in the current working directory → reference the exact absolute file_path\n" +
+			"  • running web apps or pages that should open in the right panel → reference as browser:<http-or-https-url>, for example [preview](browser:http://localhost:5173)\n" +
+			"Normal http/https Markdown links open externally; use browser: only when the user should preview a URL inside Arkloop. " +
 			"Only reference artifact keys that actually appear in result.artifacts. " +
 			"Do not invent legacy resource links, artifact keys, or file paths. Never output raw /tmp/output/ paths.",
 	},

@@ -23,6 +23,9 @@ func TestSandboxToolDescriptionsPreferArtifactsAndAbsoluteFilePaths(t *testing.T
 	if !strings.Contains(execDesc, "exact absolute file_path") {
 		t.Fatalf("exec_command description should prefer absolute file paths: %s", execDesc)
 	}
+	if !strings.Contains(execDesc, "browser:<http-or-https-url>") || !strings.Contains(execDesc, "browser:http://localhost:5173") {
+		t.Fatalf("exec_command description should explain browser resource links: %s", execDesc)
+	}
 
 	continueDesc := Must("continue_process").LLMDescription
 	if !strings.Contains(continueDesc, "process_ref") || !strings.Contains(continueDesc, "exact absolute file_path") {
@@ -69,7 +72,10 @@ func TestSearchOutputPromptExplainsWorkspaceAndArtifactRules(t *testing.T) {
 	if !strings.Contains(content, "不要把绝对文件路径改写成 legacy workspace 资源链接") {
 		t.Fatalf("prompt should forbid rewriting absolute file paths to legacy workspace links: %s", content)
 	}
-	if !strings.Contains(content, "禁止根据 stdout、stderr、本地路径或文件名臆造新的 `artifact:<key>`、legacy workspace 资源链接或绝对文件路径") {
+	if !strings.Contains(content, "`browser:<url>`") {
+		t.Fatalf("prompt should preserve browser resource links: %s", content)
+	}
+	if !strings.Contains(content, "禁止根据 stdout、stderr、本地路径或文件名臆造新的 `artifact:<key>`、`browser:<url>`、legacy workspace 资源链接或绝对文件路径") {
 		t.Fatalf("prompt should forbid invented file references: %s", content)
 	}
 }
