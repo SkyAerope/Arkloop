@@ -23,7 +23,6 @@ import { RunErrorNotice, type AppError } from './ErrorCallout'
 import { ShareModal } from './ShareModal'
 import { SourcesPanel } from './SourcesPanel'
 import { CodeExecutionPanel } from './CodeExecutionPanel'
-import { DocumentPanel } from './DocumentPanel'
 import { AgentPanel } from './AgentPanel'
 import { RightPanel, type RightPanelTab } from './RightPanel'
 import { LocalFilesPanel } from './local-files/LocalFilesPanel'
@@ -860,6 +859,7 @@ export const ChatView = memo(function ChatView() {
   const [rightPanelTabs, setRightPanelTabs] = useState<RightPanelStoredTab[]>([])
   const [activeRightPanelTabId, setActiveRightPanelTabId] = useState<string | null>(null)
   const [filesPreviewResource, setFilesPreviewResource] = useState<LocalFileResourceRef | null>(null)
+  const localFileTabSeqRef = useRef(0)
   const waitForThreadModeUpdates = useCallback(async () => {
     const pending = [planModeUpdateRef.current, learningModeUpdateRef.current].filter((item): item is Promise<void> => !!item)
     if (pending.length > 0) await Promise.all(pending)
@@ -2320,10 +2320,20 @@ export const ChatView = memo(function ChatView() {
     setActiveRightPanelTabId(tab.id)
   }, [])
 
+  const replaceRightPanelTab = useCallback((currentId: string, tab: RightPanelStoredTab) => {
+    setRightPanelTabs((current) => {
+      const index = current.findIndex((item) => item.id === currentId)
+      if (index < 0) return [...current, tab]
+      const next = [...current]
+      next[index] = tab
+      return next
+    })
+    setActiveRightPanelTabId(tab.id)
+  }, [])
+
   const pinLocalFileResource = useCallback((resource: LocalFileResourceRef) => {
-    setFilesPreviewResource(resource)
     upsertRightPanelTab({
-      id: resourceTabId(resource),
+      id: `local-file:${++localFileTabSeqRef.current}`,
       kind: 'resource',
       title: resourceTitle(resource),
       resource,
@@ -2449,14 +2459,22 @@ export const ChatView = memo(function ChatView() {
           ),
         })
       } else if (tab.kind === 'document') {
+        const artifact = tab.document.artifact
         tabs.push({
           id: tab.id,
           kind: tab.kind,
           title: tab.title,
           content: (
             <div style={{ width: '100%', height: '100%', contain: 'layout style' }}>
-              <DocumentPanel
-                artifact={tab.document.artifact}
+              <ResourcePreviewPanel
+                resource={{
+                  kind: 'artifact',
+                  key: artifact.key,
+                  filename: artifact.filename,
+                  mimeType: artifact.mime_type,
+                  size: artifact.size,
+                  title: artifact.title,
+                }}
                 artifacts={tab.document.artifacts}
                 accessToken={accessToken}
                 runId={tab.document.runId}
@@ -2477,11 +2495,40 @@ export const ChatView = memo(function ChatView() {
           ),
         })
       } else {
+        if (tab.resource.kind === 'local-file' && workPanelFolder?.trim()) {
+          tabs.push({
+            id: tab.id,
+            kind: tab.kind,
+            title: tab.title,
+            icon: localFileTabIcon(tab.resource),
+            content: (
+              <LocalFilesPanel
+                rootPath={tab.resource.rootPath}
+                accessToken={accessToken}
+                previewResource={tab.resource}
+                onPreviewResourceChange={(resource) => {
+                  if (!resource) {
+                    closeRightPanelTab(tab.id)
+                    return
+                  }
+                  replaceRightPanelTab(tab.id, {
+                    id: tab.id,
+                    kind: 'resource',
+                    title: resourceTitle(resource),
+                    resource,
+                  })
+                }}
+                onPinResource={pinLocalFileResource}
+              />
+            ),
+          })
+          continue
+        }
         tabs.push({
           id: tab.id,
           kind: tab.kind,
           title: tab.title,
-          content: <ResourcePreviewPanel resource={tab.resource} accessToken={accessToken} />,
+          content: <ResourcePreviewPanel resource={tab.resource} accessToken={accessToken} onClose={() => closeRightPanelTab(tab.id)} />,
         })
       }
     }
@@ -2492,6 +2539,7 @@ export const ChatView = memo(function ChatView() {
     closeRightPanelTab,
     filesPreviewResource,
     pinLocalFileResource,
+    replaceRightPanelTab,
     resolvedMessageSources,
     rightPanelTabs,
     workPanelFolder,

@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react'
 import { FileIcon } from 'lucide-react'
 import { ArtifactIframe } from '../ArtifactIframe'
+import type { ArtifactRef } from '../../storage'
 import type { PreviewResource } from './types'
 import { getPreviewRendererKind, type PreviewRendererKind } from './rendererKind'
 import { MarkdownDocumentRenderer } from './MarkdownDocumentRenderer'
@@ -59,6 +60,8 @@ function BinaryPreview({ resource }: { resource: PreviewResource }) {
 type Props = {
   resource: PreviewResource
   accessToken?: string
+  artifacts?: ArtifactRef[]
+  runId?: string
   mode?: 'preview' | 'source'
 }
 
@@ -66,7 +69,19 @@ function SourcePreview({ resource }: { resource: PreviewResource }) {
   return <SourceDocumentRenderer content={resource.text ?? ''} filename={resource.filename} mimeType={resource.mimeType} />
 }
 
-function PreviewResourceContent({ resource, accessToken, mode }: { resource: PreviewResource; accessToken: string; mode: 'preview' | 'source' }) {
+function PreviewResourceContent({
+  resource,
+  accessToken,
+  artifacts,
+  runId,
+  mode,
+}: {
+  resource: PreviewResource
+  accessToken: string
+  artifacts?: ArtifactRef[]
+  runId?: string
+  mode: 'preview' | 'source'
+}) {
   const kind = getPreviewRendererKind(resource)
 
   if (mode === 'source' && resource.text !== undefined) {
@@ -74,7 +89,7 @@ function PreviewResourceContent({ resource, accessToken, mode }: { resource: Pre
   }
 
   if (kind === 'markdown') {
-    return <MarkdownDocumentRenderer content={resource.text ?? ''} accessToken={accessToken} />
+    return <MarkdownDocumentRenderer content={resource.text ?? ''} accessToken={accessToken} artifacts={artifacts} runId={runId} />
   }
 
   if (kind === 'iframe') {
@@ -118,6 +133,6 @@ function PreviewResourceContent({ resource, accessToken, mode }: { resource: Pre
   return <BinaryPreview resource={resource} />
 }
 
-export const PreviewResourceView = memo(function PreviewResourceView({ resource, accessToken = '', mode = 'preview' }: Props) {
-  return <PreviewResourceContent resource={resource} accessToken={accessToken} mode={mode} />
+export const PreviewResourceView = memo(function PreviewResourceView({ resource, accessToken = '', artifacts, runId, mode = 'preview' }: Props) {
+  return <PreviewResourceContent resource={resource} accessToken={accessToken} artifacts={artifacts} runId={runId} mode={mode} />
 })

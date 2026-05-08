@@ -29,6 +29,16 @@ const EXT_MIME: Record<string, string> = {
   sql: 'text/plain',
 }
 
+const TEXT_FILENAMES = new Set([
+  'license',
+  'notice',
+  'makefile',
+  'dockerfile',
+  'readme',
+  'contributing',
+  'security',
+])
+
 export function filenameFromPath(path: string): string {
   const trimmed = path.trim()
   if (!trimmed || trimmed === '/') return 'file'
@@ -36,6 +46,8 @@ export function filenameFromPath(path: string): string {
 }
 
 export function guessMimeType(path: string): string {
+  const filename = filenameFromPath(path).toLowerCase()
+  if (TEXT_FILENAMES.has(filename)) return 'text/plain'
   const ext = path.split('.').pop()?.toLowerCase() ?? ''
   return EXT_MIME[ext] ?? 'application/octet-stream'
 }

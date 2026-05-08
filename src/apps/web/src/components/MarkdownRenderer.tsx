@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
-import rehypeSanitize from 'rehype-sanitize'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import { CopyIconButton } from './CopyIconButton'
 import type { Components, Options, UrlTransform } from 'react-markdown'
 import { defaultUrlTransform } from 'react-markdown'
@@ -189,6 +189,15 @@ function useStreamingRenderContent(content: string, throttle: boolean): string {
 const ARTIFACT_PREFIX = 'artifact:'
 const WORKSPACE_PREFIX = 'workspace:'
 const BARE_ARTIFACT_RE = /(?<!\]\()artifact:([A-Za-z0-9_-]+)/g
+
+const artifactSanitizeSchema = {
+  ...defaultSchema,
+  protocols: {
+    ...defaultSchema.protocols,
+    href: [...(defaultSchema.protocols?.href ?? []), 'artifact', 'workspace'],
+    src: [...(defaultSchema.protocols?.src ?? []), 'artifact', 'workspace'],
+  },
+}
 
 function preprocessBareArtifactRefs(content: string, artifacts: ArtifactRef[]): string {
   if (artifacts.length === 0) return content
@@ -773,7 +782,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, disabl
 
   const rehypePlugins = useMemo<NonNullable<Options['rehypePlugins']>>(
     () => {
-      const htmlPlugins: NonNullable<Options['rehypePlugins']> = allowHtml ? [rehypeRaw, rehypeSanitize] : []
+      const htmlPlugins: NonNullable<Options['rehypePlugins']> = allowHtml ? [rehypeRaw, [rehypeSanitize, artifactSanitizeSchema]] : []
       return effectiveDisableMath
         ? [...htmlPlugins, ...asyncPlugins]
         : [...htmlPlugins, [rehypeKatex, { throwOnError: false, output: 'htmlAndMathml' }], ...asyncPlugins]

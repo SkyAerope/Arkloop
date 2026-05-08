@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Code, Eye, FileText, X } from 'lucide-react'
 import { SettingsSegmentedControl } from '../settings/_SettingsSegmentedControl'
+import type { ArtifactRef } from '../../storage'
 import { loadPreviewResource } from './loader'
 import { PreviewResourceView } from './PreviewResourceView'
 import type { PreviewResource, ResourceRef } from './types'
@@ -10,6 +11,8 @@ type ViewMode = 'preview' | 'source'
 type Props = {
   resource: ResourceRef
   accessToken: string
+  artifacts?: ArtifactRef[]
+  runId?: string
   onClose?: () => void
 }
 
@@ -29,7 +32,7 @@ function getResourceFilename(resource: ResourceRef): string {
   return resource.filename ?? ('name' in resource ? resource.name : undefined) ?? ('title' in resource ? resource.title : undefined) ?? pathName ?? 'Preview'
 }
 
-export function ResourcePreviewPanel({ resource, accessToken, onClose }: Props) {
+export function ResourcePreviewPanel({ resource, accessToken, artifacts, runId, onClose }: Props) {
   const [mode, setMode] = useState<ViewMode>('preview')
   const [state, setState] = useState<{
     resource: ResourceRef | null
@@ -120,7 +123,7 @@ export function ResourcePreviewPanel({ resource, accessToken, onClose }: Props) 
         {current.error ? (
           <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>{current.error}</div>
         ) : loaded ? (
-          <PreviewResourceView resource={loaded} accessToken={accessToken} mode={mode} />
+          <PreviewResourceView resource={loaded} accessToken={accessToken} artifacts={artifacts} runId={runId} mode={mode} />
         ) : (
           <div style={{ padding: 18, color: 'var(--c-text-muted)', fontSize: 13 }}>Loading</div>
         )}

@@ -100,7 +100,7 @@ export function RightPanel({ tabs, activeTabId, onSelectTab, onCloseTab }: Props
           )
         })}
       </div>
-      <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
+      <div key={activeTab?.id ?? 'empty'} style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
         {activeTab?.content ?? (
           <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: 'var(--c-text-muted)', fontSize: 13 }}>
             这里还没有内容
