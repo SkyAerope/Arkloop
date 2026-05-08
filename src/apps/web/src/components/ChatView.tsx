@@ -162,7 +162,7 @@ import {
 
 const chatContentPadding = { panelClosed: 'clamp(24px, 5vw, 60px)', panelOpen: 'clamp(16px, 3vw, 40px)' } as const
 const chatInputPadding = { panelClosed: 'clamp(24px, 5vw, 60px)', panelOpen: 'clamp(16px, 3vw, 40px)', work: '14px' } as const
-const rightPanelDefaultWidth = 760
+const rightPanelDefaultRatio = 0.4
 const rightPanelMinWidth = 420
 const chatViewMinWidth = 520
 const rightPanelLayoutTransition = { duration: 0.22, ease: [0.16, 1, 0.3, 1] } as const
@@ -855,11 +855,13 @@ export const ChatView = memo(function ChatView() {
   const [rightPanelVisible, setRightPanelVisible] = useState(false)
   const chatViewRootRef = useRef<HTMLDivElement>(null)
   const rightPanelRatioRef = useRef(0)
-  const [rightPanelWidth, setRightPanelWidth] = useState(rightPanelDefaultWidth)
+  const [rightPanelWidth, setRightPanelWidth] = useState(rightPanelMinWidth)
   const [rightPanelTabs, setRightPanelTabs] = useState<RightPanelStoredTab[]>([])
   const [activeRightPanelTabId, setActiveRightPanelTabId] = useState<string | null>(null)
   const [filesPreviewResource, setFilesPreviewResource] = useState<LocalFileResourceRef | null>(null)
   const localFileTabSeqRef = useRef(0)
+  const isPanelOpenRef = useRef(false)
+  const effectiveRightPanelTabIdRef = useRef<string | null>(null)
   const waitForThreadModeUpdates = useCallback(async () => {
     const pending = [planModeUpdateRef.current, learningModeUpdateRef.current].filter((item): item is Promise<void> => !!item)
     if (pending.length > 0) await Promise.all(pending)
@@ -2247,7 +2249,10 @@ export const ChatView = memo(function ChatView() {
   const sourcePanelSources = sourcePanelMessageId ? resolvedMessageSources.get(sourcePanelMessageId) : undefined
   const workPanelFolder = threadId ? resolveThreadWorkFolder(threadId) : undefined
   const isSourcePanelOpen = !!(sourcePanelSources && sourcePanelSources.length > 0)
-  const isPanelOpen = rightPanelVisible
+  const hasRightPanelContent = !!workPanelFolder?.trim() || rightPanelTabs.some((tab) => (
+    tab.kind !== 'source' || (resolvedMessageSources.get(tab.messageId)?.length ?? 0) > 0
+  ))
+  const isPanelOpen = rightPanelVisible && hasRightPanelContent
 
   useEffect(() => {
     if (activePanel) setRightPanelVisible(true)
@@ -2259,10 +2264,14 @@ export const ChatView = memo(function ChatView() {
 
   useEffect(() => {
     setTitleBarRightPanelClick(() => {
+      if (!hasRightPanelContent) {
+        setRightPanelVisible(false)
+        return
+      }
       setRightPanelVisible((visible) => !visible)
     })
     return () => setTitleBarRightPanelClick(null)
-  }, [setTitleBarRightPanelClick])
+  }, [hasRightPanelContent, setTitleBarRightPanelClick])
 
   useEffect(() => {
     if (!isPanelOpen) return
@@ -2271,8 +2280,8 @@ export const ChatView = memo(function ChatView() {
 
     const adaptToContainer = () => {
       const containerWidth = root.clientWidth
-      setRightPanelWidth((width) => {
-        const ratio = rightPanelRatioRef.current || width / Math.max(containerWidth, 1)
+      setRightPanelWidth(() => {
+        const ratio = rightPanelRatioRef.current || rightPanelDefaultRatio
         const next = clampRightPanelWidth(containerWidth * ratio, containerWidth)
         rightPanelRatioRef.current = next / Math.max(containerWidth, 1)
         return next
@@ -2548,11 +2557,13 @@ export const ChatView = memo(function ChatView() {
   const effectiveRightPanelTabId = rightPanelRenderedTabs.some((tab) => tab.id === activeRightPanelTabId)
     ? activeRightPanelTabId
     : rightPanelRenderedTabs[0]?.id ?? null
+  isPanelOpenRef.current = isPanelOpen
+  effectiveRightPanelTabIdRef.current = effectiveRightPanelTabId
 
   const openCodePanel = useCallback((ce: CodeExecution) => {
     const tabId = `code:${ce.id}`
     if (codePanelExecution?.id === ce.id) {
-      if (isPanelOpen && effectiveRightPanelTabId === tabId) {
+      if (isPanelOpenRef.current && effectiveRightPanelTabIdRef.current === tabId) {
         closeRightPanelTab(tabId)
         setRightPanelVisible(false)
       } else {
@@ -2562,13 +2573,13 @@ export const ChatView = memo(function ChatView() {
       return
     }
     openCodePanelState(ce)
-  }, [closeRightPanelTab, codePanelExecution?.id, effectiveRightPanelTabId, isPanelOpen, openCodePanelState])
+  }, [closeRightPanelTab, codePanelExecution?.id, openCodePanelState])
 
   const openDocumentPanel = useCallback((artifact: ArtifactRef, options?: { trigger?: HTMLElement | null; artifacts?: ArtifactRef[]; runId?: string }) => {
     stabilizeDocumentPanelScroll(options?.trigger)
     const tabId = `document:${artifact.key}`
     if (documentPanelArtifact?.artifact.key === artifact.key) {
-      if (isPanelOpen && effectiveRightPanelTabId === tabId) {
+      if (isPanelOpenRef.current && effectiveRightPanelTabIdRef.current === tabId) {
         closeRightPanelTab(tabId)
         setRightPanelVisible(false)
       } else {
@@ -2582,7 +2593,7 @@ export const ChatView = memo(function ChatView() {
       artifacts: options?.artifacts ?? [],
       runId: options?.runId,
     })
-  }, [closeRightPanelTab, documentPanelArtifact?.artifact.key, effectiveRightPanelTabId, isPanelOpen, openDocumentPanelState, stabilizeDocumentPanelScroll])
+  }, [closeRightPanelTab, documentPanelArtifact?.artifact.key, openDocumentPanelState, stabilizeDocumentPanelScroll])
 
   // COP step 计数：timeline 中所有非 finished 的点
   const dedupedTopLevelCodeExecutions = useMemo(() => {
@@ -2810,7 +2821,7 @@ export const ChatView = memo(function ChatView() {
     />
   ), [attachments, sending, isStreaming, canCancel, cancelSubmitting, effectiveAppMode, isSearchThread, hasMessages, messagesLoading, threadId, accessToken, me?.id, t.followUpPlaceholder, t.replyPlaceholder, handleSend, handleCancel, handleAttachFiles, handlePasteContent, handleRemoveAttachment, handleAsrError, handlePersonaChange, onOpenSettings, editingQueuedPromptId, cancelQueuedPromptEdit, currentThread?.collaboration_mode, currentThread?.learning_mode_enabled, learningModeUpdating, handleTogglePlanMode, handleToggleLearningMode])
 
-  const renderLiveCopItems = (
+  const renderLiveCopItems = useCallback((
     seg: Extract<AssistantTurnSegment, { type: 'cop' }>,
     si: number,
   ): React.ReactNode[] => {
@@ -2899,9 +2910,32 @@ export const ChatView = memo(function ChatView() {
         />
       )),
     ].filter(Boolean)
-  }
+  }, [
+    accessToken,
+    activeRunId,
+    baseUrl,
+    codePanelExecution?.id,
+    currentRunCopHeaderOverride,
+    dedupedTopLevelCodeExecutions,
+    handleArtifactAction,
+    isStreaming,
+    isWorkMode,
+    liveAssistantTurn,
+    liveRunUiActive,
+    liveSegments,
+    openAgentPanelState,
+    openCodePanel,
+    preserveLiveRunUi,
+    searchSteps,
+    streamingArtifacts,
+    terminalRunHandoffStatus,
+    thinkingHint,
+    topLevelFileOps,
+    topLevelSubAgents,
+    topLevelWebFetches,
+  ])
 
-  const renderLiveCopSegment = (
+  const renderLiveCopSegment = useCallback((
     seg: Extract<AssistantTurnSegment, { type: 'cop' }>,
     si: number,
     key?: string,
@@ -2913,7 +2947,105 @@ export const ChatView = memo(function ChatView() {
         {items}
       </Fragment>
     )
-  }
+  }, [renderLiveCopItems])
+
+  const handleLiveCheckInSubmit = useCallback(() => {
+    void handleCheckInSubmit()
+  }, [handleCheckInSubmit])
+
+  const handleIncognitoDividerComplete = useCallback(() => {
+    if (isAtBottomRef.current) {
+      activateAnchor()
+    }
+  }, [activateAnchor])
+
+  const lastTurnChildren = useMemo(() => (
+    <LiveRunPane
+      isWorkMode={isWorkMode}
+      showPendingThinkingShell={showPendingThinkingShell}
+      preserveLiveRunUi={preserveLiveRunUi}
+      leadingLiveCop={leadingLiveCop}
+      trailingLiveSegments={trailingLiveSegments}
+      liveSegments={liveSegments}
+      liveRunUiActive={liveRunUiActive}
+      liveRunUiVisible={liveRunUiVisible}
+      liveAssistantTurn={liveAssistantTurn}
+      allStreamItemsForUi={allStreamItemsForUi}
+      dedupedTopLevelCodeExecutions={dedupedTopLevelCodeExecutions}
+      topLevelSubAgents={topLevelSubAgents}
+      topLevelFileOps={topLevelFileOps}
+      topLevelWebFetches={topLevelWebFetches}
+      codePanelExecutionId={codePanelExecution?.id}
+      currentRunSources={currentRunSourcesRef.current}
+      currentRunArtifacts={currentRunArtifactsRef.current}
+      activeRunId={activeRunId}
+      activeSegmentId={activeSegmentIdRef.current}
+      accessToken={accessToken}
+      baseUrl={baseUrl}
+      thinkingHint={thinkingHint}
+      visibleStreamingWidgets={visibleStreamingWidgets}
+      visibleStreamingArtifacts={visibleStreamingArtifacts}
+      injectionBlocked={injectionBlocked}
+      awaitingInput={awaitingInput}
+      checkInDraft={checkInDraft}
+      checkInSubmitting={checkInSubmitting}
+      onCheckInDraftChange={setCheckInDraft}
+      onCheckInSubmit={handleLiveCheckInSubmit}
+      pendingIncognito={pendingIncognito}
+      incognitoDividerText={t.incognitoForkDivider}
+      onIncognitoDividerComplete={handleIncognitoDividerComplete}
+      terminalRunHandoffStatus={terminalRunHandoffStatus}
+      terminalRunDisplayId={terminalRunDisplayId}
+      showRunDetailButton={showRunDetailButton}
+      setRunDetailPanelRunId={setRunDetailPanelRunId}
+      onOpenDocument={openDocumentPanel}
+      onOpenCodeExecution={openCodePanel}
+      onOpenSubAgent={openAgentPanelState}
+      onArtifactAction={handleArtifactAction}
+      renderLiveCopItems={renderLiveCopItems}
+      renderLiveCopSegment={renderLiveCopSegment}
+      bottomRef={bottomRef}
+    />
+  ), [
+    accessToken,
+    activeRunId,
+    allStreamItemsForUi,
+    awaitingInput,
+    baseUrl,
+    checkInDraft,
+    checkInSubmitting,
+    codePanelExecution?.id,
+    dedupedTopLevelCodeExecutions,
+    handleArtifactAction,
+    handleIncognitoDividerComplete,
+    handleLiveCheckInSubmit,
+    injectionBlocked,
+    isWorkMode,
+    leadingLiveCop,
+    liveAssistantTurn,
+    liveRunUiActive,
+    liveRunUiVisible,
+    liveSegments,
+    openAgentPanelState,
+    openCodePanel,
+    openDocumentPanel,
+    pendingIncognito,
+    preserveLiveRunUi,
+    renderLiveCopItems,
+    renderLiveCopSegment,
+    showPendingThinkingShell,
+    showRunDetailButton,
+    t.incognitoForkDivider,
+    terminalRunDisplayId,
+    terminalRunHandoffStatus,
+    thinkingHint,
+    topLevelFileOps,
+    topLevelSubAgents,
+    topLevelWebFetches,
+    trailingLiveSegments,
+    visibleStreamingArtifacts,
+    visibleStreamingWidgets,
+  ])
 
   return (
     <div ref={chatViewRootRef} className="theme-surface-page relative flex min-w-0 flex-1 overflow-hidden bg-[var(--c-bg-page)]">
@@ -2967,58 +3099,7 @@ export const ChatView = memo(function ChatView() {
                 lastTurnStartIdx={lastTurnStartIdx}
                 lastTurnRef={lastUserMsgRef}
                 lastUserPromptRef={lastUserPromptRef}
-                lastTurnChildren={
-                  <LiveRunPane
-                    isWorkMode={isWorkMode}
-                    showPendingThinkingShell={showPendingThinkingShell}
-                    preserveLiveRunUi={preserveLiveRunUi}
-                    leadingLiveCop={leadingLiveCop}
-                    trailingLiveSegments={trailingLiveSegments}
-                    liveSegments={liveSegments}
-                    liveRunUiActive={liveRunUiActive}
-                    liveRunUiVisible={liveRunUiVisible}
-                    liveAssistantTurn={liveAssistantTurn}
-                    allStreamItemsForUi={allStreamItemsForUi}
-                    dedupedTopLevelCodeExecutions={dedupedTopLevelCodeExecutions}
-                    topLevelSubAgents={topLevelSubAgents}
-                    topLevelFileOps={topLevelFileOps}
-                    topLevelWebFetches={topLevelWebFetches}
-                    codePanelExecutionId={codePanelExecution?.id}
-                    currentRunSources={currentRunSourcesRef.current}
-                    currentRunArtifacts={currentRunArtifactsRef.current}
-                    activeRunId={activeRunId}
-                    activeSegmentId={activeSegmentIdRef.current}
-                    accessToken={accessToken}
-                    baseUrl={baseUrl}
-                    thinkingHint={thinkingHint}
-                    visibleStreamingWidgets={visibleStreamingWidgets}
-                    visibleStreamingArtifacts={visibleStreamingArtifacts}
-                    injectionBlocked={injectionBlocked}
-                    awaitingInput={awaitingInput}
-                    checkInDraft={checkInDraft}
-                    checkInSubmitting={checkInSubmitting}
-                    onCheckInDraftChange={setCheckInDraft}
-                    onCheckInSubmit={() => void handleCheckInSubmit()}
-                    pendingIncognito={pendingIncognito}
-                    incognitoDividerText={t.incognitoForkDivider}
-                    onIncognitoDividerComplete={() => {
-                      if (isAtBottomRef.current) {
-                        activateAnchor()
-                      }
-                    }}
-                    terminalRunHandoffStatus={terminalRunHandoffStatus}
-                    terminalRunDisplayId={terminalRunDisplayId}
-                    showRunDetailButton={showRunDetailButton}
-                    setRunDetailPanelRunId={setRunDetailPanelRunId}
-                    onOpenDocument={openDocumentPanel}
-                    onOpenCodeExecution={openCodePanel}
-                    onOpenSubAgent={openAgentPanelState}
-                    onArtifactAction={handleArtifactAction}
-                    renderLiveCopItems={renderLiveCopItems}
-                    renderLiveCopSegment={renderLiveCopSegment}
-                    bottomRef={bottomRef}
-                  />
-                }
+                lastTurnChildren={lastTurnChildren}
                 showRunDetailButton={showRunDetailButton}
                 currentRunCopHeaderOverride={currentRunCopHeaderOverride}
                 handleRetryUserMessage={handleRetryUserMessage}

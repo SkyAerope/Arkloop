@@ -5,7 +5,8 @@ import type { LocaleStrings } from '../locales'
 import { ChatInput, type Attachment, type ChatInputHandle } from './ChatInput'
 import { ErrorCallout, type AppError } from './ErrorCallout'
 import { NotificationBell } from './NotificationBell'
-import { RightPanel } from './RightPanel'
+import { RightPanel, type RightPanelTab } from './RightPanel'
+import { LocalFilesPanel } from './local-files/LocalFilesPanel'
 import { isDesktop } from '@arkloop/shared/desktop'
 import { DebugTrigger, useTimeZone } from '@arkloop/shared'
 import { buildDraftAttachmentRecords, restoreAttachmentFromDraftRecord } from '../draftAttachments'
@@ -167,6 +168,7 @@ export function WelcomePage() {
   const { refreshCredits } = useCredits()
   const [showDebugPanel, setShowDebugPanel] = useState(() => readDeveloperShowDebugPanel())
   const [rightPanelVisible, setRightPanelVisible] = useState(false)
+  const [workFolder, setWorkFolder] = useState(() => readWorkFolder())
   const chatInputRef = useRef<ChatInputHandle>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [initialPlanMode, setInitialPlanMode] = useState(false)
@@ -179,16 +181,54 @@ export function WelcomePage() {
   const navigate = useNavigate()
   const { t } = useLocale()
 
+  const hasRightPanelContent = appMode === 'work' && !!workFolder?.trim()
+  const isRightPanelOpen = rightPanelVisible && hasRightPanelContent
+
   useEffect(() => {
-    setRightPanelOpen(rightPanelVisible)
-  }, [rightPanelVisible, setRightPanelOpen])
+    setRightPanelOpen(isRightPanelOpen)
+  }, [isRightPanelOpen, setRightPanelOpen])
 
   useEffect(() => {
     setTitleBarRightPanelClick(() => {
+      if (!hasRightPanelContent) {
+        setRightPanelVisible(false)
+        return
+      }
       setRightPanelVisible((visible) => !visible)
     })
     return () => setTitleBarRightPanelClick(null)
-  }, [setTitleBarRightPanelClick])
+  }, [hasRightPanelContent, setTitleBarRightPanelClick])
+
+  useEffect(() => {
+    setWorkFolder(readWorkFolder())
+
+    const handleWorkFolderChange = () => {
+      const nextFolder = readWorkFolder()
+      setWorkFolder(nextFolder)
+      if (appMode === 'work' && nextFolder?.trim()) setRightPanelVisible(true)
+    }
+    const handleStorageChange = () => {
+      setWorkFolder(readWorkFolder())
+    }
+    window.addEventListener('arkloop:work-folder-changed', handleWorkFolderChange)
+    window.addEventListener('storage', handleStorageChange)
+    return () => {
+      window.removeEventListener('arkloop:work-folder-changed', handleWorkFolderChange)
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [appMode])
+
+  const rightPanelTabs = useMemo<RightPanelTab[]>(() => {
+    if (!hasRightPanelContent || !workFolder?.trim()) return []
+    return [{
+      id: 'files',
+      kind: 'files',
+      title: 'Files',
+      hideTitle: true,
+      closable: false,
+      content: <LocalFilesPanel rootPath={workFolder} accessToken={accessToken} />,
+    }]
+  }, [accessToken, hasRightPanelContent, workFolder])
 
   const greeting = useMemo(
     () => buildGreeting(t.welcomeGreeting, me?.username ?? null, getGreetingParts(new Date(), timeZone)),
@@ -569,15 +609,15 @@ export function WelcomePage() {
       <div
         className="shrink-0 overflow-hidden bg-[var(--c-bg-page)]"
         style={{
-          width: rightPanelVisible ? welcomeRightPanelWidth : 0,
-          opacity: rightPanelVisible ? 1 : 0,
-          borderLeft: rightPanelVisible ? '0.5px solid var(--c-border-subtle)' : 'none',
-          pointerEvents: rightPanelVisible ? 'auto' : 'none',
+          width: isRightPanelOpen ? welcomeRightPanelWidth : 0,
+          opacity: isRightPanelOpen ? 1 : 0,
+          borderLeft: isRightPanelOpen ? '0.5px solid var(--c-border-subtle)' : 'none',
+          pointerEvents: isRightPanelOpen ? 'auto' : 'none',
           transition: `width ${welcomeRightPanelTransitionCss}, opacity ${welcomeRightPanelTransitionCss}`,
           willChange: 'width, opacity',
         }}
       >
-        <RightPanel tabs={[]} activeTabId={null} onSelectTab={() => {}} />
+        <RightPanel tabs={rightPanelTabs} activeTabId="files" onSelectTab={() => {}} />
       </div>
     </div>
   )
