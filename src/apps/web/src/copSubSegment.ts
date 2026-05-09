@@ -154,6 +154,12 @@ function fetchCompletedSpan(count = 1): TitleSpan {
   return span({ kind: 'fetch_completed', count })
 }
 
+function knownGenericToolSpan(toolName: string): TitleSpan | null {
+  if (toolName === 'todo_write') return span({ kind: 'updated_todos' })
+  if (toolName === 'todo_read') return span({ kind: 'read_todos' })
+  return null
+}
+
 function exploredCodeSpan(): TitleSpan {
   return span({ kind: 'explored_code' })
 }
@@ -228,12 +234,9 @@ export function segmentCompletedTitle(seg: CopSubSegment): TitleSpan[] {
       if (calls.length === 1) {
         const call = calls[0]!
         const t = call.toolName
-        // Map known generic tool names to readable labels
-        const label: Record<string, string> = {
-          todo_write: 'Updated todos',
-          todo_read: 'Read todos',
-        }
-        return [span(contentText(label[t] ?? t))]
+        const known = knownGenericToolSpan(t)
+        if (known) return [known]
+        return [span(contentText(t))]
       }
       return [stepsCompletedSpan(calls.length)]
     }
@@ -692,6 +695,10 @@ function buildCompleteMainTitle(segments: ReadonlyArray<CopSubSegment>): TitleSp
   const allCalls = collectCalls(segments)
   if (allCalls.length === 1 && PLAN_MODE_TOOL_NAMES.has(allCalls[0]!.toolName)) {
     return [planModeSpan(allCalls[0]!.toolName, allCalls[0]!.arguments)]
+  }
+  if (allCalls.length === 1) {
+    const known = knownGenericToolSpan(allCalls[0]!.toolName)
+    if (known) return [known]
   }
   if (allCalls.length === 0) {
     return segments.length > 0 ? [stepsCompletedSpan(segments.length)] : [completedSpan()]

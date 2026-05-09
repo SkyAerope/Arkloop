@@ -6,7 +6,7 @@ import type { UploadedThreadAttachment } from './api'
 import type { FontFamily, CodeFontFamily, FontSize, ThemePreset, ThemeDefinition, ThemeBackgroundImage } from './themes/types'
 import type { AssistantTurnSegment, AssistantTurnUi, CopBlockItem, TurnToolCallRef } from './assistantTurnSegments'
 import type { AgentUIEvent } from './agent-ui/contract'
-import type { TimelineText } from './timelineText'
+import { isTimelineText, type TimelineText } from './timelineText'
 import type { ArtifactResourceRef, BrowserResourceRef, LocalFileResourceRef, ResourceRef, WorkspaceFileResourceRef } from './components/resource-preview/types'
 import { browserFaviconUrl, browserTitleFromUrl, normalizeBrowserUrl } from './components/resource-preview/browserIdentity'
 import {
@@ -778,6 +778,7 @@ function isCodeExecutionRef(value: unknown): value is CodeExecutionRef {
   if (!isCodeExecutionStatus(item.status)) return false
   if (item.code != null && typeof item.code !== 'string') return false
   if (item.output != null && typeof item.output !== 'string') return false
+  if (item.displayText != null && !isTimelineText(item.displayText)) return false
   if (item.emptyLabel != null && typeof item.emptyLabel !== 'string') return false
   if (item.exitCode != null && typeof item.exitCode !== 'number') return false
   if (item.processRef != null && typeof item.processRef !== 'string') return false
@@ -881,16 +882,12 @@ export type MessageSearchStepRef = {
   id: string
   kind: 'planning' | 'searching' | 'reviewing' | 'finished'
   label: string
+  text?: TimelineText
   status: 'active' | 'done'
   queries?: string[]
   seq?: number
   resultSeq?: number
   sources?: WebSource[]
-}
-
-function isTimelineText(value: unknown): value is TimelineText {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  return typeof (value as { kind?: unknown }).kind === 'string'
 }
 
 function messageSearchStepsKey(messageId: string): string {
@@ -1294,6 +1291,7 @@ function isFileOpRef(v: unknown): v is FileOpRef {
   if (typeof o.label !== 'string') return false
   const s = o.status
   if (s !== 'running' && s !== 'success' && s !== 'failed') return false
+  if (o.displayText != null && !isTimelineText(o.displayText)) return false
   return true
 }
 

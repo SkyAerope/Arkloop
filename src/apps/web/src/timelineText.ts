@@ -58,6 +58,70 @@ export function contentText(text: string): TimelineText {
   return { kind: 'content', text }
 }
 
+export function isTimelineText(value: unknown): value is TimelineText {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const item = value as Record<string, unknown>
+  switch (item.kind) {
+    case 'content': return typeof item.text === 'string'
+    case 'with_ellipsis': return isTimelineText(item.value)
+    case 'join': return Array.isArray(item.parts) && item.parts.every(isTimelineText) && typeof item.separator === 'string'
+    case 'completed':
+    case 'working':
+    case 'running':
+    case 'editing':
+    case 'edit_completed':
+    case 'exploring_code':
+    case 'explored_code':
+    case 'searching_code':
+    case 'searched_code':
+    case 'listing_files':
+    case 'listed_files':
+    case 'reading_file':
+    case 'read_file':
+    case 'writing_file':
+    case 'wrote_file':
+    case 'editing_file':
+    case 'edited_file':
+    case 'running_command':
+    case 'run_command':
+    case 'updated_todos':
+    case 'read_todos':
+    case 'reviewing_sources':
+      return true
+    case 'steps_completed':
+    case 'read_files':
+    case 'listed_file_count':
+    case 'search_count':
+    case 'ran_commands':
+    case 'agent_tasks':
+    case 'fetch_count':
+    case 'wrote_files':
+    case 'edited_files':
+      return isFiniteNumber(item.count)
+    case 'fetch_completed':
+    case 'agent_completed':
+    case 'search_completed':
+      return item.count == null || isFiniteNumber(item.count)
+    case 'plan_mode': return item.action === 'enter' || item.action === 'exit'
+    case 'image_generation':
+      return (item.status === 'live' || item.status === 'success' || item.status === 'failed') && (item.count == null || isFiniteNumber(item.count))
+    case 'search':
+      return (item.tense === 'live' || item.tense === 'done')
+        && (item.query == null || typeof item.query === 'string')
+        && (item.extraCount == null || isFiniteNumber(item.extraCount))
+    case 'fetching': return item.target == null || typeof item.target === 'string'
+    case 'loaded_resources':
+      return (item.tense === 'live' || item.tense === 'done') && isFiniteNumber(item.tools) && isFiniteNumber(item.skills)
+    case 'wrote_path':
+    case 'edited_path':
+      return typeof item.path === 'string'
+    case 'tool_subject':
+      return isToolSubjectAction(item.action) && typeof item.subject === 'string'
+    default:
+      return false
+  }
+}
+
 export function renderTimelineText(value: TimelineText, locale: Locale): string {
   if (value.kind === 'content') return value.text
   if (value.kind === 'with_ellipsis') return `${renderTimelineText(value.value, locale)}...`
@@ -75,6 +139,23 @@ function plural(count: number, singular: string, pluralForm = `${singular}s`): s
 
 function zhCount(count: number, unit: string): string {
   return `${count} ${unit}`
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isToolSubjectAction(value: unknown): value is Extract<TimelineText, { kind: 'tool_subject' }>['action'] {
+  return value === 'read'
+    || value === 'searched'
+    || value === 'listed'
+    || value === 'wrote'
+    || value === 'edited'
+    || value === 'reading'
+    || value === 'searching'
+    || value === 'listing'
+    || value === 'writing'
+    || value === 'editing'
 }
 
 function renderEn(value: CoreTimelineText): string {
