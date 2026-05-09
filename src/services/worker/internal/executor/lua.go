@@ -1539,6 +1539,7 @@ func (rt *luaRuntime) runAgentLoop(
 		MaxTotalOutputTokens:   rt.rc.MaxTotalOutputTokens,
 		PendingMemoryWrites:    rt.rc.PendingMemoryWrites,
 		Runtime:                rt.rc.Runtime,
+		ToolExecutionTracker:   rt.rc.ToolExecutionTracker,
 		LlmRetryMaxAttempts:    rt.rc.LlmRetryMaxAttempts,
 		LlmRetryBaseDelayMs:    rt.rc.LlmRetryBaseDelayMs,
 		WaitForInput:           rt.rc.WaitForInput,

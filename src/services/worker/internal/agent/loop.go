@@ -23,6 +23,7 @@ import (
 	"arkloop/services/worker/internal/security"
 	"arkloop/services/worker/internal/stablejson"
 	"arkloop/services/worker/internal/subagentctl"
+	"arkloop/services/worker/internal/tooldiagnostics"
 	"arkloop/services/worker/internal/tools"
 	"arkloop/services/worker/internal/tools/builtin/askuser"
 	"github.com/google/uuid"
@@ -67,6 +68,7 @@ type RunContext struct {
 	MaxCostMicros                    *int64
 	MaxTotalOutputTokens             *int64
 	ToolExecutor                     *tools.DispatchingExecutor
+	ToolExecutionTracker             *tooldiagnostics.Tracker
 	ToolSpecs                        []llm.ToolSpec
 	PendingMemoryWrites              *memory.PendingWriteBuffer
 	Runtime                          *sharedtoolruntime.RuntimeSnapshot
@@ -974,6 +976,11 @@ func (l *Loop) executeToolCall(
 	yield func(events.RunEvent) error,
 ) tools.ExecutionResult {
 	call = llm.CanonicalToolCall(call)
+	if runCtx.ToolExecutionTracker != nil {
+		runCtx.ToolExecutionTracker.Start(runCtx.RunID, call.ToolCallID, call.ToolName)
+		defer runCtx.ToolExecutionTracker.Finish(runCtx.RunID, call.ToolCallID)
+		runCtx.ToolExecutionTracker.UpdatePhase(runCtx.RunID, call.ToolCallID, "rollout")
+	}
 	// Rollout: 写入 ToolCall
 	if runCtx.RolloutRecorder != nil {
 		inputJSON, _ := json.Marshal(call.ArgumentsJSON)
@@ -1026,6 +1033,7 @@ func (l *Loop) executeToolCall(
 		Channel:                          runCtx.Channel,
 		PipelineRC:                       runCtx.PipelineRC,
 		StreamEvent:                      streamEvent,
+		ToolTracker:                      runCtx.ToolExecutionTracker,
 	}
 	result := runCtx.ToolExecutor.Execute(ctx, call.ToolName, copyMap(call.ArgumentsJSON), execCtx, call.ToolCallID)
 	if runCtx.PipelineRC != nil && runCtx.PipelineRC.PluginHookRunner != nil {

@@ -35,6 +35,7 @@ import (
 	workerruntime "arkloop/services/worker/internal/runtime"
 	"arkloop/services/worker/internal/securitycap"
 	"arkloop/services/worker/internal/subagentctl"
+	"arkloop/services/worker/internal/tooldiagnostics"
 	"arkloop/services/worker/internal/toolprovider"
 	"arkloop/services/worker/internal/tools"
 	"arkloop/services/worker/internal/tools/builtin/channel_qq"
@@ -377,6 +378,7 @@ func (e *EngineV1) Execute(ctx context.Context, pool *pgxpool.Pool, run data.Run
 		HookRuntime:             e.hookRuntime,
 		HookRegistry:            e.hookRegistry,
 		PluginHookRunner:        pipeline.NewDefaultPluginHookRunner(),
+		ToolExecutionTracker:    tooldiagnostics.DefaultTracker,
 		UserID:                  run.CreatedByUserID,
 		JobPayload:              cloneMap(input.JobPayload),
 		ProfileRef:              derefString(run.ProfileRef),
@@ -601,6 +603,7 @@ func (e *EngineV1) ExecuteContextCompactMaintenance(
 		TraceID:               strings.TrimSpace(traceID),
 		Emitter:               events.NewEmitter(traceID),
 		Router:                e.router,
+		ToolExecutionTracker:  tooldiagnostics.DefaultTracker,
 		JobPayload:            cloneMap(input.JobPayload),
 		InputJSON:             loaded.InputJSON,
 		Messages:              loaded.Messages,

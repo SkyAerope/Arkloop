@@ -49,6 +49,7 @@ import (
 	"arkloop/services/worker/internal/runtime"
 	"arkloop/services/worker/internal/securitycap"
 	"arkloop/services/worker/internal/subagentctl"
+	"arkloop/services/worker/internal/tooldiagnostics"
 	"arkloop/services/worker/internal/toolprovider"
 	"arkloop/services/worker/internal/tools"
 	"arkloop/services/worker/internal/tools/builtin"
@@ -633,21 +634,22 @@ func (e *DesktopEngine) Execute(ctx context.Context, run data.Run, traceID strin
 	llmRetryMaxAttempts, llmRetryBaseDelayMs := resolveDesktopLLMRetry(ctx, e.db)
 
 	rc := &pipeline.RunContext{
-		Run:                 run,
-		DB:                  e.db,
-		RunStatusDB:         runsRepo,
-		Pool:                nil,
-		MemoryServiceDB:     e.db,
-		MemorySnapshotStore: pipeline.NewDesktopMemorySnapshotStore(e.db),
-		EventBus:            e.bus,
-		TraceID:             traceID,
-		Tracer:              tracer,
-		Emitter:             emitter,
-		Router:              e.auxRouter,
-		Runtime:             &runRuntime,
-		HookRuntime:         e.hookRuntime,
-		HookRegistry:        e.hookRegistry,
-		PluginHookRunner:    pipeline.NewDefaultPluginHookRunner(),
+		Run:                  run,
+		DB:                   e.db,
+		RunStatusDB:          runsRepo,
+		Pool:                 nil,
+		MemoryServiceDB:      e.db,
+		MemorySnapshotStore:  pipeline.NewDesktopMemorySnapshotStore(e.db),
+		EventBus:             e.bus,
+		TraceID:              traceID,
+		Tracer:               tracer,
+		Emitter:              emitter,
+		Router:               e.auxRouter,
+		Runtime:              &runRuntime,
+		HookRuntime:          e.hookRuntime,
+		HookRegistry:         e.hookRegistry,
+		PluginHookRunner:     pipeline.NewDefaultPluginHookRunner(),
+		ToolExecutionTracker: tooldiagnostics.DefaultTracker,
 
 		ExecutorBuilder:     e.executorRegistry,
 		ToolBudget:          map[string]any{},

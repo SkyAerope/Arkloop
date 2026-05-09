@@ -73,6 +73,7 @@ func (e *SimpleExecutor) Execute(
 		MaxTotalOutputTokens:             rc.MaxTotalOutputTokens,
 		PendingMemoryWrites:              rc.PendingMemoryWrites,
 		Runtime:                          rc.Runtime,
+		ToolExecutionTracker:             rc.ToolExecutionTracker,
 		LlmRetryMaxAttempts:              rc.LlmRetryMaxAttempts,
 		LlmRetryBaseDelayMs:              rc.LlmRetryBaseDelayMs,
 		WaitForInput:                     rc.WaitForInput,
