@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useToast } from '@arkloop/shared'
 import { motion } from 'framer-motion'
 import {
@@ -12,6 +12,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import {
+  checkPluginRuntime,
   getPluginEnablement,
   getPluginRuntimeStatus,
   installPluginRuntime,
@@ -49,7 +50,7 @@ type PluginSettingDefinition = {
   options: string[]
 }
 
-type PluginAction = 'install-runtime' | 'toggle-enabled' | 'update-setting'
+type PluginAction = 'install-runtime' | 'toggle-enabled' | 'update-setting' | 'check-runtime'
 
 type BusyAction = {
   pluginID: string
@@ -109,6 +110,12 @@ function settingDefinitions(manifest: Record<string, unknown>): PluginSettingDef
   })
 }
 
+function visibleSettingDefinitions(plugin: PluginPackage): PluginSettingDefinition[] {
+  return settingDefinitions(plugin.manifest).filter((setting) => (
+    plugin.id !== 'arkloop.plugins.cua' || setting.key !== 'auto_update_enabled'
+  ))
+}
+
 function settingControlValue(definition: PluginSettingDefinition, status: PluginStatus) {
   const value = status.enablement?.settings?.[definition.key] ?? definition.defaultValue
   if (definition.type === 'boolean') return value === true ? 'true' : 'false'
@@ -145,18 +152,58 @@ function settingSelectOptions(
 }
 
 function runtimeStatusValue(status: PluginStatus, suffixes: string[]) {
+  const value = runtimeStatusRawValue(status, suffixes)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function runtimeStatusRawValue(status: PluginStatus, suffixes: string[]) {
   const raw = status.runtime?.status_json
-  if (!isRecord(raw)) return ''
+  if (!isRecord(raw)) return undefined
   for (const suffix of suffixes) {
     const value = raw[suffix]
-    if (typeof value === 'string' && value.trim() !== '') return value
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value
   }
   for (const [key, value] of Object.entries(raw)) {
-    if (suffixes.some((suffix) => key.endsWith(`.${suffix}`)) && typeof value === 'string' && value.trim() !== '') {
+    if (suffixes.some((suffix) => key.endsWith(`.${suffix}`)) && value !== undefined && value !== null && String(value).trim() !== '') {
       return value
     }
   }
-  return ''
+  return undefined
+}
+
+function runtimeStatusBoolValue(status: PluginStatus, suffixes: string[]) {
+  const value = runtimeStatusRawValue(status, suffixes)
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    if (value === 'true') return true
+    if (value === 'false') return false
+  }
+  return null
+}
+
+function formatRuntimeTimestamp(value: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function permissionDisplayValue(value: boolean | null, checked: boolean, labels: ReturnType<typeof useLocale>['t']['desktopSettings']['pluginsPage']) {
+  if (!checked) return labels.checking
+  if (value === null) return labels.unchecked
+  return value ? labels.granted : labels.notGranted
+}
+
+function permissionTone(value: boolean | null, checked: boolean): 'neutral' | 'success' | 'error' {
+  if (!checked || value === null) return 'neutral'
+  return value ? 'success' : 'error'
+}
+
+function hasRuntimePermissionCheck(status: PluginStatus) {
+  return runtimeStatusValue(status, ['permissions.checked_at']) !== ''
 }
 
 export function PluginsSettings({ accessToken }: Props) {
@@ -274,6 +321,31 @@ export function PluginsSettings({ accessToken }: Props) {
     }
   }, [accessToken, addToast, ps.settingSaveFailed, state.statusByID])
 
+  const checkRuntime = useCallback(async (plugin: PluginPackage) => {
+    setActiveBusyAction({ pluginID: plugin.id, action: 'check-runtime' })
+    try {
+      const runtime = await checkPluginRuntime(accessToken, plugin.id)
+      setState((current) => ({
+        ...current,
+        statusByID: {
+          ...current.statusByID,
+          [plugin.id]: { ...(current.statusByID[plugin.id] ?? { enablement: null }), runtime },
+        },
+      }))
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : ps.runtimeCheckFailed, 'error')
+    } finally {
+      setActiveBusyAction(null)
+    }
+  }, [accessToken, addToast, ps.runtimeCheckFailed])
+
+  useEffect(() => {
+    if (!selectedPlugin || selectedPlugin.id !== 'arkloop.plugins.cua' || busyAction) return
+    const status = state.statusByID[selectedPlugin.id] ?? { enablement: null, runtime: null }
+    if (status.runtime?.status !== 'installed' || hasRuntimePermissionCheck(status)) return
+    void checkRuntime(selectedPlugin)
+  }, [busyAction, checkRuntime, selectedPlugin, state.statusByID])
+
   if (selectedPlugin) {
     return (
       <SettingsPage title={ds.pluginsTitle} className="max-w-[760px]">
@@ -285,6 +357,7 @@ export function PluginsSettings({ accessToken }: Props) {
           pageTitle={ds.pluginsTitle}
           onBack={() => setSelectedPluginID(null)}
           onInstallRuntime={() => void installRuntime(selectedPlugin)}
+          onCheckRuntime={() => void checkRuntime(selectedPlugin)}
           onToggleEnabled={(enabled) => void toggleEnabled(selectedPlugin, enabled)}
           onUpdateSetting={(definition, value) => void updateSetting(selectedPlugin, definition, value)}
         />
@@ -389,19 +462,24 @@ function PluginListRow({
   const busy = busyAction !== null
   const installBusy = busyAction === 'install-runtime'
   const toggleBusy = busyAction === 'toggle-enabled'
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    onOpen()
+  }
 
   return (
     <motion.div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
       whileTap={{ scale: 0.972 }}
       transition={{ type: 'spring', stiffness: 680, damping: 20, mass: 0.38 }}
-      className="overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)]"
+      className="cursor-pointer overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] outline-none transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)] focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]"
     >
-      <div className="grid min-h-[76px] w-full grid-cols-1 items-center gap-3 px-4 py-3 transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)] sm:grid-cols-[minmax(0,1fr)_auto]">
-        <button
-          type="button"
-          className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg text-left outline-none focus-visible:[box-shadow:0_0_0_1px_var(--c-input-border-color-hover)]"
-          onClick={onOpen}
-        >
+      <div className="grid min-h-[76px] w-full grid-cols-1 items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg text-left">
           <PluginIcon />
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
@@ -415,8 +493,12 @@ function PluginListRow({
             </p>
           </div>
           <ChevronRight size={16} className="text-[var(--c-text-muted)]" />
-        </button>
-        <div className="flex shrink-0 items-center gap-2 justify-self-end">
+        </div>
+        <div
+          className="flex shrink-0 items-center gap-2 justify-self-end"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
           {runtimeNeeded && !runtimeReady && (
             <SettingsButton
               icon={installBusy ? <Loader2 className="animate-spin" /> : <Download />}
@@ -448,6 +530,7 @@ function PluginDetailPage({
   pageTitle,
   onBack,
   onInstallRuntime,
+  onCheckRuntime,
   onToggleEnabled,
   onUpdateSetting,
 }: {
@@ -458,6 +541,7 @@ function PluginDetailPage({
   pageTitle: string
   onBack: () => void
   onInstallRuntime: () => void
+  onCheckRuntime: () => void
   onToggleEnabled: (enabled: boolean) => void
   onUpdateSetting: (definition: PluginSettingDefinition, value: string) => void
 }) {
@@ -465,14 +549,18 @@ function PluginDetailPage({
   const runtimeStatus = status.runtime?.status ?? 'not_installed'
   const runtimeNeeded = hasRuntime(plugin.manifest)
   const runtimeReady = runtimeStatus === 'installed'
-  const settings = settingDefinitions(plugin.manifest)
+  const settings = visibleSettingDefinitions(plugin)
   const busy = busyAction !== null
   const installBusy = busyAction === 'install-runtime'
   const toggleBusy = busyAction === 'toggle-enabled'
-  const helperAppPath = runtimeStatusValue(status, ['helper_app_path', 'helperAppPath'])
+  const checkBusy = busyAction === 'check-runtime'
   const helperAppName = runtimeStatusValue(status, ['helper_app_name', 'helperAppName'])
   const helperAppBundleID = runtimeStatusValue(status, ['helper_app_bundle_id', 'helperAppBundleID'])
-  const runtimeBinaryPath = runtimeStatusValue(status, ['command', 'path'])
+  const showCUAPermissions = plugin.id === 'arkloop.plugins.cua' && runtimeReady
+  const accessibilityPermission = runtimeStatusBoolValue(status, ['permissions.accessibility'])
+  const screenRecordingPermission = runtimeStatusBoolValue(status, ['permissions.screen_recording'])
+  const permissionCheckedAt = runtimeStatusValue(status, ['permissions.checked_at'])
+  const permissionError = runtimeStatusValue(status, ['permissions.error'])
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -518,9 +606,6 @@ function PluginDetailPage({
 
       <PluginDetailSection title={labels.overview}>
         <PluginDetailCard>
-          <PluginDetailRow label={labels.pluginId}>
-            <PluginValue value={plugin.id} mono />
-          </PluginDetailRow>
           <PluginDetailRow label={labels.version}>
             <PluginValue value={plugin.version} />
           </PluginDetailRow>
@@ -536,28 +621,52 @@ function PluginDetailPage({
           <PluginDetailRow label={labels.runtimeStatus}>
             <PluginValue value={runtimeNeeded ? runtimeStatus : labels.notRequired} />
           </PluginDetailRow>
-          {runtimeNeeded && runtimeReady && helperAppPath && (
-            <PluginDetailRow label={labels.helperApp}>
-              <PluginValue value={helperAppPath} mono />
-            </PluginDetailRow>
-          )}
-          {runtimeNeeded && runtimeReady && helperAppName && (
-            <PluginDetailRow label={labels.permissionApp}>
-              <PluginValue value={helperAppName} />
-            </PluginDetailRow>
-          )}
-          {runtimeNeeded && runtimeReady && helperAppBundleID && (
-            <PluginDetailRow label={labels.bundleId}>
-              <PluginValue value={helperAppBundleID} mono />
-            </PluginDetailRow>
-          )}
-          {runtimeNeeded && runtimeReady && runtimeBinaryPath && (
-            <PluginDetailRow label={labels.runtimeBinary}>
-              <PluginValue value={runtimeBinaryPath} mono />
-            </PluginDetailRow>
-          )}
         </PluginDetailCard>
       </PluginDetailSection>
+
+      {showCUAPermissions && (
+        <PluginDetailSection
+          title={labels.permissionsSection}
+          action={(
+            <SettingsIconButton label={labels.checkPermissions} onClick={onCheckRuntime} disabled={busy}>
+              {checkBusy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            </SettingsIconButton>
+          )}
+        >
+          <PluginDetailCard>
+            {helperAppName && (
+              <PluginDetailRow label={labels.permissionApp}>
+                <PluginValue value={helperAppName} />
+              </PluginDetailRow>
+            )}
+            {helperAppBundleID && (
+              <PluginDetailRow label={labels.bundleId}>
+                <PluginValue value={helperAppBundleID} mono />
+              </PluginDetailRow>
+            )}
+            <PluginDetailRow label={labels.accessibilityPermission}>
+              <PluginValue
+                value={permissionDisplayValue(accessibilityPermission, permissionCheckedAt !== '', labels)}
+                tone={permissionTone(accessibilityPermission, permissionCheckedAt !== '')}
+              />
+            </PluginDetailRow>
+            <PluginDetailRow label={labels.screenRecordingPermission}>
+              <PluginValue
+                value={permissionDisplayValue(screenRecordingPermission, permissionCheckedAt !== '', labels)}
+                tone={permissionTone(screenRecordingPermission, permissionCheckedAt !== '')}
+              />
+            </PluginDetailRow>
+            <PluginDetailRow label={labels.permissionCheckedAt}>
+              <PluginValue value={formatRuntimeTimestamp(permissionCheckedAt) || labels.checking} />
+            </PluginDetailRow>
+            {permissionError && (
+              <PluginDetailRow label={labels.permissionError}>
+                <PluginValue value={permissionError} tone="error" />
+              </PluginDetailRow>
+            )}
+          </PluginDetailCard>
+        </PluginDetailSection>
+      )}
 
       {settings.length > 0 && (
         <PluginSettingsSection
@@ -593,27 +702,35 @@ function PluginSettingsSection({
           const options = settingSelectOptions(setting, labels)
           const disabled = busy || status.enablement === null
           return (
-            <PluginDetailRow key={setting.key} label={setting.label}>
-              {options.length > 0 ? (
-                <SettingsSelect
-                  value={value}
-                  options={options}
-                  onChange={(nextValue) => onUpdateSetting(setting, nextValue)}
-                  disabled={disabled}
-                  triggerClassName="h-[35px]"
-                />
-              ) : (
-                <SettingsInput
-                  variant="md"
-                  defaultValue={value}
-                  disabled={disabled}
-                  onBlur={(event) => {
-                    const nextValue = event.currentTarget.value
-                    if (nextValue !== value) onUpdateSetting(setting, nextValue)
-                  }}
-                />
-              )}
-            </PluginDetailRow>
+	            <PluginDetailRow key={setting.key} label={setting.label}>
+	              {options.length > 0 ? (
+	                <div className="flex justify-end">
+	                  <div className="w-[180px] max-w-full">
+	                    <SettingsSelect
+	                      value={value}
+	                      options={options}
+	                      onChange={(nextValue) => onUpdateSetting(setting, nextValue)}
+	                      disabled={disabled}
+	                      triggerClassName="h-9"
+	                    />
+	                  </div>
+	                </div>
+	              ) : (
+	                <div className="flex justify-end">
+	                  <div className="w-[240px] max-w-full">
+	                    <SettingsInput
+	                      variant="md"
+	                      defaultValue={value}
+	                      disabled={disabled}
+	                      onBlur={(event) => {
+	                        const nextValue = event.currentTarget.value
+	                        if (nextValue !== value) onUpdateSetting(setting, nextValue)
+	                      }}
+	                    />
+	                  </div>
+	                </div>
+	              )}
+	            </PluginDetailRow>
           )
         })}
       </PluginDetailCard>
@@ -634,10 +751,13 @@ function PluginIcon({ size = 'md' }: { size?: 'md' | 'lg' }) {
   )
 }
 
-function PluginDetailSection({ title, children }: { title: string; children: ReactNode }) {
+function PluginDetailSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-2.5">
-      <h4 className="pl-2.5 text-[13px] font-normal text-[var(--c-text-secondary)]">{title}</h4>
+      <div className="flex min-h-[32px] items-center justify-between gap-3 pl-2.5">
+        <h4 className="text-[13px] font-normal text-[var(--c-text-secondary)]">{title}</h4>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
       {children}
     </section>
   )
@@ -663,14 +783,22 @@ function PluginDetailRow({ label, children }: { label: string; children: ReactNo
 function PluginValue({
   value,
   mono,
+  tone = 'neutral',
 }: {
   value: string
   mono?: boolean
+  tone?: 'neutral' | 'success' | 'error'
 }) {
+  const toneClass = tone === 'success'
+    ? 'text-[var(--c-status-success)]'
+    : tone === 'error'
+      ? 'text-[var(--c-status-error)]'
+      : 'text-[var(--c-text-secondary)]'
   return (
     <div
       className={[
-        'truncate text-right text-[13px] font-medium leading-5 text-[var(--c-text-secondary)]',
+        'truncate text-right text-[13px] font-medium leading-5',
+        toneClass,
         mono ? 'font-mono text-[12px]' : '',
       ].filter(Boolean).join(' ')}
       title={value}
