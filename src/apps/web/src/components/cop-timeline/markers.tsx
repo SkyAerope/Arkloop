@@ -2,7 +2,6 @@ import type { ComponentType, SVGProps } from 'react'
 import {
   BotMessageSquare,
   CheckCircle2,
-  Circle,
   ClipboardList,
   FilePenLine,
   FileSearch,
@@ -100,7 +99,3 @@ export function markerForStep(step: WebSearchPhaseStep): TimelineMarker {
   return { kind: 'icon', icon: Search, label: 'Search' }
 }
 
-export function markerForGenericTool(toolName: string): TimelineMarker {
-  const marker = markerForToolName(toolName)
-  return marker.kind === 'icon' ? marker : { kind: 'icon', icon: Circle, label: toolName }
-}

@@ -16,17 +16,17 @@ export type TopLevelCopToolEntry =
   | { kind: 'generic'; id: string; seq: number; item: GenericToolCallRef }
 
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
-const ROOT_TOOL_ICON_WIDTH = 18
-const ROOT_TOOL_ICON_GAP = 4
-const ROOT_TOOL_EXPANDED_OFFSET = -(ROOT_TOOL_ICON_WIDTH + ROOT_TOOL_ICON_GAP)
-const ROOT_TOOL_LINE_HEIGHT = 20
+const TOP_LEVEL_TOOL_ICON_WIDTH = 18
+const TOP_LEVEL_TOOL_ICON_GAP = 4
+const TOP_LEVEL_TOOL_EXPANDED_OFFSET = -(TOP_LEVEL_TOOL_ICON_WIDTH + TOP_LEVEL_TOOL_ICON_GAP)
+const TOP_LEVEL_TOOL_LINE_HEIGHT = 20
 
 function livePreviewLines(text: string | undefined): string[] {
   if (!text?.trim()) return []
   return text.replace(/\r\n/g, '\n').split('\n').filter((line) => line.trim() !== '').slice(-5)
 }
 
-function RootLivePreview({ text }: { text?: string }) {
+function TopLevelLivePreview({ text }: { text?: string }) {
   const lines = livePreviewLines(text)
   if (lines.length === 0) return null
   return (
@@ -34,8 +34,8 @@ function RootLivePreview({ text }: { text?: string }) {
       className="cop-root-live-preview"
       style={{
         marginTop: 4,
-        marginLeft: ROOT_TOOL_EXPANDED_OFFSET,
-        width: `calc(100% + ${Math.abs(ROOT_TOOL_EXPANDED_OFFSET)}px)`,
+        marginLeft: TOP_LEVEL_TOOL_EXPANDED_OFFSET,
+        width: `calc(100% + ${Math.abs(TOP_LEVEL_TOOL_EXPANDED_OFFSET)}px)`,
         maxWidth: 'min(100%, 720px)',
         maxHeight: 86,
         overflow: 'hidden',
@@ -62,16 +62,16 @@ function RootLivePreview({ text }: { text?: string }) {
   )
 }
 
-function RootToolMarker({ marker }: { marker: TimelineMarker }) {
+function TopLevelToolMarker({ marker }: { marker: TimelineMarker }) {
   if (marker.kind === 'icon') {
     return (
       <span
         title={marker.label}
         aria-label={marker.label}
         style={{
-          width: ROOT_TOOL_ICON_WIDTH,
-          height: ROOT_TOOL_LINE_HEIGHT,
-          flex: `0 0 ${ROOT_TOOL_ICON_WIDTH}px`,
+          width: TOP_LEVEL_TOOL_ICON_WIDTH,
+          height: TOP_LEVEL_TOOL_LINE_HEIGHT,
+          flex: `0 0 ${TOP_LEVEL_TOOL_ICON_WIDTH}px`,
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -87,9 +87,9 @@ function RootToolMarker({ marker }: { marker: TimelineMarker }) {
     <span
       aria-hidden="true"
       style={{
-        width: ROOT_TOOL_ICON_WIDTH,
-        height: ROOT_TOOL_LINE_HEIGHT,
-        flex: `0 0 ${ROOT_TOOL_ICON_WIDTH}px`,
+        width: TOP_LEVEL_TOOL_ICON_WIDTH,
+        height: TOP_LEVEL_TOOL_LINE_HEIGHT,
+        flex: `0 0 ${TOP_LEVEL_TOOL_ICON_WIDTH}px`,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -107,10 +107,10 @@ function RootToolMarker({ marker }: { marker: TimelineMarker }) {
   )
 }
 
-function RootToolFrame({ toolName, children }: { toolName: string; children: ReactNode }) {
+function TopLevelToolFrame({ toolName, children }: { toolName: string; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: ROOT_TOOL_ICON_GAP, padding: '6px 0' }}>
-      <RootToolMarker marker={markerForToolName(toolName)} />
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: TOP_LEVEL_TOOL_ICON_GAP, padding: '6px 0' }}>
+      <TopLevelToolMarker marker={markerForToolName(toolName)} />
       <div style={{ minWidth: 0, flex: 1 }}>
         {children}
       </div>
@@ -135,17 +135,17 @@ export function TopLevelCopToolBlock({
 
   if (entry.kind === 'file') {
     return (
-      <RootToolFrame toolName={entry.item.toolName}>
-        <FileOpToolRow op={entry.item} live={live} expandedOffsetLeft={ROOT_TOOL_EXPANDED_OFFSET} />
-        {live && entry.item.status === 'running' && <RootLivePreview text={entry.item.output} />}
-      </RootToolFrame>
+      <TopLevelToolFrame toolName={entry.item.toolName}>
+        <FileOpToolRow op={entry.item} live={live} expandedOffsetLeft={TOP_LEVEL_TOOL_EXPANDED_OFFSET} />
+        {live && entry.item.status === 'running' && <TopLevelLivePreview text={entry.item.output} />}
+      </TopLevelToolFrame>
     )
   }
 
   if (entry.kind === 'generic') {
     const item = entry.item
     return (
-      <RootToolFrame toolName={item.toolName}>
+      <TopLevelToolFrame toolName={item.toolName}>
         <ExecutionCard
           variant="fileop"
           toolName={item.toolName}
@@ -156,16 +156,16 @@ export function TopLevelCopToolBlock({
           status={item.status}
           errorMessage={item.errorMessage}
           smooth={!!live && item.status === 'running'}
-          expandedOffsetLeft={ROOT_TOOL_EXPANDED_OFFSET}
+          expandedOffsetLeft={TOP_LEVEL_TOOL_EXPANDED_OFFSET}
         />
-        {live && item.status === 'running' && <RootLivePreview text={item.output} />}
-      </RootToolFrame>
+        {live && item.status === 'running' && <TopLevelLivePreview text={item.output} />}
+      </TopLevelToolFrame>
     )
   }
 
   const ce = entry.item
   return (
-    <RootToolFrame toolName={ce.language === 'shell' ? 'exec_command' : 'python_execute'}>
+    <TopLevelToolFrame toolName={ce.language === 'shell' ? 'exec_command' : 'python_execute'}>
       {ce.language === 'shell'
         ? (
           <ExecutionCard
@@ -176,7 +176,7 @@ export function TopLevelCopToolBlock({
             status={ce.status}
             errorMessage={ce.errorMessage}
             smooth={!!live && ce.status === 'running'}
-            expandedOffsetLeft={ROOT_TOOL_EXPANDED_OFFSET}
+            expandedOffsetLeft={TOP_LEVEL_TOOL_EXPANDED_OFFSET}
           />
         )
         : (
@@ -191,6 +191,6 @@ export function TopLevelCopToolBlock({
           />
         )
       }
-    </RootToolFrame>
+    </TopLevelToolFrame>
   )
 }

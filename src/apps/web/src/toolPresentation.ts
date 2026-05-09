@@ -29,11 +29,11 @@ export type ExploreGroupRef = {
   seq?: number
 }
 
-const EXPLORE_TOOL_NAMES = new Set(['read_file', 'grep', 'glob', 'load_tools', 'load_skill', 'lsp'])
-const LOAD_TOOL_NAMES = new Set(['load_tools', 'load_skill'])
-const MUTATING_LSP_OPERATIONS = new Set(['rename'])
+export const EXPLORE_TOOL_NAMES = new Set(['read_file', 'grep', 'glob', 'load_tools', 'load_skill', 'lsp'])
+export const LOAD_TOOL_NAMES = new Set(['load_tools', 'load_skill'])
+export const LSP_MUTATING_OPERATIONS = new Set(['rename'])
 
-function basename(path: string): string {
+export function basename(path: string): string {
   const normalized = path.replace(/\\/g, '/')
   return normalized.split('/').filter(Boolean).pop() ?? path
 }
@@ -52,11 +52,11 @@ export function compactCommandLine(line: string): string {
   }).join(' ')
 }
 
-function truncate(value: string, max: number): string {
+export function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max)}…` : value
 }
 
-function stringArg(args: Record<string, unknown>, key: string): string {
+export function stringArg(args: Record<string, unknown>, key: string): string {
   const value = args[key]
   return typeof value === 'string' ? value : ''
 }
@@ -149,7 +149,7 @@ export function presentationForTool(toolNameInput: string, args: Record<string, 
     }
     case 'lsp': {
       const operation = stringArg(args, 'operation')
-      kind = MUTATING_LSP_OPERATIONS.has(operation) ? 'edit' : 'lsp'
+      kind = LSP_MUTATING_OPERATIONS.has(operation) ? 'edit' : 'lsp'
       subject = operation || undefined
       detail = stringArg(args, 'file_path') || stringArg(args, 'query') || undefined
       description = lspDescription(args)

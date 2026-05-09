@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copTimelinePayloadForSegment, promotedCopTimelineEntries, splitCopItemsByTopLevelTools, toolCallIdsInCopTimelines } from '../copSegmentTimeline'
+import { copTimelinePayloadForSegment, buildTimelineEntries, splitCopItemsByTopLevelTools, toolCallIdsInCopTimelines } from '../copSegmentTimeline'
 
 const call = (id: string, name: string, seq: number) =>
   ({ kind: 'call' as const, call: { toolCallId: id, toolName: name, arguments: {} }, seq })
@@ -558,7 +558,7 @@ describe('copTimelinePayloadForSegment', () => {
     expect(r.codeExecutions?.map((item) => item.id)).toEqual(['cmd_1', 'cmd_2'])
   })
 
-  it('promotedCopTimelineEntries 按真实 seq 混排 Explore 和 Edit', () => {
+  it('buildTimelineEntries 按真实 seq 混排 Explore 和 Edit', () => {
     const payload = copTimelinePayloadForSegment(
       {
         type: 'cop',
@@ -583,7 +583,7 @@ describe('copTimelinePayloadForSegment', () => {
       ['read_1'],
       ['read_2'],
     ])
-    expect(promotedCopTimelineEntries({
+    expect(buildTimelineEntries({
       payload,
       hasTimelineBody: false,
       bodyFileOps: [],
@@ -643,7 +643,7 @@ describe('copTimelinePayloadForSegment', () => {
     ])
   })
 
-  it('promotedCopTimelineEntries 将 timeline body 按提升 segment 切片', () => {
+  it('buildTimelineEntries 将 timeline body 按提升 segment 切片', () => {
     const payload = copTimelinePayloadForSegment(
       {
         type: 'cop',
@@ -668,7 +668,7 @@ describe('copTimelinePayloadForSegment', () => {
       },
     )
 
-    expect(promotedCopTimelineEntries({
+    expect(buildTimelineEntries({
       payload,
       hasTimelineBody: true,
       bodyFileOps: [],
@@ -679,7 +679,7 @@ describe('copTimelinePayloadForSegment', () => {
     ])
   })
 
-  it('promotedCopTimelineEntries 将 barrier 后的 thinking 附着到 barrier', () => {
+  it('buildTimelineEntries 将 barrier 后的 thinking 附着到 barrier', () => {
     const payload = copTimelinePayloadForSegment(
       {
         type: 'cop',
@@ -697,7 +697,7 @@ describe('copTimelinePayloadForSegment', () => {
       },
     )
 
-    const entries = promotedCopTimelineEntries({
+    const entries = buildTimelineEntries({
       payload,
       hasTimelineBody: true,
       bodyFileOps: [],

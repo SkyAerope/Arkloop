@@ -41,14 +41,14 @@ export type AssistantTurnFoldState = {
 
 const TIMELINE_TITLE_TOOL = 'timeline_title'
 const HIDDEN_COP_TOOLS = new Set(['end_reply'])
-const EXECUTION_COP_TOOLS = new Set(['exec_command', 'python_execute', 'continue_process', 'terminate_process'])
+const EXECUTION_COP_TOOL_NAMES = new Set(['exec_command', 'python_execute', 'continue_process', 'terminate_process'])
 
 function shouldHideCopTool(toolName: string): boolean {
   return HIDDEN_COP_TOOLS.has(toolName.trim())
 }
 
 function isExecutionCopTool(toolName: string): boolean {
-  return EXECUTION_COP_TOOLS.has(toolName.trim())
+  return EXECUTION_COP_TOOL_NAMES.has(toolName.trim())
 }
 
 export function copSegmentCalls(segment: { type: 'cop'; items: CopBlockItem[] }): TurnToolCallRef[] {
@@ -77,7 +77,7 @@ function assistantTurnEventTimeMs(event: AssistantTurnEvent): number {
   return Number.isFinite(t) ? t : Date.now()
 }
 
-function sealOpenThinkingInCop(items: CopBlockItem[], endMs: number): void {
+function closeOpenThinkingItems(items: CopBlockItem[], endMs: number): void {
   for (const it of items) {
     if (it.kind !== 'thinking' || it.endedAtMs != null) continue
     if (it.startedAtMs == null) it.startedAtMs = endMs
@@ -85,7 +85,7 @@ function sealOpenThinkingInCop(items: CopBlockItem[], endMs: number): void {
   }
 }
 
-function sealThinkingBeforeLatestCall(items: CopBlockItem[], endMs: number): void {
+function closeThinkingBeforeLastCall(items: CopBlockItem[], endMs: number): void {
   for (let i = items.length - 2; i >= 0; i--) {
     const it = items[i]
     if (it.kind === 'call') break
@@ -134,7 +134,7 @@ function extractResultPayload(event: AssistantTurnEvent): unknown {
   return (event.data as { result?: unknown }).result
 }
 
-function copIsEmpty(cop: { title: string | null; items: CopBlockItem[] }): boolean {
+function isCopEmpty(cop: { title: string | null; items: CopBlockItem[] }): boolean {
   return cop.items.length === 0
 }
 
@@ -175,7 +175,7 @@ function cloneSegment(s: AssistantTurnSegment): AssistantTurnSegment {
   }
 }
 
-export function drainAssistantTurnForPersist(state: AssistantTurnFoldState, endMs?: number): AssistantTurnUi {
+export function finalizeAndDrainTurn(state: AssistantTurnFoldState, endMs?: number): AssistantTurnUi {
   finalizeAssistantTurnFoldState(state, endMs)
   const turn: AssistantTurnUi = { segments: state.segments.map(cloneSegment) }
   state.segments = []
@@ -193,12 +193,12 @@ export function requestAssistantTurnThinkingBreak(state: AssistantTurnFoldState)
   state.thinkingMustBreakBeforeNext = true
 }
 
-function flushCopToSegments(
+function pushCurrentCopToSegments(
   segments: AssistantTurnSegment[],
   currentCop: AssistantTurnFoldState['currentCop'],
 ): void {
   if (currentCop == null) return
-  if (!copIsEmpty(currentCop)) {
+  if (!isCopEmpty(currentCop)) {
     segments.push({
       type: 'cop',
       title: currentCop.title,
@@ -208,7 +208,7 @@ function flushCopToSegments(
 }
 
 
-function lastSegmentHasCalls(segments: AssistantTurnSegment[]): boolean {
+function lastCopSegmentHasCalls(segments: AssistantTurnSegment[]): boolean {
   const last = segments[segments.length - 1]
   return !!(last?.type === 'cop' && last.items.some((item) => item.kind === 'call'))
 }
@@ -269,10 +269,17 @@ function attachResultToSegments(
 
 export function snapshotAssistantTurn(state: AssistantTurnFoldState): AssistantTurnUi {
   const segments = state.segments.map(cloneSegment)
-  flushCopToSegments(segments, state.currentCop)
+  pushCurrentCopToSegments(segments, state.currentCop)
   return { segments }
 }
 
+/**
+ * 事件折叠状态机，核心规则：
+ * - 新 COP 块：首个非隐藏 tool.call 创建新块；exec 类工具或当前块已有 exec 时先 flush 再创建
+ * - 追加：同类别连续 tool.call 合入同一 COP，text/thinking 追加到当前块或最近的 tool COP
+ * - Flush 触发：run.segment.start/end、message.delta 遇非空白普通文本、exec 工具前的边界、orphan result 类别不匹配时
+ * - thinkingMustBreakBeforeNext：tool.call 后置位，确保下一段 thinking 不与 call 前的 thinking 合并，避免视觉上思考内容跨工具粘连
+ */
 export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: AssistantTurnEvent): void {
   const { segments } = state
   let { currentCop } = state
@@ -280,8 +287,8 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
 
   const flushCop = (endMs: number) => {
     if (currentCop == null) return
-    if (!copIsEmpty(currentCop)) {
-      sealOpenThinkingInCop(currentCop.items, endMs)
+    if (!isCopEmpty(currentCop)) {
+      closeOpenThinkingItems(currentCop.items, endMs)
       segments.push({
         type: 'cop',
         title: currentCop.title,
@@ -347,7 +354,7 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
       },
       seq: event.seq,
     })
-    sealThinkingBeforeLatestCall(targetCop.items, eventTs)
+    closeThinkingBeforeLastCall(targetCop.items, eventTs)
   }
 
   if (event.type === 'run.segment.start') {
@@ -401,7 +408,7 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
     }
 
     const hasCallsInOpenCop = currentCop != null && currentCop.items.some((i) => i.kind === 'call')
-    const previousToolCopHasTrailingThinking = currentCop == null && lastSegmentHasCalls(segments)
+    const previousToolCopHasTrailingThinking = currentCop == null && lastCopSegmentHasCalls(segments)
 
     if (delta.trim() === '') {
       if (previousToolCopHasTrailingThinking) {
@@ -468,7 +475,7 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
       },
       seq: event.seq,
     })
-    sealThinkingBeforeLatestCall(currentCop!.items, eventTs)
+    closeThinkingBeforeLastCall(currentCop!.items, eventTs)
     state.thinkingMustBreakBeforeNext = true
     state.currentCop = currentCop
     return
@@ -492,9 +499,9 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
 
 export function finalizeAssistantTurnFoldState(state: AssistantTurnFoldState, endMs?: number): void {
   if (state.currentCop == null) return
-  if (!copIsEmpty(state.currentCop)) {
+  if (!isCopEmpty(state.currentCop)) {
     const target = endMs ?? state.lastEventTimeMs ?? Date.now()
-    sealOpenThinkingInCop(state.currentCop.items, target)
+    closeOpenThinkingItems(state.currentCop.items, target)
     state.segments.push({
       type: 'cop',
       title: state.currentCop.title,

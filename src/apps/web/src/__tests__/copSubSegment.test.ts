@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CopBlockItem } from '../assistantTurnSegments'
-import { aggregateMainTitle, buildSubSegments, categoryForTool, presentToProgressive } from '../copSubSegment'
+import { aggregateMainTitle, buildSubSegments, categoryForTool, runningToolLabel } from '../copSubSegment'
 
 function toolCall(
   id: string,
@@ -35,7 +35,7 @@ describe('copSubSegment image generation titles', () => {
     }
 
     expect(categoryForTool('image_generate')).toBe('image')
-    expect(presentToProgressive('image_generate', { prompt: 'a mountain at dawn' })).toBe('Generating image')
+    expect(runningToolLabel('image_generate', { prompt: 'a mountain at dawn' })).toBe('Generating image')
     expect(aggregateMainTitle([openSegment], true, false)).toBe('Generating image...')
     expect(aggregateMainTitle([openSegment], true, false)).not.toContain('image_generate')
   })
@@ -72,7 +72,7 @@ describe('copSubSegment web search titles', () => {
       title: 'Searching...',
     }
 
-    expect(presentToProgressive('web_search', { query: 'rust crate niche' })).toBe('Searching for rust crate niche')
+    expect(runningToolLabel('web_search', { query: 'rust crate niche' })).toBe('Searching for rust crate niche')
     expect(aggregateMainTitle([openSegment], true, false)).toBe('Searching for rust crate niche...')
     expect(aggregateMainTitle([openSegment], true, false)).not.toContain('web_search')
   })
@@ -88,7 +88,7 @@ describe('copSubSegment web search titles', () => {
     }
 
     expect(categoryForTool('web_fetch')).toBe('fetch')
-    expect(presentToProgressive('web_fetch', { url: 'https://www.example.com/docs/page' })).toBe('Fetching example.com')
+    expect(runningToolLabel('web_fetch', { url: 'https://www.example.com/docs/page' })).toBe('Fetching example.com')
     expect(aggregateMainTitle([openSegment], true, false)).toBe('Fetching example.com...')
     expect(aggregateMainTitle([openSegment], true, false)).not.toContain('web_fetch')
   })

@@ -1,7 +1,8 @@
 import type { CopBlockItem } from './assistantTurnSegments'
-import { normalizeToolName, compactCommandLine, presentationForTool } from './toolPresentation'
+import { normalizeToolName, compactCommandLine, presentationForTool, basename, truncate, EXPLORE_TOOL_NAMES, LOAD_TOOL_NAMES, LSP_MUTATING_OPERATIONS } from './toolPresentation'
 import { isWebSearchToolName, webSearchQueriesFromArguments } from './webSearchTimelineFromAgentEvent'
 import { planDisplayNameFromArgs } from './planMetadata'
+import { isWebFetchToolName } from './agentEventProcessing'
 
 export type CopSegmentCategory = 'explore' | 'exec' | 'edit' | 'agent' | 'fetch' | 'search' | 'image' | 'generic'
 
@@ -14,32 +15,32 @@ export type CopSubSegment = {
   title: string
 }
 
-const EXPLORE_NAMES = new Set(['read_file', 'grep', 'glob', 'load_tools', 'load_skill', 'lsp'])
-const EXEC_NAMES = new Set(['exec_command', 'python_execute', 'continue_process', 'terminate_process'])
-const EDIT_NAMES = new Set(['edit', 'edit_file', 'write_file'])
-const AGENT_NAMES = new Set([
+export const EXEC_TOOL_NAMES = new Set(['exec_command', 'python_execute', 'continue_process', 'terminate_process'])
+export const EDIT_TOOL_NAMES = new Set(['edit', 'edit_file', 'write_file'])
+export const AGENT_TOOL_NAMES = new Set([
   'spawn_agent',
   'send_input', 'wait_agent', 'resume_agent', 'close_agent', 'interrupt_agent',
 ])
-const MUTATING_LSP = new Set(['rename'])
-const LOAD_TOOL_NAMES = new Set(['load_tools', 'load_skill'])
-const IMAGE_GENERATE_TOOL_NAME = 'image_generate'
-
-function isWebFetchToolName(toolName: string): boolean {
-  const n = normalizeToolName(toolName).toLowerCase().replace(/-/g, '_')
-  return n === 'web_fetch' || n.startsWith('web_fetch.')
-}
+export const TODO_TOOL_NAMES = new Set(['todo_write'])
+export const TOP_LEVEL_TOOL_NAMES = new Set([...EXEC_TOOL_NAMES, 'todo_write'])
+export const FILE_OP_TOOL_NAMES = new Set([
+  'grep', 'glob', 'read_file', 'read', 'write_file', 'edit', 'edit_file',
+  'load_tools', 'load_skill', 'lsp',
+  'memory_write', 'memory_edit', 'memory_search', 'memory_read', 'memory_forget',
+  'notebook_write', 'notebook_read', 'notebook_edit', 'notebook_forget',
+])
+export const IMAGE_GENERATE_TOOL_NAME = 'image_generate'
 
 export function categoryForTool(toolName: string): CopSegmentCategory {
   const n = normalizeToolName(toolName)
   if (isWebSearchToolName(toolName)) return 'search'
-  if (EXPLORE_NAMES.has(n)) {
-    if (n === 'lsp' && MUTATING_LSP.has(toolName)) return 'edit'
+  if (EXPLORE_TOOL_NAMES.has(n)) {
+    if (n === 'lsp' && LSP_MUTATING_OPERATIONS.has(toolName)) return 'edit'
     return 'explore'
   }
-  if (EXEC_NAMES.has(n)) return 'exec'
-  if (EDIT_NAMES.has(n)) return 'edit'
-  if (AGENT_NAMES.has(n)) return 'agent'
+  if (EXEC_TOOL_NAMES.has(n)) return 'exec'
+  if (EDIT_TOOL_NAMES.has(n)) return 'edit'
+  if (AGENT_TOOL_NAMES.has(n)) return 'agent'
   if (isWebFetchToolName(toolName)) return 'fetch'
   if (isImageGenerateToolName(toolName)) return 'image'
   return 'generic'
@@ -58,12 +59,7 @@ export function segmentLiveTitle(cat: CopSegmentCategory): string {
   }
 }
 
-function basename(path: string): string {
-  const normalized = path.replace(/\\/g, '/')
-  return normalized.split('/').filter(Boolean).pop() ?? path
-}
-
-function isLoadToolName(toolName: string): boolean {
+function isLoadTool(toolName: string): boolean {
   return LOAD_TOOL_NAMES.has(normalizeToolName(toolName))
 }
 
@@ -103,7 +99,7 @@ function countLoadToolsCall(call: CallItem['call']): number {
   return Math.max(1, queries)
 }
 
-function formatCount(count: number, singular: string, plural: string): string {
+export function formatCount(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`
 }
 
@@ -141,7 +137,7 @@ export function segmentCompletedTitle(seg: CopSubSegment): string {
         .filter((c) => normalizeToolName(c.toolName) === 'load_tools')
         .reduce((count, call) => count + countLoadToolsCall(call), 0)
       const loadSkillCount = calls.filter((c) => normalizeToolName(c.toolName) === 'load_skill').length
-      if (calls.every((c) => isLoadToolName(c.toolName))) {
+      if (calls.every((c) => isLoadTool(c.toolName))) {
         return formatLoadToolsTitle(loadToolsCount, loadSkillCount, 'done')
       }
       const parts: string[] = []
@@ -256,7 +252,7 @@ export function aggregateCallStats(calls: ReadonlyArray<CallItem['call']>): Aggr
     if (n === 'lsp') {
       // rename 算 edit，其余算 search
       const op = typeof c.arguments?.operation === 'string' ? c.arguments.operation : ''
-      if (MUTATING_LSP.has(op)) {
+      if (LSP_MUTATING_OPERATIONS.has(op)) {
         const fp = typeof c.arguments?.file_path === 'string' ? c.arguments.file_path : ''
         stats.editPaths.push(fp ? basename(fp) : c.toolCallId)
       } else {
@@ -292,9 +288,6 @@ export function aggregateCallStats(calls: ReadonlyArray<CallItem['call']>): Aggr
   return stats
 }
 
-function truncate(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max)}…` : value
-}
 
 function uniqueWebSearchQueries(calls: ReadonlyArray<CallItem['call']>): string[] {
   const seen = new Set<string>()
@@ -362,7 +355,7 @@ function lspProgressive(args: Record<string, unknown>): string {
   }
 }
 
-export function presentToProgressive(
+export function runningToolLabel(
   toolNameInput: string,
   args: Record<string, unknown> = {},
   displayDescription?: string,
@@ -413,10 +406,6 @@ export function presentToProgressive(
   }
 }
 
-function pluralize(n: number, singular: string, plural: string): string {
-  return n === 1 ? singular : plural
-}
-
 function formatStatsParts(stats: AggregatedCallStats): string {
   const onlyLoadTools = Array.from(stats.byToolName.keys()).every((toolName) => LOAD_TOOL_NAMES.has(toolName))
   const parts: string[] = []
@@ -424,15 +413,15 @@ function formatStatsParts(stats: AggregatedCallStats): string {
   else if (stats.writePaths.length > 1) parts.push(`Wrote ${stats.writePaths.length} files`)
   if (stats.editPaths.length === 1) parts.push(`Edited ${stats.editPaths[0]}`)
   else if (stats.editPaths.length > 1) parts.push(`Edited ${stats.editPaths.length} files`)
-  if (stats.readPaths.size > 0) parts.push(`Read ${stats.readPaths.size} ${pluralize(stats.readPaths.size, 'file', 'files')}`)
-  if (stats.searchCount > 0) parts.push(`${stats.searchCount} ${pluralize(stats.searchCount, 'search', 'searches')}`)
-  if (stats.globCount > 0) parts.push(`Listed ${stats.globCount} ${pluralize(stats.globCount, 'file', 'files')}`)
+  if (stats.readPaths.size > 0) parts.push(`Read ${formatCount(stats.readPaths.size, 'file', 'files')}`)
+  if (stats.searchCount > 0) parts.push(formatCount(stats.searchCount, 'search', 'searches'))
+  if (stats.globCount > 0) parts.push(`Listed ${formatCount(stats.globCount, 'file', 'files')}`)
   if (parts.length === 0 && onlyLoadTools) {
     parts.push(formatLoadToolsTitle(stats.loadToolsCount, stats.loadSkillCount, 'done'))
   }
-  if (stats.execCount > 0) parts.push(`Ran ${stats.execCount} ${pluralize(stats.execCount, 'command', 'commands')}`)
-  if (stats.agentCount > 0) parts.push(`${stats.agentCount} agent ${pluralize(stats.agentCount, 'task', 'tasks')}`)
-  if (stats.fetchCount > 0) parts.push(`${stats.fetchCount} ${pluralize(stats.fetchCount, 'fetch', 'fetches')}`)
+  if (stats.execCount > 0) parts.push(`Ran ${formatCount(stats.execCount, 'command', 'commands')}`)
+  if (stats.agentCount > 0) parts.push(formatCount(stats.agentCount, 'agent task', 'agent tasks'))
+  if (stats.fetchCount > 0) parts.push(formatCount(stats.fetchCount, 'fetch', 'fetches'))
   if (stats.imageCount > 0) parts.push(imageGenerateDoneTitle(stats.imageCount, stats.imageFailedCount))
   const webSearchTitle = webSearchStatsTitle(stats)
   if (webSearchTitle) parts.push(webSearchTitle)
@@ -446,7 +435,7 @@ function formatSingleCategoryTitle(cat: CopSegmentCategory, stats: AggregatedCal
       return parts || 'Explored code'
     }
     case 'exec':
-      return `${stats.execCount} ${pluralize(stats.execCount, 'step', 'steps')} completed`
+      return `${formatCount(stats.execCount, 'step', 'steps')} completed`
     case 'edit': {
       if (stats.writePaths.length > 0 && stats.editPaths.length > 0) {
         return formatStatsParts(stats)
@@ -468,10 +457,16 @@ function formatSingleCategoryTitle(cat: CopSegmentCategory, stats: AggregatedCal
     case 'image':
       return imageGenerateDoneTitle(total, stats.imageFailedCount)
     case 'generic':
-      return `${total} ${pluralize(total, 'step', 'steps')} completed`
+      return `${formatCount(total, 'step', 'steps')} completed`
   }
 }
 
+/**
+ * 聚合整个 COP 的主标题。
+ * Live 态：取最后 open 段的最后一个 running tool 的渐进式标签，前面拼接已完成段的历史统计，
+ *   例如 "Read 3 files · Searching auth flow..."——让用户同时看到进度和已完成工作。
+ * Complete 态：跨段聚合所有 call，单类别输出该类别摘要，多类别输出跨类别统计。
+ */
 export function aggregateMainTitle(
   segments: ReadonlyArray<CopSubSegment>,
   isLive: boolean,
@@ -506,12 +501,12 @@ export function aggregateMainTitle(
       .map((it) => it.call)
     const current = (() => {
       if (!lastCall) return segmentLiveTitle(openSeg.category).replace(/\.\.\.$/, '')
-      if (openCalls.length > 0 && openCalls.every((call) => isLoadToolName(call.toolName))) {
+      if (openCalls.length > 0 && openCalls.every((call) => isLoadTool(call.toolName))) {
         const stats = aggregateCallStats(openCalls)
         return formatLoadToolsTitle(stats.loadToolsCount, stats.loadSkillCount, 'live')
       }
-      if (isLoadToolName(lastCall.toolName)) return segmentLiveTitle(openSeg.category).replace(/\.\.\.$/, '')
-      return presentToProgressive(lastCall.toolName, lastCall.arguments, lastCall.displayDescription)
+      if (isLoadTool(lastCall.toolName)) return segmentLiveTitle(openSeg.category).replace(/\.\.\.$/, '')
+      return runningToolLabel(lastCall.toolName, lastCall.arguments, lastCall.displayDescription)
     })()
     const closedSegs = segments.filter((s) => s !== openSeg && s.status === 'closed')
     const closedCalls = collectCalls(closedSegs)
@@ -537,9 +532,15 @@ export function aggregateMainTitle(
   const cats = Array.from(new Set(segments.map((s) => s.category)))
   if (cats.length === 1) return formatSingleCategoryTitle(cats[0]!, stats, allCalls.length)
   const parts = formatStatsParts(stats)
-  return parts || `${allCalls.length} ${pluralize(allCalls.length, 'step', 'steps')} completed`
+  return parts || `${formatCount(allCalls.length, 'step', 'steps')} completed`
 }
 
+/**
+ * 将 COP 内的 items 按类别分组为子段。
+ * 连续同类别 tool.call 合并为一个 SubSegment；类别变化时关闭当前段、开启新段。
+ * call 之前的 thinking/assistant_text 作为 pendingLead 暂存，延迟挂入第一个 tool segment——
+ * 避免在尚无工具信息的阶段就孤立展示思考内容。
+ */
 export function buildSubSegments(items: CopBlockItem[]): CopSubSegment[] {
   const segments: CopSubSegment[] = []
   let currentItems: CopBlockItem[] = []

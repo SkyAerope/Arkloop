@@ -3,6 +3,7 @@ import type { SubAgentRef, FileOpRef, WebFetchRef } from '../../storage'
 import type { ExploreGroupRef } from '../../toolPresentation'
 import type { CodeExecution } from '../CodeExecutionCard'
 import { codeExecutionAccentColor } from '../../codeExecutionStatus'
+import { DEFAULT_SEARCHING_LABEL, COMPLETED_SEARCHING_LABEL } from '../../webSearchTimelineFromAgentEvent'
 
 export type WebSearchPhaseStep = {
   id: string
@@ -72,9 +73,6 @@ export type UEntry =
   | { kind: 'explore'; id: string; seq: number; item: ExploreGroupRef }
   | { kind: 'fetch'; id: string; seq: number; item: WebFetchRef }
   | { kind: 'generic'; id: string; seq: number; item: NonNullable<Props['genericTools']>[number] }
-
-const DEFAULT_SEARCHING_LABEL = 'Searching'
-const COMPLETED_SEARCHING_LABEL = 'Search completed'
 
 export function timelineStepDisplayLabel(step: Pick<WebSearchPhaseStep, 'kind' | 'label' | 'status'>): string {
   if (step.kind === 'reviewing') return 'Reviewing sources'

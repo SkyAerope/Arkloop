@@ -4,7 +4,7 @@ import type { CodeExecutionRef, FileOpRef, SubAgentRef, WebFetchRef, WebSource }
 import type { WebSearchPhaseStep } from './cop-timeline/CopTimeline'
 import { CopTimeline } from './cop-timeline/CopTimeline'
 import { buildResolvedPool, buildSubSegments, buildThinkingOnlyFromItems, segmentLiveTitle } from '../copSubSegment'
-import { presentationForTool } from '../toolPresentation'
+import { basename, presentationForTool, stringArg } from '../toolPresentation'
 import {
   copTimelinePayloadForSegment,
   deriveTodoChanges,
@@ -63,15 +63,6 @@ function topLevelEntryForTool(
     return { kind: 'generic', id, seq: entry.seq, item: generic }
   }
   return null
-}
-
-function basename(path: string): string {
-  return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path
-}
-
-function stringArg(args: Record<string, unknown>, key: string): string {
-  const value = args[key]
-  return typeof value === 'string' ? value : ''
 }
 
 function previewFromArgs(toolName: string, args: Record<string, unknown>): string | undefined {

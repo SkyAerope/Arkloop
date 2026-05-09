@@ -7,9 +7,10 @@ import {
   agentEventToolOutput,
 } from './agent-ui/event-data'
 import type { ArtifactRef, BrowserActionRef, CodeExecutionRef, FileOpRef, MessageThinkingRef, SubAgentRef, WebFetchRef, WidgetRef } from './storage'
-import { presentationForTool } from './toolPresentation'
+import { basename, presentationForTool, truncate } from './toolPresentation'
+import { FILE_OP_TOOL_NAMES } from './copSubSegment'
 
-const CODE_EXECUTION_TOOL_NAMES = new Set(['python_execute', 'exec_command'])
+const CODE_EXECUTION_CALL_TOOL_NAMES = new Set(['python_execute', 'exec_command'])
 const CODE_EXECUTION_RESULT_TOOL_NAMES = new Set(['python_execute', 'exec_command', 'continue_process', 'terminate_process'])
 const TERMINAL_CONTROL_SEQUENCE_PATTERN = new RegExp(String.raw`\u001b\[[0-9;?]*[ -/]*[@-~]`, 'g')
 
@@ -126,7 +127,7 @@ function pickStringField(record: Record<string, unknown>, keys: string[]): strin
   return ''
 }
 
-function pickExecCommandMode(args: Record<string, unknown> | undefined): CodeExecutionRef['mode'] {
+function pickCommandMode(args: Record<string, unknown> | undefined): CodeExecutionRef['mode'] {
   const raw = typeof args?.mode === 'string' ? args.mode.trim() : ''
   switch (raw) {
     case 'follow':
@@ -203,7 +204,7 @@ function codeExecutionEmptyLabel(language: CodeExecutionRef['language'] | null, 
   return 'Completed with no output'
 }
 
-function extractCodeExecutionError(event: AgentUIEvent): CodeExecutionErrorDetails {
+function extractEventError(event: AgentUIEvent): CodeExecutionErrorDetails {
   const data = agentEventDataRecord(event.data)
   if (!data) {
     return {
@@ -246,7 +247,7 @@ function resolveCodeExecutionStatus(params: {
   exitCode?: number
 }): CodeExecutionRef['status'] {
   const { event, result, exitCode } = params
-  const error = extractCodeExecutionError(event)
+  const error = extractEventError(event)
   if (error.errorClass || error.errorMessage) {
     return 'failed'
   }
@@ -401,7 +402,7 @@ export function applyCodeExecutionToolCall(
   }
 
   const toolName = pickToolName(event.data, event.toolName)
-  if (!CODE_EXECUTION_TOOL_NAMES.has(toolName)) {
+  if (!CODE_EXECUTION_CALL_TOOL_NAMES.has(toolName)) {
     return { nextExecutions: executions }
   }
 
@@ -421,7 +422,7 @@ export function applyCodeExecutionToolCall(
   const appended: CodeExecutionRef = {
     id: pickToolCallId(event),
     language,
-    mode: toolName === 'exec_command' ? pickExecCommandMode(args) : undefined,
+    mode: toolName === 'exec_command' ? pickCommandMode(args) : undefined,
     code,
     displayDescription,
     status: 'running',
@@ -450,7 +451,7 @@ export function applyCodeExecutionToolResult(
   const processRef = pickProcessRef(result)
   const toolCallId = pickToolCallId(event)
   const outputPatch = extractCodeExecutionOutput(result)
-  const error = extractCodeExecutionError(event)
+  const error = extractEventError(event)
   const cursor = result && typeof result === 'object' && typeof (result as { cursor?: unknown }).cursor === 'string'
     ? (result as { cursor: string }).cursor
     : undefined
@@ -559,7 +560,7 @@ export function firstVisibleCodeExecutionToolCallIndex(events: AgentUIEvent[]): 
   return events.findIndex((event, index) => {
     if (index >= events.length - 1) return false
     if (event.type !== 'tool-call') return false
-    return CODE_EXECUTION_TOOL_NAMES.has(pickToolName(event.data, event.toolName))
+    return CODE_EXECUTION_CALL_TOOL_NAMES.has(pickToolName(event.data, event.toolName))
   })
 }
 
@@ -582,7 +583,7 @@ export function shouldReplayMessageCodeExecutions(executions: CodeExecutionRef[]
   return executions.some((item) => item.language === 'shell' && item.mode !== 'buffered' && !item.processRef)
 }
 
-export function selectFreshAgentEvents(params: {
+export function filterUnprocessedAgentEvents(params: {
   events: AgentUIEvent[]
   activeRunId: string
   processedCount: number
@@ -604,7 +605,7 @@ export function selectFreshAgentEvents(params: {
 }
 
 /** 首包「处理中」占位：仅此类事件表示用户可见的助手正文或工具链路（segment / thinking delta 等不算）。 */
-export function agentEventDismissesAssistantPlaceholder(event: AgentUIEvent): boolean {
+export function shouldClearAssistantPlaceholder(event: AgentUIEvent): boolean {
   switch (event.type) {
     case 'assistant-delta': {
       const obj = agentEventDataRecord(event.data) ?? {}
@@ -917,11 +918,11 @@ function hasSubAgentError(data: unknown): boolean {
   return rawError != null && typeof rawError === 'object'
 }
 
-function findAgentByToolCallId(agents: SubAgentRef[], toolCallId: string): number {
+function findAgentIndexByToolCallId(agents: SubAgentRef[], toolCallId: string): number {
   return agents.findIndex((a) => a.id === toolCallId)
 }
 
-function findAgentBySubAgentId(agents: SubAgentRef[], subAgentId: string): number {
+function findAgentIndexBySubAgentId(agents: SubAgentRef[], subAgentId: string): number {
   return agents.findIndex((a) => a.subAgentId === subAgentId)
 }
 
@@ -966,7 +967,7 @@ export function applySubAgentToolResult(
   const resultStatus = typeof result.status === 'string' ? result.status : undefined
 
   if (toolName === 'spawn_agent') {
-    const idx = findAgentByToolCallId(agents, toolCallId)
+    const idx = findAgentIndexByToolCallId(agents, toolCallId)
     if (idx < 0) return { nextAgents: agents }
     const currentRunId = typeof result.current_run_id === 'string' ? result.current_run_id : undefined
     const updated: SubAgentRef = {
@@ -983,7 +984,7 @@ export function applySubAgentToolResult(
   }
 
   // For other tools, locate by sub_agent_id in result
-  const targetIdx = subAgentId ? findAgentBySubAgentId(agents, subAgentId) : -1
+  const targetIdx = subAgentId ? findAgentIndexBySubAgentId(agents, subAgentId) : -1
 
   if (toolName === 'close_agent') {
     if (targetIdx < 0) return { nextAgents: agents }
@@ -1035,8 +1036,6 @@ export function buildMessageSubAgentsFromAgentEvents(events: AgentUIEvent[]): Su
 
 // --- File operation processing ---
 
-const FILE_OP_TOOL_NAMES = new Set(['grep', 'glob', 'read_file', 'read', 'write_file', 'edit', 'edit_file', 'load_tools', 'load_skill', 'lsp', 'memory_write', 'memory_edit', 'memory_search', 'memory_read', 'memory_forget', 'notebook_write', 'notebook_read', 'notebook_edit', 'notebook_forget'])
-
 function normalizeFileOpToolName(toolName: string): string {
   if (toolName === 'read' || toolName.startsWith('read.')) return 'read_file'
   return toolName
@@ -1064,9 +1063,6 @@ type FileOpToolResultPatch = {
 
 function fileOpLabel(toolName: string, args: Record<string, unknown>): string {
   toolName = normalizeFileOpToolName(toolName)
-  const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '…' : s
-  const basename = (p: string) => p.replace(/\\/g, '/').split('/').pop() ?? p
-
   switch (toolName) {
     case 'grep': {
       const pattern = typeof args.pattern === 'string' ? args.pattern : ''
@@ -1455,7 +1451,7 @@ export function applyFileOpToolResult(
 
   const toolCallId = pickToolCallId(event)
   const result = agentEventToolOutput(event.data)
-  const error = extractCodeExecutionError(event)
+  const error = extractEventError(event)
   const hasError = !!(error.errorClass || error.errorMessage)
 
   const targetIdx = ops.findIndex((o) => o.id === toolCallId)
@@ -1528,7 +1524,7 @@ export function applyWebFetchToolResult(
 
   const toolCallId = pickToolCallId(event)
   const result = agentEventToolOutput(event.data) as Record<string, unknown> | undefined
-  const error = extractCodeExecutionError(event)
+  const error = extractEventError(event)
   const hasError = !!(event.errorCode || error.errorClass || error.errorMessage)
   const title = typeof result?.title === 'string' ? result.title : undefined
   const statusCode = typeof result?.status_code === 'number' ? result.status_code : undefined

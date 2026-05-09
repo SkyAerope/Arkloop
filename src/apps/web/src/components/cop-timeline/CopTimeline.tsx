@@ -5,7 +5,7 @@ import type { CodeExecution } from '../CodeExecutionCard'
 import type { SubAgentRef } from '../../storage'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { CopSubSegment, ResolvedPool } from '../../copSubSegment'
-import { aggregateMainTitle } from '../../copSubSegment'
+import { aggregateMainTitle, TOP_LEVEL_TOOL_NAMES } from '../../copSubSegment'
 import { recordPerfCount, recordPerfValue } from '../../perfDebug'
 import {
   COP_TIMELINE_THINKING_PLAIN_LINE_HEIGHT_PX,
@@ -25,8 +25,6 @@ import { localizeTimelineLabel } from './labels'
 import { markerForCategory } from './markers'
 
 export type { WebSearchPhaseStep } from './types'
-
-const TOP_LEVEL_TOOL_NAMES = new Set(['python_execute', 'exec_command', 'continue_process', 'terminate_process', 'todo_write'])
 
 function isTopLevelOnlySegment(segment: CopSubSegment): boolean {
   const calls = segment.items.filter((item): item is Extract<CopSubSegment['items'][number], { kind: 'call' }> => item.kind === 'call')
