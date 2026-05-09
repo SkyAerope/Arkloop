@@ -111,6 +111,53 @@ function ToolTitle({ title, live, status: _status, highlightedSuffix }: { title:
   )
 }
 
+function fileOpDiffCounts(op: FileOpRef): { added: number; removed: number } | null {
+  if (op.status === 'running') return null
+  return summarizeDiff(op.output || op.errorMessage)
+}
+
+function FileOpDiffSuffix({ added, removed }: { added: number; removed: number }) {
+  return (
+    <span
+      aria-label={`${added} added${removed > 0 ? `, ${removed} removed` : ''}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        flexShrink: 0,
+        fontVariantNumeric: 'tabular-nums',
+        fontSize: 12,
+        lineHeight: '16px',
+      }}
+    >
+      {added > 0 && (
+        <motion.span
+          key={`added-${added}`}
+          className="cop-diff-added"
+          initial={{ y: 5, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -5, opacity: 0 }}
+          transition={{ duration: 0.16, ease: 'easeOut' }}
+        >
+          +{added}
+        </motion.span>
+      )}
+      {removed > 0 && (
+        <motion.span
+          key={`removed-${removed}`}
+          className="cop-diff-removed"
+          initial={{ y: 5, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -5, opacity: 0 }}
+          transition={{ duration: 0.16, ease: 'easeOut' }}
+        >
+          -{removed}
+        </motion.span>
+      )}
+    </span>
+  )
+}
+
 export function FileOpToolCard({ op }: { op: FileOpRef }) {
   const { locale } = useLocale()
   const title = localizeTimelineLabel(op.displayDescription || op.label || op.toolName, locale)
@@ -118,13 +165,15 @@ export function FileOpToolCard({ op }: { op: FileOpRef }) {
   const lines = previewLines(op.output || op.errorMessage)
   const cardTitle = op.pattern || op.displaySubject || (filePath ? basename(filePath) : title)
   const cardSubtitle = filePath && cardTitle !== filePath ? filePath : op.displayDetail || ''
+  const diffCounts = fileOpDiffCounts(op)
 
   return (
     <div style={{ marginTop: 4, borderRadius: 8, background: 'var(--c-attachment-bg)', overflow: 'hidden', border: '0.5px solid var(--c-border-subtle)' }}>
-      {(cardTitle || cardSubtitle) && (
+      {(cardTitle || cardSubtitle || diffCounts) && (
         <div style={{ padding: '8px 10px', fontFamily: MONO, fontSize: 12, color: 'var(--c-text-secondary)', background: 'var(--c-bg-menu)', borderBottom: '0.5px solid var(--c-border-subtle)', display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           <span style={{ fontWeight: 600, color: 'var(--c-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardTitle}</span>
           {cardSubtitle && <span style={{ color: 'var(--c-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {cardSubtitle}</span>}
+          {diffCounts && <FileOpDiffSuffix added={diffCounts.added} removed={diffCounts.removed} />}
         </div>
       )}
       {lines.length > 0 ? (

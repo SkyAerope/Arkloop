@@ -152,13 +152,15 @@ export function segmentCompletedTitle(seg: CopSubSegment): string {
       return `${n} step${n === 1 ? '' : 's'} completed`
     }
     case 'edit': {
-      const editCall = calls[0]
-      const filePath = (editCall?.arguments?.file_path as string | undefined) ?? ''
-      const action = normalizeToolName(editCall?.toolName ?? '') === 'write_file' ? 'Wrote' : 'Edited'
-      const subject = editCall ? planDisplayNameFromArgs(editCall.arguments ?? {}) : null
-      const diff = calls[0] ? extractCallDiff(calls[0]) : null
-      const diffSuffix = diff ? ` +${diff.added} -${diff.removed}` : ''
-      return subject || filePath ? `${action} ${subject ?? basename(filePath)}${diffSuffix}` : `${action} file${diffSuffix}`
+      const stats = aggregateCallStats(calls)
+      const parts: string[] = []
+      for (const p of stats.writePaths) {
+        parts.push(`Wrote ${p}${formatDiffSuffix(p, stats.writePathDiff)}`)
+      }
+      for (const p of stats.editPaths) {
+        parts.push(`Edited ${p}${formatDiffSuffix(p, stats.editPathDiff)}`)
+      }
+      return parts.length > 0 ? parts.join(', ') : 'Edit completed'
     }
     case 'agent': {
       const n = calls.length
@@ -450,7 +452,10 @@ export function runningToolLabel(
 function formatDiffSuffix(path: string, diffMap: Map<string, { added: number; removed: number }>): string {
   const d = diffMap.get(path)
   if (!d) return ''
-  return ` +${d.added} -${d.removed}`
+  const parts: string[] = []
+  if (d.added > 0) parts.push(`+${d.added}`)
+  if (d.removed > 0) parts.push(`-${d.removed}`)
+  return parts.length > 0 ? ` ${parts.join(' ')}` : ''
 }
 
 function formatStatsParts(stats: AggregatedCallStats): string {
