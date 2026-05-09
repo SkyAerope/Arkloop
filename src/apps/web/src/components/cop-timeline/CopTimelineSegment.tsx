@@ -22,6 +22,7 @@ import type { Locale } from '../../locales'
 
 const EXPLORE_BOTTOM_PAD = 0
 const SCROLL_EDGE_EPSILON = 1
+const CARD_BOTTOM_FOLLOW_THRESHOLD = 24
 
 function cardShadowState(el: HTMLElement) {
   const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
@@ -29,6 +30,11 @@ function cardShadowState(el: HTMLElement) {
     top: el.scrollTop > SCROLL_EDGE_EPSILON,
     bottom: el.scrollTop < maxScrollTop - SCROLL_EDGE_EPSILON,
   }
+}
+
+function cardIsNearBottom(el: HTMLElement) {
+  const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
+  return maxScrollTop - el.scrollTop <= CARD_BOTTOM_FOLLOW_THRESHOLD
 }
 
 export function CopTimelineSegment({
@@ -69,6 +75,7 @@ export function CopTimelineSegment({
   const cardScrollRef = useRef<HTMLDivElement | null>(null)
   const cardContentRef = useRef<HTMLDivElement | null>(null)
   const didPinInitialCardRef = useRef(false)
+  const shouldFollowCardBottomRef = useRef(true)
   const [cardShadows, setCardShadows] = useState({ top: false, bottom: false })
 
   // Sync expanded state when defaultExpanded prop changes (e.g. new segment appears)
@@ -104,12 +111,20 @@ export function CopTimelineSegment({
     setCardShadows((prev) => prev.top === next.top && prev.bottom === next.bottom ? prev : next)
   }, [])
 
+  const handleCardScroll = useCallback(() => {
+    const el = cardScrollRef.current
+    if (!el) return
+    shouldFollowCardBottomRef.current = cardIsNearBottom(el)
+    updateCardShadows()
+  }, [updateCardShadows])
+
   useLayoutEffect(() => {
     const el = cardScrollRef.current
     if (!el) return
-    if (isLive || !didPinInitialCardRef.current) {
+    if (!didPinInitialCardRef.current || (isLive && shouldFollowCardBottomRef.current)) {
       el.scrollTop = el.scrollHeight
       didPinInitialCardRef.current = true
+      shouldFollowCardBottomRef.current = true
     }
     updateCardShadows()
   })
@@ -119,7 +134,7 @@ export function CopTimelineSegment({
     const ro = new ResizeObserver(() => {
       const el = cardScrollRef.current
       if (!el) return
-      if (isLive) el.scrollTop = el.scrollHeight
+      if (isLive && shouldFollowCardBottomRef.current) el.scrollTop = el.scrollHeight
       updateCardShadows()
     })
     if (cardScrollRef.current) ro.observe(cardScrollRef.current)
@@ -156,7 +171,7 @@ export function CopTimelineSegment({
       <div
         ref={cardScrollRef}
         className="cop-timeline-items-card__scroll"
-        onScroll={updateCardShadows}
+        onScroll={handleCardScroll}
       >
         <div ref={cardContentRef} className="cop-timeline-items-card__content">
           {segment.items.map((item) => (
@@ -171,7 +186,7 @@ export function CopTimelineSegment({
 
   if (hideHeader) {
     return (
-      <div style={{ position: 'relative', paddingTop: flattenSingleItem ? 0 : 6, paddingBottom: flattenSingleItem || endsWithNarrative ? 0 : EXPLORE_BOTTOM_PAD }}>
+      <div style={{ position: 'relative', paddingTop: flattenSingleItem ? 0 : 1, paddingBottom: flattenSingleItem || endsWithNarrative ? 0 : EXPLORE_BOTTOM_PAD }}>
         {flattenSingleItem && segment.items.length === 1 ? (
           renderItem(segment.items[0]!, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
         ) : (

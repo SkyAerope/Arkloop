@@ -605,6 +605,7 @@ describe('CopTimeline', () => {
       })
       expect(html).toContain('class="cop-timeline-items-card"')
       expect(html).toContain('class="cop-timeline-items-card__scroll"')
+      expect(html).toContain('padding-top:1px')
     })
   })
 
@@ -717,6 +718,57 @@ describe('CopTimeline', () => {
           })
           expect(card?.dataset.topShadow).toBe('false')
           expect(card?.dataset.bottomShadow).toBe('true')
+        } finally {
+          cleanup()
+        }
+      } finally {
+        scrollHeightSpy.mockRestore()
+        clientHeightSpy.mockRestore()
+      }
+    })
+
+    it('live scrollable card stops following bottom after user scrolls up', async () => {
+      const scrollHeightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function getScrollHeight(this: HTMLElement) {
+        return (this as HTMLElement).classList.contains('cop-timeline-items-card__scroll') ? 320 : 160
+      })
+      const clientHeightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function getClientHeight(this: HTMLElement) {
+        return (this as HTMLElement).classList.contains('cop-timeline-items-card__scroll') ? 120 : 160
+      })
+      const seg = makeSeg({ id: 's1', status: 'open', title: 'Reading files', items: [
+        { kind: 'call', call: { toolCallId: 'c1', toolName: 'read_file', arguments: {} }, seq: 0 },
+        { kind: 'call', call: { toolCallId: 'c2', toolName: 'read_file', arguments: {} }, seq: 1 },
+      ]})
+      try {
+        const { container, rerender, cleanup } = await renderTimelineDom({
+          segments: [seg],
+          pool: EMPTY_POOL,
+          isComplete: false,
+          live: true,
+        })
+        try {
+          const scroll = container.querySelector('.cop-timeline-items-card__scroll') as HTMLElement | null
+          expect(scroll).not.toBeNull()
+          expect(scroll?.scrollTop).toBe(320)
+
+          await act(async () => {
+            scroll!.scrollTop = 0
+            scroll!.dispatchEvent(new Event('scroll', { bubbles: true }))
+          })
+
+          await rerender({
+            segments: [{
+              ...seg,
+              items: [
+                ...seg.items,
+                { kind: 'call', call: { toolCallId: 'c3', toolName: 'read_file', arguments: {} }, seq: 2 },
+              ],
+            }],
+            pool: EMPTY_POOL,
+            isComplete: false,
+            live: true,
+          })
+
+          expect(scroll?.scrollTop).toBe(0)
         } finally {
           cleanup()
         }
