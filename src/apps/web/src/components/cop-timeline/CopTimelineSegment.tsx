@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { type CopSubSegment, type ResolvedPool } from '../../copSubSegment'
+import { segmentCompletedTitle, type CopSubSegment, type ResolvedPool } from '../../copSubSegment'
 import type { CodeExecution } from '../CodeExecutionCard'
 import type { SubAgentRef } from '../../storage'
 
@@ -13,12 +13,13 @@ import { SubAgentBlock } from '../SubAgentBlock'
 import { CodeExecutionCard } from '../CodeExecutionCard'
 import { ExecutionCard } from '../ExecutionCard'
 import { TypewriterText, RenderTitleSpans } from './utils'
-import { timelineStepDisplayLabel } from './types'
+import { timelineStepText } from './types'
 import { SourceListCard } from './SourceList'
 import { QueryPill } from './utils'
 import { useLocale } from '../../contexts/LocaleContext'
 import { localizeTimelineLabel, localizeTimelineTitleSpan } from './labels'
 import type { Locale } from '../../locales'
+import { renderTimelineText } from '../../timelineText'
 
 const EXPLORE_BOTTOM_PAD = 0
 const SCROLL_EDGE_EPSILON = 1
@@ -158,9 +159,17 @@ export function CopTimelineSegment({
 
   const endsWithNarrative = compactNarrativeEnd && segment.items.at(-1)?.kind === 'assistant_text'
 
-  const headerLabel = localizeTimelineLabel(segment.title, locale)
   const headerLive = isOpen && isLive
-  const hasTitleSpans = segment.titleSpans && segment.titleSpans.length > 0
+  const canDeriveLegacyTitle = segment.status === 'closed'
+    && segment.items.some((item) => item.kind === 'call')
+    && (segment.category === 'exec' || segment.category === 'plan' || segment.category === 'generic')
+  const segmentTitleSpans = segment.titleSpans && segment.titleSpans.length > 0
+    ? segment.titleSpans
+    : canDeriveLegacyTitle
+      ? segmentCompletedTitle(segment)
+      : null
+  const headerLabel = localizeTimelineLabel(segment.title, locale)
+  const hasTitleSpans = segmentTitleSpans && segmentTitleSpans.length > 0
 
   const renderItemsCard = () => (
     <div
@@ -222,7 +231,7 @@ export function CopTimelineSegment({
       >
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {hasTitleSpans ? (
-            <RenderTitleSpans spans={segment.titleSpans!.map(s => localizeTimelineTitleSpan(s, locale))} />
+            <RenderTitleSpans spans={segmentTitleSpans!.map(s => localizeTimelineTitleSpan(s, locale))} />
           ) : (
             <TypewriterText text={headerLabel} live={headerLive} className={headerLive ? 'thinking-shimmer-dim' : undefined} />
           )}
@@ -309,7 +318,7 @@ function renderItem(
       render: (id) => {
         const codeExec = pool.codeExecutions.get(id)!
         return codeExec.language === 'shell'
-          ? <ExecutionCard variant="shell" displayDescription={codeExec.displayDescription} code={codeExec.code} output={codeExec.output} status={codeExec.status} errorMessage={codeExec.errorMessage} smooth={live && codeExec.status === 'running'} />
+          ? <ExecutionCard variant="shell" displayDescription={codeExec.displayDescription} displayText={codeExec.displayText} code={codeExec.code} output={codeExec.output} status={codeExec.status} errorMessage={codeExec.errorMessage} smooth={live && codeExec.status === 'running'} />
           : <CodeExecutionCard language={codeExec.language} code={codeExec.code} output={codeExec.output} errorMessage={codeExec.errorMessage} status={codeExec.status} onOpen={onOpenCodeExecution ? () => onOpenCodeExecution(codeExec) : undefined} isActive={activeCodeExecutionId === codeExec.id} />
       },
     },
@@ -344,7 +353,7 @@ function renderItem(
       check: (id) => pool.genericTools.has(id),
       render: (id) => {
         const gen = pool.genericTools.get(id)!
-        return <ExecutionCard variant="fileop" toolName={gen.toolName} label={gen.label} displayDescription={gen.displayDescription} output={gen.output} status={gen.status} errorMessage={gen.errorMessage} smooth={live && gen.status === 'running'} />
+        return <ExecutionCard variant="fileop" toolName={gen.toolName} label={gen.label} displayDescription={gen.displayDescription} displayText={gen.displayText} output={gen.output} status={gen.status} errorMessage={gen.errorMessage} smooth={live && gen.status === 'running'} />
       },
     },
     {
@@ -354,7 +363,7 @@ function renderItem(
         return (
           <div>
             <div style={{ fontSize: 'var(--c-cop-row-font-size)', color: 'var(--c-cop-row-fg)', lineHeight: 'var(--c-cop-row-line-height)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <TypewriterText text={localizeTimelineLabel(timelineStepDisplayLabel(step), locale)} className={step.status === 'active' ? 'thinking-shimmer-dim' : undefined} live={live} />
+              <TypewriterText text={renderTimelineText(timelineStepText(step), locale)} className={step.status === 'active' ? 'thinking-shimmer-dim' : undefined} live={live} />
             </div>
             {step.kind === 'searching' && step.queries && step.queries.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
@@ -376,7 +385,7 @@ function renderItem(
 
   // Fallback: keep unknown tool rows readable instead of exposing raw ids.
   const hasError = typeof call.errorClass === 'string' && call.errorClass !== ''
-  const fallbackTitle = localizeTimelineLabel(presentationForTool(call.toolName, call.arguments).description, locale)
+  const fallbackTitle = renderTimelineText(presentationForTool(call.toolName, call.arguments).text, locale)
   return (
     <div style={{ fontSize: 'var(--c-cop-row-font-size)', color: 'var(--c-cop-row-fg)', lineHeight: 'var(--c-cop-row-line-height)' }}>
       <TypewriterText text={fallbackTitle} live={live && !hasError && call.result === undefined} />

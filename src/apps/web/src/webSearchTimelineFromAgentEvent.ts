@@ -79,6 +79,7 @@ export function applyAgentEventToWebSearchSteps(
       id: segmentId,
       kind: stepKind,
       label,
+      text: stepKind === 'reviewing' ? { kind: 'reviewing_sources' } : { kind: 'content', text: label || DEFAULT_SEARCHING_LABEL },
       status: 'active',
       queries,
     }
@@ -106,6 +107,7 @@ export function applyAgentEventToWebSearchSteps(
       id: callId,
       kind: 'searching',
       label: DEFAULT_SEARCHING_LABEL,
+      text: { kind: 'search', tense: 'live' },
       status: 'active',
       queries,
       seq: event.order,
@@ -125,6 +127,7 @@ export function applyAgentEventToWebSearchSteps(
             ...s,
             status: 'done' as const,
             ...(s.label.trim() === DEFAULT_SEARCHING_LABEL ? { label: COMPLETED_SEARCHING_LABEL } : {}),
+            ...(s.label.trim() === DEFAULT_SEARCHING_LABEL ? { text: { kind: 'search_completed' } as const } : {}),
             ...(typeof event.order === 'number' ? { resultSeq: event.order } : {}),
             ...(sources ? { sources } : {}),
           }

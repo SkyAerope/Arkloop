@@ -262,7 +262,7 @@ describe('CopTimeline', () => {
         thinkingOnly: { markdown: 'some thinking', durationSec: 5, live: false },
         isComplete: true,
       })
-      expect(html).toContain('Thought for 5s')
+      expect(html).toContain('已思考 5s')
     })
 
     it('complete thinkingOnly with durationSec=0 shows "Thought"', () => {
@@ -272,7 +272,7 @@ describe('CopTimeline', () => {
         thinkingOnly: { markdown: 'think', durationSec: 0, live: false },
         isComplete: true,
       })
-      expect(html).toContain('Thought')
+      expect(html).toContain('已思考')
     })
 
     it('live thinkingOnly shows thinking-live phase key', async () => {
@@ -446,7 +446,7 @@ describe('CopTimeline', () => {
         isComplete: false,
         live: true,
       })
-      expect(html).toContain('Exploring code...')
+      expect(html).toContain('正在查看代码...')
     })
 
     it('segment with status=closed shows its completed title', () => {
@@ -485,7 +485,7 @@ describe('CopTimeline', () => {
         pool: EMPTY_POOL,
         isComplete: true,
       })
-      expect(html).toContain('Wrote hello.py')
+      expect(html).toContain('已写入 hello.py')
       expect(html).not.toContain('Edited hello.py')
     })
   })
@@ -532,7 +532,7 @@ describe('CopTimeline', () => {
         isComplete: false,
         live: true,
       })
-      expect(html).toContain('Running...')
+      expect(html).toContain('编辑中...')
     })
 
     it('thinkingOnly + live -> data-phase="thinking-live"', () => {
@@ -863,7 +863,7 @@ describe('CopTimelineHeaderLabel', () => {
     })
 
     expect(incrementalTypewriterMock).toHaveBeenCalledWith(
-      'Planning next moves for 0s',
+      'Planning next moves 0s',
       true,
       'Planning next moves...',
     )

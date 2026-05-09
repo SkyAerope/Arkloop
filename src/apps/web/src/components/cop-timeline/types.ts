@@ -4,11 +4,13 @@ import type { ExploreGroupRef } from '../../toolPresentation'
 import type { CodeExecution } from '../CodeExecutionCard'
 import { codeExecutionAccentColor } from '../../codeExecutionStatus'
 import { DEFAULT_SEARCHING_LABEL, COMPLETED_SEARCHING_LABEL } from '../../webSearchTimelineFromAgentEvent'
+import type { TimelineText } from '../../timelineText'
 
 export type WebSearchPhaseStep = {
   id: string
   kind: 'planning' | 'searching' | 'reviewing' | 'finished'
   label: string
+  text?: TimelineText
   status: 'active' | 'done'
   queries?: string[]
   sources?: WebSource[]
@@ -35,7 +37,7 @@ export type Props = {
   fileOps?: FileOpRef[]
   exploreGroups?: ExploreGroupRef[]
   webFetches?: WebFetchRef[]
-  genericTools?: Array<{ id: string; toolName: string; label: string; displayDescription?: string; output?: string; emptyLabel?: string; status: 'running' | 'success' | 'failed'; errorMessage?: string; seq?: number }>
+  genericTools?: Array<{ id: string; toolName: string; label: string; displayDescription?: string; displayText?: TimelineText; output?: string; emptyLabel?: string; status: 'running' | 'success' | 'failed'; errorMessage?: string; seq?: number }>
   headerOverride?: string
   shimmer?: boolean
   live?: boolean
@@ -80,6 +82,17 @@ export function timelineStepDisplayLabel(step: Pick<WebSearchPhaseStep, 'kind' |
     return COMPLETED_SEARCHING_LABEL
   }
   return step.label
+}
+
+export function timelineStepText(step: Pick<WebSearchPhaseStep, 'kind' | 'label' | 'status' | 'text'>): TimelineText {
+  if (step.text) return step.text
+  if (step.kind === 'reviewing') return { kind: 'reviewing_sources' }
+  if (step.kind === 'searching' && step.status === 'done' && step.label.trim() === DEFAULT_SEARCHING_LABEL) {
+    return { kind: 'search_completed' }
+  }
+  if (step.label.trim() === DEFAULT_SEARCHING_LABEL) return { kind: 'search', tense: 'live' }
+  if (step.label.trim() === COMPLETED_SEARCHING_LABEL) return { kind: 'search_completed' }
+  return { kind: 'content', text: step.label }
 }
 
 const DOT_COLOR_MAP: Record<UEntry['kind'], (entry: UEntry) => string> = {

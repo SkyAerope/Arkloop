@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Search } from 'lucide-react'
 import { useTypewriter } from '../../hooks/useTypewriter'
 import type { TitleSpan } from '../../copSubSegment'
+import { renderTimelineText } from '../../timelineText'
 
 /** CopTimeline 左轴点线几何；ChatPage 顶层条与之对齐 */
 export const COP_TIMELINE_DOT_NUDGE_Y = 1
@@ -28,7 +29,7 @@ export function RenderTitleSpans({ spans }: { spans: TitleSpan[] }) {
         'diffKind' in s ? (
           <span key={i} className={s.diffKind === 'added' ? 'cop-diff-added' : 'cop-diff-removed'}>{s.text}</span>
         ) : (
-          <React.Fragment key={i}>{s.text}</React.Fragment>
+          <React.Fragment key={i}>{renderTimelineText(s.text, 'en')}</React.Fragment>
         ),
       )}
     </>
