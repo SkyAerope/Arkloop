@@ -410,7 +410,8 @@ describe('CopTimeline', () => {
         pool: EMPTY_POOL,
         isComplete: true,
       })
-      expect(html).toContain('Read 9 files, 10 searches, Listed 3 files')
+      expect(html).toContain('1 步已完成')
+      expect(html).not.toContain('Read 9 files, 10 searches, Listed 3 files')
       expect(html).not.toContain('正在搜索 for')
     })
 
@@ -567,7 +568,7 @@ describe('CopTimeline', () => {
       expect(html).toContain('Planning next steps...')
     })
 
-    it('complete with N segments -> header shows step count', () => {
+    it('complete with N segments -> header shows localized step count', () => {
       const seg1 = makeSeg({ id: 's1', status: 'closed', title: 'Step 1', seq: 0 })
       const seg2 = makeSeg({ id: 's2', status: 'closed', title: 'Step 2', seq: 1, category: 'edit' })
       const html = renderTimeline({
@@ -575,17 +576,19 @@ describe('CopTimeline', () => {
         pool: EMPTY_POOL,
         isComplete: true,
       })
-      expect(html).toContain('2 steps completed')
+      expect(html).toContain('2 步已完成')
+      expect(html).not.toContain('2 steps completed')
     })
 
-    it('complete with 1 segment uses segment title', () => {
+    it('complete with 1 empty segment uses localized fallback title', () => {
       const seg = makeSeg({ id: 's1', status: 'closed', title: 'Step 1', seq: 0 })
       const html = renderTimeline({
         segments: [seg],
         pool: EMPTY_POOL,
         isComplete: true,
       })
-      expect(html).toContain('Step 1')
+      expect(html).toContain('1 步已完成')
+      expect(html).not.toContain('Step 1')
       expect(html).not.toContain('1 step completed')
     })
 
@@ -733,7 +736,8 @@ describe('CopTimeline', () => {
         thinkingOnly: { markdown: 'Thought about it', durationSec: 4, live: false },
         isComplete: true,
       })
-      expect(html).toContain('1 step completed')
+      expect(html).toContain('1 步已完成')
+      expect(html).not.toContain('1 step completed')
       expect(html).toContain('data-phase="thought"')
     })
 
@@ -759,7 +763,8 @@ describe('CopTimeline', () => {
         thinkingOnly: { markdown: 'thought', durationSec: 2, live: false },
         isComplete: true,
       })
-      expect(html).toContain('3 steps completed')
+      expect(html).toContain('3 步已完成')
+      expect(html).not.toContain('3 steps completed')
     })
   })
 

@@ -134,65 +134,6 @@ export function dotColor(entry: UEntry): string {
   return DOT_COLOR_MAP[entry.kind](entry)
 }
 
-export function autoLabel(opts: {
-  anyThinkingLive: boolean
-  hasAnyThinking: boolean
-  live: boolean
-  thinkingLiveHeaderLabel: string
-  isComplete: boolean
-  hasThinkingOnly: boolean
-  sourceCount: number
-  effectiveStepCount: number
-  thoughtDurationLabel: string
-  showPendingThinkingHeader: boolean
-  thinkingHint?: string
-  visibleSteps: WebSearchPhaseStep[]
-  t: { copTimelineLiveProgress: string }
-}): string {
-  const {
-    anyThinkingLive, hasAnyThinking, live, thinkingLiveHeaderLabel,
-    isComplete, hasThinkingOnly, sourceCount, effectiveStepCount,
-    thoughtDurationLabel, showPendingThinkingHeader, thinkingHint,
-    visibleSteps, t,
-  } = opts
-
-  switch (true) {
-    case anyThinkingLive || (hasAnyThinking && live):
-      return thinkingLiveHeaderLabel
-
-    case hasAnyThinking && isComplete && !hasThinkingOnly:
-      return sourceCount > 0
-        ? `Reviewed ${sourceCount} sources`
-        : effectiveStepCount > 0
-          ? `${effectiveStepCount} step${effectiveStepCount === 1 ? '' : 's'} completed`
-          : thoughtDurationLabel
-
-    case hasAnyThinking:
-      return thoughtDurationLabel
-
-    case showPendingThinkingHeader:
-      return `${thinkingHint}...`
-
-    case isComplete:
-      return sourceCount > 0
-        ? `Reviewed ${sourceCount} sources`
-        : effectiveStepCount > 0
-          ? `${effectiveStepCount} step${effectiveStepCount === 1 ? '' : 's'} completed`
-          : 'Completed'
-
-    case visibleSteps.length > 0:
-      return visibleSteps[visibleSteps.length - 1]
-        ? timelineStepDisplayLabel(visibleSteps[visibleSteps.length - 1]!)
-        : 'Searching...'
-
-    case effectiveStepCount > 0:
-      return t.copTimelineLiveProgress
-
-    default:
-      return thinkingHint ? `${thinkingHint}...` : 'Searching...'
-  }
-}
-
 export const ENTRY_SORT_PRIORITY: Record<UEntry['kind'], number> = {
   thinking: -1,
   done: 0,

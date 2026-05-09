@@ -133,6 +133,26 @@ function span(text: string, zh: string): TitleSpan {
   return { text, zh }
 }
 
+function completedSpan(): TitleSpan {
+  return span('Completed', '已完成')
+}
+
+function stepsCompletedSpan(count: number): TitleSpan {
+  return span(`${count} step${count === 1 ? '' : 's'} completed`, `${count} 步已完成`)
+}
+
+function editCompletedSpan(): TitleSpan {
+  return span('Edit completed', '编辑已完成')
+}
+
+function fetchCompletedSpan(count = 1): TitleSpan {
+  return count === 1 ? span('Fetch completed', '获取已完成') : span(`${count} fetches completed`, `${count} 次获取已完成`)
+}
+
+function exploredCodeSpan(): TitleSpan {
+  return span('Explored code', '已查看代码')
+}
+
 function countZh(count: number, unit: string): string {
   return `${count} ${unit}`
 }
@@ -161,7 +181,7 @@ export function segmentCompletedTitle(seg: CopSubSegment): TitleSpan[] {
   const calls = seg.items
     .filter((i): i is Extract<CopBlockItem, { kind: 'call' }> => i.kind === 'call')
     .map((i) => i.call)
-  if (calls.length === 0) return [{ text: 'Completed' }]
+  if (calls.length === 0) return [completedSpan()]
 
   const imageTitle = imageGenerateCallsTitle(calls)
   if (imageTitle) return [{ text: imageTitle }]
@@ -190,27 +210,27 @@ export function segmentCompletedTitle(seg: CopSubSegment): TitleSpan[] {
       if (readPaths.size > 0) parts.push(span(`Read ${readPaths.size} file${readPaths.size === 1 ? '' : 's'}`, `已读取 ${countZh(readPaths.size, '个文件')}`))
       if (searchCount > 0) parts.push(span(`${searchCount} search${searchCount === 1 ? '' : 'es'}`, `${searchCount} 次搜索`))
       if (globCount > 0) parts.push(span(`Listed ${globCount} file${globCount === 1 ? '' : 's'}`, `已列出 ${countZh(globCount, '个文件')}`))
-      return parts.length > 0 ? joinTitleSpans(parts, ', ') : [span('Explored code', '已查看代码')]
+      return parts.length > 0 ? joinTitleSpans(parts, ', ') : [exploredCodeSpan()]
     }
     case 'exec': {
       const n = calls.length
-      return [span(`${n} step${n === 1 ? '' : 's'} completed`, `${n} 步已完成`)]
+      return [stepsCompletedSpan(n)]
     }
     case 'edit': {
       const stats = aggregateCallStats(calls)
       const spans = formatStatsSpans(stats)
-      return spans.length > 0 ? spans : [{ text: 'Edit completed' }]
+      return spans.length > 0 ? spans : [editCompletedSpan()]
     }
     case 'agent': {
       const n = calls.length
       return n === 1 ? [span('Agent completed', '子代理已完成')] : [span(`${n} agent tasks completed`, `${n} 个子代理任务已完成`)]
     }
-    case 'fetch': return [{ text: 'Fetch completed' }]
+    case 'fetch': return [fetchCompletedSpan()]
     case 'search': return [webSearchCompletedTitleSpan(calls)]
     case 'image': return [{ text: imageGenerateCallsTitle(calls) ?? imageGenerateTitle('success') }]
     case 'plan': {
       if (calls.length === 1) return [planModeSpan(calls[0]!.toolName, calls[0]!.arguments)]
-      return [span(`${calls.length} steps completed`, `${calls.length} 步已完成`)]
+      return [stepsCompletedSpan(calls.length)]
     }
     case 'generic': {
       if (calls.length === 1) {
@@ -223,7 +243,7 @@ export function segmentCompletedTitle(seg: CopSubSegment): TitleSpan[] {
         }
         return [{ text: label[t] ?? t }]
       }
-      return [span(`${calls.length} steps completed`, `${calls.length} 步已完成`)]
+      return [stepsCompletedSpan(calls.length)]
     }
   }
 }
@@ -428,12 +448,6 @@ function webSearchCompletedTitleSpan(calls: ReadonlyArray<CallItem['call']>): Ti
   return calls.length === 1 ? span('Search completed', '搜索已完成') : span(`${calls.length} searches completed`, `${calls.length} 次搜索已完成`)
 }
 
-function webSearchStatsTitle(stats: AggregatedCallStats): string | null {
-  if (stats.webSearchCount <= 0) return null
-  return formatWebSearchTitle('Searched for', stats.webSearchQueries)
-    ?? (stats.webSearchCount === 1 ? 'Search completed' : `${stats.webSearchCount} searches completed`)
-}
-
 function webSearchStatsTitleSpan(stats: AggregatedCallStats): TitleSpan | null {
   if (stats.webSearchCount <= 0) return null
   return formatWebSearchTitleSpan('done', stats.webSearchQueries)
@@ -593,42 +607,44 @@ export function formatStatsSpans(stats: AggregatedCallStats): TitleSpan[] {
   return result
 }
 
-function formatStatsParts(stats: AggregatedCallStats): string {
-  return titleSpansToText(formatStatsSpans(stats))
-}
-
-function formatSingleCategoryTitle(cat: CopSegmentCategory, stats: AggregatedCallStats, total: number): string {
+function formatSingleCategoryTitleSpans(cat: CopSegmentCategory, stats: AggregatedCallStats, total: number): TitleSpan[] {
   switch (cat) {
     case 'explore': {
-      const parts = formatStatsParts(stats)
-      return parts || 'Explored code'
+      const parts = formatStatsSpans(stats)
+      return parts.length > 0 ? parts : [exploredCodeSpan()]
     }
     case 'exec':
-      return `${formatCount(stats.execCount, 'step', 'steps')} completed`
+      return [stepsCompletedSpan(stats.execCount)]
     case 'edit': {
       if (stats.writePaths.length > 0 && stats.editPaths.length > 0) {
-        return formatStatsParts(stats)
+        return formatStatsSpans(stats)
       }
       if (stats.writePaths.length > 0 && stats.editPaths.length === 0) {
-        if (stats.writePaths.length === 1) return `Wrote ${stats.writePaths[0]}${titleSpansToText(formatDiffSpans(stats.writePaths[0]!, stats.writePathDiff))}`
-        return `Wrote ${stats.writePaths.length} files`
+        if (stats.writePaths.length === 1) {
+          const path = stats.writePaths[0]!
+          return [span(`Wrote ${path}`, `已写入 ${path}`), ...formatDiffSpans(path, stats.writePathDiff)]
+        }
+        return [span(`Wrote ${stats.writePaths.length} files`, `已写入 ${countZh(stats.writePaths.length, '个文件')}`)]
       }
-      if (stats.editPaths.length === 1) return `Edited ${stats.editPaths[0]}${titleSpansToText(formatDiffSpans(stats.editPaths[0]!, stats.editPathDiff))}`
-      if (stats.editPaths.length > 1) return `Edited ${stats.editPaths.length} files`
-      return 'Edit completed'
+      if (stats.editPaths.length === 1) {
+        const path = stats.editPaths[0]!
+        return [span(`Edited ${path}`, `已编辑 ${path}`), ...formatDiffSpans(path, stats.editPathDiff)]
+      }
+      if (stats.editPaths.length > 1) return [span(`Edited ${stats.editPaths.length} files`, `已编辑 ${countZh(stats.editPaths.length, '个文件')}`)]
+      return [editCompletedSpan()]
     }
     case 'agent':
-      return stats.agentCount === 1 ? 'Agent completed' : `${stats.agentCount} agent tasks completed`
+      return stats.agentCount === 1 ? [span('Agent completed', '子代理已完成')] : [span(`${stats.agentCount} agent tasks completed`, `${stats.agentCount} 个子代理任务已完成`)]
     case 'fetch':
-      return stats.fetchCount === 1 ? 'Fetch completed' : `${stats.fetchCount} fetches completed`
+      return [fetchCompletedSpan(stats.fetchCount)]
     case 'search':
-      return webSearchStatsTitle(stats) ?? 'Search completed'
+      return [webSearchStatsTitleSpan(stats) ?? span('Search completed', '搜索已完成')]
     case 'image':
-      return imageGenerateDoneTitle(total, stats.imageFailedCount)
+      return [{ text: imageGenerateDoneTitle(total, stats.imageFailedCount) }]
     case 'plan':
-      return `${formatCount(total, 'step', 'steps')} completed`
+      return [stepsCompletedSpan(total)]
     case 'generic':
-      return `${formatCount(total, 'step', 'steps')} completed`
+      return [stepsCompletedSpan(total)]
   }
 }
 
@@ -683,9 +699,7 @@ function buildCompleteMainTitle(segments: ReadonlyArray<CopSubSegment>): TitleSp
     return [planModeSpan(allCalls[0]!.toolName, allCalls[0]!.arguments)]
   }
   if (allCalls.length === 0) {
-    // 退化路径：没有真实 call（例如 segments 仅作为 title 占位），沿用旧 segment.title 行为
-    if (segments.length > 1) return [{ text: `${segments.length} steps completed` }]
-    return [{ text: segments[0]!.title || 'Completed' }]
+    return segments.length > 0 ? [stepsCompletedSpan(segments.length)] : [completedSpan()]
   }
   const stats = aggregateCallStats(allCalls)
   const imageTitle = imageGenerateCallsTitle(allCalls)
@@ -694,9 +708,9 @@ function buildCompleteMainTitle(segments: ReadonlyArray<CopSubSegment>): TitleSp
   if (cats.length === 1 && cats[0] === 'search') {
     return [webSearchStatsTitleSpan(stats) ?? span('Search completed', '搜索已完成')]
   }
-  if (cats.length === 1) return [{ text: formatSingleCategoryTitle(cats[0]!, stats, allCalls.length) }]
+  if (cats.length === 1) return formatSingleCategoryTitleSpans(cats[0]!, stats, allCalls.length)
   const parts = formatStatsSpans(stats)
-  return parts.length > 0 ? parts : [{ text: `${formatCount(allCalls.length, 'step', 'steps')} completed` }]
+  return parts.length > 0 ? parts : [stepsCompletedSpan(allCalls.length)]
 }
 
 /**
@@ -855,13 +869,15 @@ export function buildFallbackSegments(tools: {
     seq: t.seq ?? 0,
   }))
 
+  const titleSpans = [stepsCompletedSpan(allTools.length)]
   segs.push({
     id: 'fallback-tools',
     category: 'generic',
     status: 'closed',
     items,
     seq: items[0]?.seq ?? 0,
-    title: `${allTools.length} step${allTools.length === 1 ? '' : 's'} completed`,
+    title: titleSpansToText(titleSpans),
+    titleSpans,
   })
   return segs
 }
