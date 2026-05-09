@@ -49,6 +49,13 @@ type PluginSettingDefinition = {
   options: string[]
 }
 
+type PluginAction = 'install-runtime' | 'toggle-enabled' | 'update-setting'
+
+type BusyAction = {
+  pluginID: string
+  action: PluginAction
+}
+
 type Props = {
   accessToken: string
 }
@@ -130,7 +137,7 @@ export function PluginsSettings({ accessToken }: Props) {
   const [tab, setTab] = useState<PluginTab>('installed')
   const [state, setState] = useState<LoadState>({ plugins: [], statusByID: {} })
   const [loading, setLoading] = useState(true)
-  const [busyID, setBusyID] = useState<string | null>(null)
+  const [busyAction, setBusyAction] = useState<BusyAction | null>(null)
   const [selectedPluginID, setSelectedPluginID] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -165,7 +172,7 @@ export function PluginsSettings({ accessToken }: Props) {
   )
 
   const installRuntime = useCallback(async (plugin: PluginPackage) => {
-    setBusyID(plugin.id)
+    setBusyAction({ pluginID: plugin.id, action: 'install-runtime' })
     try {
       const runtime = await installPluginRuntime(accessToken, plugin.id)
       setState((current) => ({
@@ -178,12 +185,12 @@ export function PluginsSettings({ accessToken }: Props) {
     } catch (error) {
       addToast(error instanceof Error ? error.message : ps.runtimeInstallFailed, 'error')
     } finally {
-      setBusyID(null)
+      setBusyAction(null)
     }
   }, [accessToken, addToast, ps.runtimeInstallFailed])
 
   const toggleEnabled = useCallback(async (plugin: PluginPackage, enabled: boolean) => {
-    setBusyID(plugin.id)
+    setBusyAction({ pluginID: plugin.id, action: 'toggle-enabled' })
     try {
       const enablement = await setPluginEnabled(accessToken, plugin.id, enabled)
       setState((current) => ({
@@ -196,7 +203,7 @@ export function PluginsSettings({ accessToken }: Props) {
     } catch (error) {
       addToast(error instanceof Error ? error.message : enabled ? ps.enableFailed : ps.disableFailed, 'error')
     } finally {
-      setBusyID(null)
+      setBusyAction(null)
     }
   }, [accessToken, addToast, ps.disableFailed, ps.enableFailed])
 
@@ -210,7 +217,7 @@ export function PluginsSettings({ accessToken }: Props) {
       ...previous,
       [definition.key]: settingPayloadValue(definition, value),
     }
-    setBusyID(plugin.id)
+    setBusyAction({ pluginID: plugin.id, action: 'update-setting' })
     try {
       const enablement = await updatePluginSettings(accessToken, plugin.id, nextSettings)
       setState((current) => ({
@@ -223,7 +230,7 @@ export function PluginsSettings({ accessToken }: Props) {
     } catch (error) {
       addToast(error instanceof Error ? error.message : ps.settingSaveFailed, 'error')
     } finally {
-      setBusyID(null)
+      setBusyAction(null)
     }
   }, [accessToken, addToast, ps.settingSaveFailed, state.statusByID])
 
@@ -233,7 +240,7 @@ export function PluginsSettings({ accessToken }: Props) {
         <PluginDetailPage
           plugin={selectedPlugin}
           status={state.statusByID[selectedPlugin.id] ?? { enablement: null, runtime: null }}
-          busy={busyID === selectedPlugin.id}
+          busyAction={busyAction?.pluginID === selectedPlugin.id ? busyAction.action : null}
           labels={ps}
           pageTitle={ds.pluginsTitle}
           onBack={() => setSelectedPluginID(null)}
@@ -271,7 +278,7 @@ export function PluginsSettings({ accessToken }: Props) {
             {ps.emptyInstalled}
           </div>
         ) : (
-          <PluginList plugins={items} statusByID={state.statusByID} busyID={busyID} labels={ps} onOpen={setSelectedPluginID} onInstallRuntime={installRuntime} onToggleEnabled={toggleEnabled} />
+          <PluginList plugins={items} statusByID={state.statusByID} busyAction={busyAction} labels={ps} onOpen={setSelectedPluginID} onInstallRuntime={installRuntime} onToggleEnabled={toggleEnabled} />
         )
       ) : (
         <div className="rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] px-5 py-6">
@@ -286,7 +293,7 @@ export function PluginsSettings({ accessToken }: Props) {
 function PluginList({
   plugins,
   statusByID,
-  busyID,
+  busyAction,
   labels,
   onOpen,
   onInstallRuntime,
@@ -294,7 +301,7 @@ function PluginList({
 }: {
   plugins: PluginPackage[]
   statusByID: Record<string, PluginStatus>
-  busyID: string | null
+  busyAction: BusyAction | null
   labels: ReturnType<typeof useLocale>['t']['desktopSettings']['pluginsPage']
   onOpen: (pluginID: string) => void
   onInstallRuntime: (plugin: PluginPackage) => void
@@ -307,7 +314,7 @@ function PluginList({
           key={plugin.package_id}
           plugin={plugin}
           status={statusByID[plugin.id] ?? { enablement: null, runtime: null }}
-          busy={busyID === plugin.id}
+          busyAction={busyAction?.pluginID === plugin.id ? busyAction.action : null}
           labels={labels}
           onOpen={() => onOpen(plugin.id)}
           onInstallRuntime={() => onInstallRuntime(plugin)}
@@ -321,7 +328,7 @@ function PluginList({
 function PluginListRow({
   plugin,
   status,
-  busy,
+  busyAction,
   labels,
   onOpen,
   onInstallRuntime,
@@ -329,7 +336,7 @@ function PluginListRow({
 }: {
   plugin: PluginPackage
   status: PluginStatus
-  busy: boolean
+  busyAction: PluginAction | null
   labels: ReturnType<typeof useLocale>['t']['desktopSettings']['pluginsPage']
   onOpen: () => void
   onInstallRuntime: () => void
@@ -339,6 +346,9 @@ function PluginListRow({
   const runtimeStatus = status.runtime?.status ?? 'not_installed'
   const runtimeNeeded = hasRuntime(plugin.manifest)
   const runtimeReady = runtimeStatus === 'installed'
+  const busy = busyAction !== null
+  const installBusy = busyAction === 'install-runtime'
+  const toggleBusy = busyAction === 'toggle-enabled'
 
   return (
     <motion.div
@@ -369,7 +379,7 @@ function PluginListRow({
         <div className="flex shrink-0 items-center gap-2 justify-self-end">
           {runtimeNeeded && !runtimeReady && (
             <SettingsButton
-              icon={busy ? <Loader2 className="animate-spin" /> : <Download />}
+              icon={installBusy ? <Loader2 className="animate-spin" /> : <Download />}
               disabled={busy}
               onClick={onInstallRuntime}
             >
@@ -378,7 +388,7 @@ function PluginListRow({
           )}
           <SettingsButton
             variant={enabled ? 'secondary' : 'primary'}
-            icon={busy ? <Loader2 className="animate-spin" /> : enabled ? <Check /> : <Plus />}
+            icon={toggleBusy ? <Loader2 className="animate-spin" /> : enabled ? <Check /> : <Plus />}
             disabled={busy || (runtimeNeeded && !runtimeReady && !enabled)}
             onClick={() => onToggleEnabled(!enabled)}
           >
@@ -393,7 +403,7 @@ function PluginListRow({
 function PluginDetailPage({
   plugin,
   status,
-  busy,
+  busyAction,
   labels,
   pageTitle,
   onBack,
@@ -403,7 +413,7 @@ function PluginDetailPage({
 }: {
   plugin: PluginPackage
   status: PluginStatus
-  busy: boolean
+  busyAction: PluginAction | null
   labels: ReturnType<typeof useLocale>['t']['desktopSettings']['pluginsPage']
   pageTitle: string
   onBack: () => void
@@ -416,6 +426,9 @@ function PluginDetailPage({
   const runtimeNeeded = hasRuntime(plugin.manifest)
   const runtimeReady = runtimeStatus === 'installed'
   const settings = settingDefinitions(plugin.manifest)
+  const busy = busyAction !== null
+  const installBusy = busyAction === 'install-runtime'
+  const toggleBusy = busyAction === 'toggle-enabled'
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -441,7 +454,7 @@ function PluginDetailPage({
         <div className="flex shrink-0 items-center gap-2">
           {runtimeNeeded && !runtimeReady && (
             <SettingsButton
-              icon={busy ? <Loader2 className="animate-spin" /> : <Download />}
+              icon={installBusy ? <Loader2 className="animate-spin" /> : <Download />}
               disabled={busy}
               onClick={onInstallRuntime}
             >
@@ -450,7 +463,7 @@ function PluginDetailPage({
           )}
           <SettingsButton
             variant={enabled ? 'secondary' : 'primary'}
-            icon={busy ? <Loader2 className="animate-spin" /> : enabled ? <Check /> : <Plus />}
+            icon={toggleBusy ? <Loader2 className="animate-spin" /> : enabled ? <Check /> : <Plus />}
             disabled={busy || (runtimeNeeded && !runtimeReady && !enabled)}
             onClick={() => onToggleEnabled(!enabled)}
           >

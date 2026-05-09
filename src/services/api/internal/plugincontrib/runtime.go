@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"runtime"
 	"strings"
+	"time"
 
 	"arkloop/services/api/internal/data"
+	sharedoutbound "arkloop/services/shared/outboundurl"
 	"arkloop/services/shared/pluginbinary"
 	"arkloop/services/shared/pluginmanifest"
 	"github.com/jackc/pgx/v5"
 )
+
+const runtimeInstallDownloadTimeout = 5 * time.Minute
 
 func (e *Enabler) InstallRuntime(ctx context.Context, req EnableRequest) (data.PluginRuntimeState, error) {
 	if ctx == nil {
@@ -152,7 +155,8 @@ func (e *Enabler) installRuntimeBinary(ctx context.Context, pkg data.PluginPacka
 	if !ok {
 		return nil
 	}
-	return pluginbinary.DownloadAndExtract(ctx, http.DefaultClient, e.pluginStore, pkg.PluginID, pkg.Version, pluginbinary.DownloadConfig{
+	client := sharedoutbound.DefaultPolicy().NewHTTPClient(runtimeInstallDownloadTimeout)
+	return pluginbinary.DownloadAndExtract(ctx, client, e.pluginStore, pkg.PluginID, pkg.Version, pluginbinary.DownloadConfig{
 		URL:        binary.URL,
 		SHA256:     binary.SHA256,
 		TargetDir:  "runtime",

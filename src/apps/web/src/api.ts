@@ -2443,6 +2443,7 @@ export async function installPluginRuntime(accessToken: string, pluginID: string
     method: 'POST',
     accessToken,
     body: JSON.stringify({}),
+    signal: AbortSignal.timeout(300_000),
   })
 }
 
