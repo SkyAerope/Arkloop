@@ -101,7 +101,7 @@ export function splitCopItemsByTopLevelTools(
 ): SplitCopItemEntry[] {
   const calls = items.filter((item): item is Extract<CopBlockItem, { kind: 'call' }> => item.kind === 'call')
   const hasProcessContext = items.some((item) => item.kind !== 'call')
-  if (!hasProcessContext && calls.length === 1) {
+  if (!hasProcessContext && calls.length === 1 && isTopLevelCopToolName(calls[0]!.call.toolName)) {
     return [{
       kind: 'tool',
       id: calls[0]!.call.toolCallId,

@@ -22,7 +22,8 @@ export const AGENT_TOOL_NAMES = new Set([
   'send_input', 'wait_agent', 'resume_agent', 'close_agent', 'interrupt_agent',
 ])
 export const TODO_TOOL_NAMES = new Set(['todo_write'])
-export const TOP_LEVEL_TOOL_NAMES = new Set([...EXEC_TOOL_NAMES, 'todo_write'])
+// 仅 todo_write 仍需提升到顶层；exec 工具现已归入 COP timeline 作为 exec 子段渲染
+export const TOP_LEVEL_TOOL_NAMES = new Set(['todo_write'])
 export const FILE_OP_TOOL_NAMES = new Set([
   'grep', 'glob', 'read_file', 'read', 'write_file', 'edit', 'edit_file',
   'load_tools', 'load_skill', 'lsp',

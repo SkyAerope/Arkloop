@@ -185,6 +185,31 @@ export function CopSegmentBlocks({
           )
         }
 
+        // Single-call entry without process context → render directly
+        if (entry.items.length === 1 && entry.items[0]?.kind === 'call') {
+          const singleCall = entry.items[0]!
+          // Construct a tool entry for topLevelEntryForTool
+          const toolEntry: Extract<ReturnType<typeof splitCopItemsByTopLevelTools>[number], { kind: 'tool' }> = {
+            kind: 'tool',
+            id: singleCall.call.toolCallId,
+            seq: singleCall.seq,
+            item: singleCall,
+          }
+          const toolResult = topLevelEntryForTool(toolEntry, fullPayload, todoWritesForFinalDisplay)
+          if (toolResult) {
+            return (
+              <TopLevelCopToolBlock
+                key={`${keyPrefix}-tool-${entry.id}`}
+                entry={toolResult}
+                live={entryLive}
+                onOpenCodeExecution={onOpenCodeExecution}
+                activeCodeExecutionId={activeCodeExecutionId}
+              />
+            )
+          }
+          return null
+        }
+
         const timelineSegment: CopSegment = { ...segment, items: entry.items }
         const payload = copTimelinePayloadForSegment(timelineSegment, pools)
         const pool = buildResolvedPool(payload)

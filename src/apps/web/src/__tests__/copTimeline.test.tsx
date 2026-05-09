@@ -310,7 +310,7 @@ describe('CopTimeline', () => {
   })
 
   describe('segment rendering', () => {
-    it('single exec segment with closed status renders nothing inside CopTimeline', () => {
+    it('single exec segment with closed status renders inside CopTimeline', () => {
       const seg = makeSeg({
         id: 'seg1',
         category: 'exec',
@@ -323,7 +323,8 @@ describe('CopTimeline', () => {
         pool: EMPTY_POOL,
         isComplete: true,
       })
-      expect(html).toBe('')
+      expect(html).not.toBe('')
+      expect(html).toContain('1 步已完成')
     })
 
     it('exec segment renders outside header collapse, not as nested segment', () => {

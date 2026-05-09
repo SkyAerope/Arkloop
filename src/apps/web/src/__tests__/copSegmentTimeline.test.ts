@@ -594,7 +594,7 @@ describe('copTimelinePayloadForSegment', () => {
     ])
   })
 
-  it('splitCopItemsByTopLevelTools 将 exec 和 todo 从 timeline 切出来', () => {
+  it('splitCopItemsByTopLevelTools 仅将 todo_write 从 timeline 切出来，exec 留在 timeline 中', () => {
     const entries = splitCopItemsByTopLevelTools([
       { kind: 'thinking', content: 'scan first', seq: 1 },
       call('cmd_1', 'exec_command', 2),
@@ -604,31 +604,29 @@ describe('copTimelinePayloadForSegment', () => {
     ])
 
     expect(entries.map((entry) => entry.kind === 'tool' ? `tool:${entry.item.call.toolName}` : `timeline:${entry.items.length}`)).toEqual([
-      'timeline:1',
-      'tool:exec_command',
-      'timeline:1',
+      'timeline:3',
       'tool:todo_write',
       'timeline:1',
     ])
   })
 
-  it('single tool is promoted to root without a COP wrapper', () => {
+  it('仅单 todo_write 提升为 root tool，其他单工具留在 timeline 中（无 COP shell 渲染）', () => {
     const entries = splitCopItemsByTopLevelTools([
       call('read_1', 'read', 1),
     ])
 
     expect(entries.map((entry) => entry.kind === 'tool' ? `tool:${entry.item.call.toolName}` : `timeline:${entry.items.length}`)).toEqual([
-      'tool:read',
+      'timeline:1',
     ])
   })
 
-  it('timeline_title alone does not keep a single tool inside COP', () => {
+  it('timeline_title with single non-todo tool stays in timeline (card mode without COP shell)', () => {
     const entries = splitCopItemsByTopLevelTools([
       call('doc_1', 'document_write', 1),
     ], { segmentTitle: 'Writing report' })
 
     expect(entries.map((entry) => entry.kind === 'tool' ? `tool:${entry.item.call.toolName}` : `timeline:${entry.items.length}`)).toEqual([
-      'tool:document_write',
+      'timeline:1',
     ])
   })
 

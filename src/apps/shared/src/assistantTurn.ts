@@ -41,14 +41,9 @@ export type AssistantTurnFoldState = {
 
 const TIMELINE_TITLE_TOOL = 'timeline_title'
 const HIDDEN_COP_TOOLS = new Set(['end_reply'])
-const EXECUTION_COP_TOOL_NAMES = new Set(['exec_command', 'python_execute', 'continue_process', 'terminate_process'])
 
 function shouldHideCopTool(toolName: string): boolean {
   return HIDDEN_COP_TOOLS.has(toolName.trim())
-}
-
-function isExecutionCopTool(toolName: string): boolean {
-  return EXECUTION_COP_TOOL_NAMES.has(toolName.trim())
 }
 
 export function copSegmentCalls(segment: { type: 'cop'; items: CopBlockItem[] }): TurnToolCallRef[] {
@@ -213,15 +208,10 @@ function lastCopSegmentHasCalls(segments: AssistantTurnSegment[]): boolean {
   return !!(last?.type === 'cop' && last.items.some((item) => item.kind === 'call'))
 }
 
-function copHasExecutionCall(cop: { items: CopBlockItem[] }): boolean {
-  return cop.items.some((item) => item.kind === 'call' && isExecutionCopTool(item.call.toolName))
-}
-
 function appendThinkingToPreviousToolCop(segments: AssistantTurnSegment[], delta: string, seq: number, startedAtMs: number): boolean {
   const last = segments[segments.length - 1]
   if (last?.type !== 'cop') return false
   if (!last.items.some((item) => item.kind === 'call')) return false
-  if (copHasExecutionCall(last)) return false
   const tail = last.items[last.items.length - 1]
   if (tail?.kind === 'thinking') {
     tail.content += delta
@@ -275,10 +265,11 @@ export function snapshotAssistantTurn(state: AssistantTurnFoldState): AssistantT
 
 /**
  * 事件折叠状态机，核心规则：
- * - 新 COP 块：首个非隐藏 tool.call 创建新块；exec 类工具或当前块已有 exec 时先 flush 再创建
+ * - 新 COP 块：首个非隐藏 tool.call 创建新块
  * - 追加：同类别连续 tool.call 合入同一 COP，text/thinking 追加到当前块或最近的 tool COP
- * - Flush 触发：run.segment.start/end、message.delta 遇非空白普通文本、exec 工具前的边界、orphan result 类别不匹配时
- * - thinkingMustBreakBeforeNext：tool.call 后置位，确保下一段 thinking 不与 call 前的 thinking 合并，避免视觉上思考内容跨工具粘连
+ * - Flush 触发：run.segment.start/end、message.delta 遇非空白普通文本
+ * - timeline_title：仅命名当前 COP，不切断
+ * - thinkingMustBreakBeforeNext：tool.call 后置位，确保下一段 thinking 不与 call 前的 thinking 合并
  */
 export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: AssistantTurnEvent): void {
   const { segments } = state
@@ -320,17 +311,12 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
     }
   }
 
-  const shouldBreakCopBeforeTool = (toolName: string): boolean => {
-    if (currentCop == null) return false
-    if (isExecutionCopTool(toolName)) return true
-    return copHasExecutionCall(currentCop)
+  const shouldBreakCopBeforeTool = (_toolName: string): boolean => {
+    return false
   }
 
-  const shouldBreakCopBeforeOrphanResult = (toolName: string): boolean => {
-    if (currentCop == null) return false
-    const currentHasExecution = copHasExecutionCall(currentCop)
-    if (isExecutionCopTool(toolName)) return !currentHasExecution
-    return currentHasExecution
+  const shouldBreakCopBeforeOrphanResult = (_toolName: string): boolean => {
+    return false
   }
 
   const attachResultToCop = (toolCallId: string, toolName: string, result: unknown, errorClass?: string, errorMessage?: string) => {
@@ -361,9 +347,6 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
     const forceNew = state.thinkingMustBreakBeforeNext
     if (forceNew) {
       state.thinkingMustBreakBeforeNext = false
-    }
-    if (currentCop != null && copHasExecutionCall(currentCop)) {
-      flushCop(eventTs)
     }
     if (currentCop == null && forceNew && appendThinkingToPreviousToolCop(segments, delta, eventSeq, eventTs)) {
       state.currentCop = currentCop
@@ -420,9 +403,6 @@ export function foldAssistantTurnEvent(state: AssistantTurnFoldState, event: Ass
   const handleToolCall = (event: AssistantTurnEvent) => {
     const toolName = pickToolName(event.data)
     if (toolName === TIMELINE_TITLE_TOOL) {
-      if (currentCop != null && copHasExecutionCall(currentCop)) {
-        flushCop(eventTs)
-      }
       ensureCop()
       const args = extractArguments(event.data)
       const labelRaw = args.label

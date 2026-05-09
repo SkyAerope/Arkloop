@@ -69,7 +69,7 @@ async function renderBlocks(
 }
 
 describe('CopSegmentBlocks', () => {
-  it('renders exec_command as a top-level sibling, not inside CopTimeline', async () => {
+  it('renders exec_command inside CopTimeline, not as top-level sibling', async () => {
     const { container, cleanup } = await renderBlocks({
       type: 'cop',
       title: null,
@@ -82,13 +82,13 @@ describe('CopSegmentBlocks', () => {
       const timeline = container.querySelector('.cop-timeline-root')
       expect(container.textContent).toContain('pwd')
       expect(timeline).not.toBeNull()
-      expect(timeline?.textContent).not.toContain('pwd')
+      expect(timeline?.textContent).toContain('pwd')
     } finally {
       cleanup()
     }
   })
 
-  it('renders todo_write as a top-level sibling, not inside CopTimeline', async () => {
+  it('renders todo_write as a top-level sibling; remaining single tool renders in card mode without COP shell', async () => {
     const { container, cleanup } = await renderBlocks({
       type: 'cop',
       title: null,
@@ -111,17 +111,16 @@ describe('CopSegmentBlocks', () => {
       ],
     })
     try {
-      const timeline = container.querySelector('.cop-timeline-root')
       expect(container.textContent).toContain('Write focused test')
       expect(container.textContent).toContain('1 of 2 Done')
-      expect(timeline).not.toBeNull()
-      expect(timeline?.textContent).not.toContain('Write focused test')
+      // todo_write is promoted as top-level, read renders in card mode without COP shell
+      expect(container.querySelector('.cop-timeline-root')).toBeNull()
     } finally {
       cleanup()
     }
   })
 
-  it('renders single document_write as a root tool, not as one-step COP', async () => {
+  it('renders single document_write in card mode without COP shell', async () => {
     const { container, cleanup } = await renderBlocks({
       type: 'cop',
       title: null,
@@ -146,7 +145,7 @@ describe('CopSegmentBlocks', () => {
     }
   })
 
-  it('timeline_title alone still renders single document_write as root', async () => {
+  it('timeline_title with single document_write renders in card mode without COP shell', async () => {
     const { container, cleanup } = await renderBlocks({
       type: 'cop',
       title: 'Writing report',

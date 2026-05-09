@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { categoryForTool, type CopSubSegment, type ResolvedPool } from '../../copSubSegment'
+import { type CopSubSegment, type ResolvedPool } from '../../copSubSegment'
 import type { CodeExecution } from '../CodeExecutionCard'
 import type { SubAgentRef } from '../../storage'
-import { CopTimelineUnifiedRow } from './CopUnifiedRow'
+
 import { CopThoughtSummaryRow, TimelineNarrativeBody } from './ThinkingBlock'
 import { FileOpToolRow, FileOpToolCard, summarizeDiff } from './ToolRows'
 import { normalizeToolName } from '../../toolPresentation'
@@ -12,14 +12,13 @@ import { WebFetchItem } from './WebFetchItem'
 import { SubAgentBlock } from '../SubAgentBlock'
 import { CodeExecutionCard } from '../CodeExecutionCard'
 import { ExecutionCard } from '../ExecutionCard'
-import { TypewriterText, COP_TIMELINE_CONTENT_PADDING_LEFT_PX } from './utils'
+import { TypewriterText } from './utils'
 import { timelineStepDisplayLabel } from './types'
 import { SourceListCard } from './SourceList'
 import { QueryPill } from './utils'
 import { useLocale } from '../../contexts/LocaleContext'
 import { localizeTimelineLabel } from './labels'
 import type { Locale } from '../../locales'
-import { markerForStep, markerForToolName } from './markers'
 
 const EXPLORE_BOTTOM_PAD = 12
 
@@ -99,9 +98,7 @@ export function CopTimelineSegment({
     setExpanded((v) => !v)
   }
 
-  const editOnly = segment.category === 'edit' && segment.items.every(i => i.kind === 'call')
-  const exploreCard = segment.category === 'explore'
-  const endsWithNarrative = compactNarrativeEnd && !exploreCard && segment.items.at(-1)?.kind === 'assistant_text'
+  const endsWithNarrative = compactNarrativeEnd && segment.items.at(-1)?.kind === 'assistant_text'
 
   const headerLabel = localizeTimelineLabel(segment.title, locale)
   const headerLive = isOpen && isLive
@@ -128,10 +125,10 @@ export function CopTimelineSegment({
 
   if (hideHeader) {
     return (
-      <div style={{ position: 'relative', paddingTop: flattenSingleItem ? 0 : 6, paddingLeft: editOnly || exploreCard || flattenSingleItem ? 0 : COP_TIMELINE_CONTENT_PADDING_LEFT_PX, paddingBottom: flattenSingleItem || endsWithNarrative ? 0 : EXPLORE_BOTTOM_PAD }}>
+      <div style={{ position: 'relative', paddingTop: flattenSingleItem ? 0 : 6, paddingBottom: flattenSingleItem || endsWithNarrative ? 0 : EXPLORE_BOTTOM_PAD }}>
         {flattenSingleItem && segment.items.length === 1 ? (
           renderItem(segment.items[0]!, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
-        ) : exploreCard ? (
+        ) : (
           <div
             style={{
               borderRadius: 8,
@@ -147,27 +144,6 @@ export function CopTimelineSegment({
               </div>
             ))}
           </div>
-        ) : (
-          segment.items.map((item, index) => (
-            <div key={itemTypeId(item)} style={{ position: 'relative' }}>
-              {editOnly ? (
-                renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
-              ) : (
-                <CopTimelineUnifiedRow
-                  isFirst={index === 0}
-                  isLast={index === segment.items.length - 1}
-                  multiItems={segment.items.length >= 2}
-                  dotColor={itemDotColor(item)}
-                  dotTop={itemDotTop(item)}
-                  paddingBottom={10}
-                  horizontalMotion={false}
-                  marker={markerForItem(item, pool)}
-                >
-                  {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
-                </CopTimelineUnifiedRow>
-              )}
-            </div>
-          ))
         )}
       </div>
     )
@@ -223,54 +199,25 @@ export function CopTimelineSegment({
           style={{
             position: 'relative',
             paddingTop: 6,
-            paddingLeft: editOnly || exploreCard ? 0 : COP_TIMELINE_CONTENT_PADDING_LEFT_PX,
+            paddingLeft: 0,
             paddingBottom: endsWithNarrative ? 0 : EXPLORE_BOTTOM_PAD,
           }}
         >
-          {exploreCard ? (
-            <div
-              style={{
-                borderRadius: 8,
-                background: 'var(--c-attachment-bg)',
-                border: '0.5px solid var(--c-border-subtle)',
-                padding: '6px 10px',
-                overflow: 'hidden',
-              }}
-            >
-              {segment.items.map((item) => (
-                <div
-                  key={itemTypeId(item)}
-                  style={{ position: 'relative', padding: '3px 0' }}
-                >
-                  {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
-                </div>
-              ))}
-            </div>
-          ) : (
-            segment.items.map((item, index) => (
-              <div
-                key={itemTypeId(item)}
-                style={{ position: 'relative' }}
-              >
-                {editOnly ? (
-                  renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)
-                ) : (
-                  <CopTimelineUnifiedRow
-                    isFirst={index === 0}
-                    isLast={index === segment.items.length - 1}
-                    multiItems={segment.items.length >= 2}
-                    dotColor={itemDotColor(item)}
-                    dotTop={itemDotTop(item)}
-                    paddingBottom={10}
-                    horizontalMotion={false}
-                    marker={markerForItem(item, pool)}
-                  >
-                    {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
-                  </CopTimelineUnifiedRow>
-                )}
+          <div
+            style={{
+              borderRadius: 8,
+              background: 'var(--c-attachment-bg)',
+              border: '0.5px solid var(--c-border-subtle)',
+              padding: '6px 10px',
+              overflow: 'hidden',
+            }}
+          >
+            {segment.items.map((item) => (
+              <div key={itemTypeId(item)} style={{ position: 'relative', padding: '3px 0' }}>
+                {renderItem(item, pool, isLive, onOpenCodeExecution, activeCodeExecutionId, onOpenSubAgent, accessToken, baseUrl, typography, locale)}
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </motion.div>
       </motion.div>
     </div>
@@ -280,37 +227,6 @@ export function CopTimelineSegment({
 function itemTypeId(item: CopSubSegment['items'][number]): string {
   if (item.kind === 'call') return item.call.toolCallId
   return `${item.kind}-${item.seq}`
-}
-
-function itemDotColor(item: CopSubSegment['items'][number]): string {
-  if (item.kind === 'thinking') return 'var(--c-text-muted)'
-  if (item.kind === 'assistant_text') return 'var(--c-border-mid)'
-  // call item - defer to resolved status
-  const hasError = typeof item.call.errorClass === 'string' && item.call.errorClass !== ''
-  if (hasError) return 'var(--c-status-error-text, #ef4444)'
-  const hasResult = item.call.result !== undefined
-  return hasResult ? 'var(--c-text-muted)' : 'var(--c-text-secondary)'
-}
-
-function itemDotTop(item: CopSubSegment['items'][number]): number | undefined {
-  if (item.kind === 'call') {
-    const n = normalizeToolName(item.call.toolName)
-    // Cards with title bars need higher dot alignment
-    if (n === 'edit' || n === 'edit_file' || n === 'write_file') return 18
-    if (n === 'python_execute') return 18
-    // Rows with 4px top padding (ExecutionCard, SubAgentBlock)
-    const cat = categoryForTool(item.call.toolName)
-    if (cat === 'exec' || cat === 'agent') return 9
-  }
-  return 6
-}
-
-function markerForItem(item: CopSubSegment['items'][number], pool: ResolvedPool) {
-  if (item.kind !== 'call') return { kind: 'dot' as const }
-  const toolCallId = item.call.toolCallId
-  const step = pool.steps.get(toolCallId)
-  if (step) return markerForStep(step)
-  return markerForToolName(item.call.toolName)
 }
 
 type ItemResolver = {
