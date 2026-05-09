@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useToast } from '@arkloop/shared'
 import {
+  Blocks,
+  Check,
   Download,
   Loader2,
-  Power,
+  Plus,
   RefreshCw,
 } from 'lucide-react'
 import {
@@ -21,8 +23,7 @@ import { SettingsPage } from './_SettingsLayout'
 import { SettingsButton, SettingsIconButton } from './_SettingsButton'
 import { SettingsModalFrame } from './_SettingsModalFrame'
 import { SettingsSegmentedControl } from './_SettingsSegmentedControl'
-import { SettingsStatusBadge } from './_SettingsStatusBadge'
-import { SettingsSummaryCard, SettingsSummaryCardBadge, SettingsSummaryCardLine } from './_SettingsSummaryCard'
+import { SettingsSummaryCard } from './_SettingsSummaryCard'
 
 type PluginTab = 'installed' | 'marketplace'
 
@@ -44,36 +45,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function hasArray(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0
-}
-
 function hasRuntime(manifest: Record<string, unknown>): boolean {
   return isRecord(manifest.runtime) && Object.keys(manifest.runtime).length > 0
 }
 
-function contributionKeys(manifest: Record<string, unknown>) {
-  return [
-    hasRuntime(manifest) ? 'runtime' : '',
-    hasArray(manifest.mcp_servers) ? 'mcp' : '',
-    hasArray(manifest.skills) ? 'skill' : '',
-    hasArray(manifest.hooks) ? 'hook' : '',
-    typeof manifest.context === 'string' && manifest.context.trim() ? 'context' : '',
-  ].filter(Boolean)
-}
-
 function sourceLabel(sourceKind: string, builtIn: string, custom: string) {
   return sourceKind === 'builtin' ? builtIn : custom
-}
-
-function contributionNames(manifest: Record<string, unknown>, key: string, fallback: string) {
-  const raw = manifest[key]
-  if (!Array.isArray(raw)) return []
-  return raw.map((item, index) => {
-    if (!isRecord(item)) return `${fallback} ${index + 1}`
-    const name = item.name ?? item.install_key ?? item.skill_key ?? item.id
-    return typeof name === 'string' && name.trim() ? name.trim() : `${fallback} ${index + 1}`
-  })
 }
 
 export function PluginsSettings({ accessToken }: Props) {
@@ -154,77 +131,51 @@ export function PluginsSettings({ accessToken }: Props) {
     }
   }, [accessToken, addToast, ps.disableFailed, ps.enableFailed])
 
-  const contributionLabel = useCallback((key: string) => {
-    const labels: Record<string, string> = {
-      runtime: ps.runtime,
-      mcp: ps.mcp,
-      skill: ps.skill,
-      hook: ps.hook,
-      context: ps.context,
-    }
-    return labels[key] ?? key
-  }, [ps.context, ps.hook, ps.mcp, ps.runtime, ps.skill])
-
   const renderPluginCard = (plugin: PluginPackage) => {
     const status = state.statusByID[plugin.id]
     const enabled = status?.enablement?.enabled ?? false
     const runtimeStatus = status?.runtime?.status ?? 'not_installed'
     const runtimeReady = runtimeStatus === 'installed'
     const runtimeNeeded = hasRuntime(plugin.manifest)
-    const keys = contributionKeys(plugin.manifest)
     const busy = busyID === plugin.id
-    const capabilities = keys.map(contributionLabel).join(' / ') || '-'
 
     return (
       <SettingsSummaryCard
         key={plugin.package_id}
-        minHeightClass="min-h-[154px]"
         onClick={() => setSelectedPluginID(plugin.id)}
+        minHeightClass="min-h-[76px]"
+        className="justify-center py-3"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-[14px] font-semibold leading-tight text-[var(--c-text-primary)]">
-              {plugin.display_name}
-            </h3>
-            {plugin.description && (
-              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[var(--c-text-muted)]">
-                {plugin.description}
-              </p>
-            )}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] text-[var(--c-text-secondary)]">
+            <Blocks size={18} />
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1">
-            <SettingsSummaryCardBadge>{sourceLabel(plugin.source_kind, ps.builtIn, ps.custom)}</SettingsSummaryCardBadge>
-            <SettingsSummaryCardBadge>{enabled ? ps.enabled : ps.disabled}</SettingsSummaryCardBadge>
-            {runtimeNeeded && (
-              <SettingsSummaryCardBadge>{runtimeReady ? ps.ready : ps.needsSetup}</SettingsSummaryCardBadge>
-            )}
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-[14px] font-semibold leading-tight text-[var(--c-text-primary)]">{plugin.display_name}</h3>
+            <p className="mt-1 truncate text-[12px] leading-tight text-[var(--c-text-muted)]">
+              {plugin.description || sourceLabel(plugin.source_kind, ps.builtIn, ps.custom)}
+            </p>
           </div>
-        </div>
-
-        <div className="mt-4 min-w-0 space-y-2 pr-[148px]">
-          <SettingsSummaryCardLine label={ps.version} value={plugin.version} />
-          <SettingsSummaryCardLine label={ps.capabilities} value={capabilities} />
-        </div>
-
-        <div className="absolute bottom-3 right-3 flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-          {runtimeNeeded && !runtimeReady && (
-            <SettingsButton
-              variant="secondary"
-              icon={busy ? <Loader2 className="animate-spin" /> : <Download />}
-              disabled={busy}
-              onClick={() => void installRuntime(plugin)}
+          <div className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
+            {runtimeNeeded && !runtimeReady && (
+              <SettingsIconButton
+                label={ps.installRuntime}
+                className="h-8 w-8"
+                disabled={busy}
+                onClick={() => void installRuntime(plugin)}
+              >
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              </SettingsIconButton>
+            )}
+            <SettingsIconButton
+              label={enabled ? ps.disable : ps.enable}
+              className="h-8 w-8"
+              disabled={busy || (runtimeNeeded && !runtimeReady && !enabled)}
+              onClick={() => void toggleEnabled(plugin, !enabled)}
             >
-              {ps.installRuntime}
-            </SettingsButton>
-          )}
-          <SettingsButton
-            variant={enabled ? 'secondary' : 'primary'}
-            icon={busy ? <Loader2 className="animate-spin" /> : <Power />}
-            disabled={busy || (runtimeNeeded && !runtimeReady && !enabled)}
-            onClick={() => void toggleEnabled(plugin, !enabled)}
-          >
-            {enabled ? ps.disable : ps.enable}
-          </SettingsButton>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : enabled ? <Check size={14} /> : <Plus size={14} />}
+            </SettingsIconButton>
+          </div>
         </div>
       </SettingsSummaryCard>
     )
@@ -271,7 +222,6 @@ export function PluginsSettings({ accessToken }: Props) {
           status={state.statusByID[selectedPlugin.id] ?? { enablement: null, runtime: null }}
           busy={busyID === selectedPlugin.id}
           labels={ps}
-          contributionLabel={contributionLabel}
           onClose={() => setSelectedPluginID(null)}
           onInstallRuntime={() => void installRuntime(selectedPlugin)}
           onToggleEnabled={(enabled) => void toggleEnabled(selectedPlugin, enabled)}
@@ -286,7 +236,6 @@ function PluginDetailModal({
   status,
   busy,
   labels,
-  contributionLabel,
   onClose,
   onInstallRuntime,
   onToggleEnabled,
@@ -295,7 +244,6 @@ function PluginDetailModal({
   status: PluginStatus
   busy: boolean
   labels: ReturnType<typeof useLocale>['t']['desktopSettings']['pluginsPage']
-  contributionLabel: (key: string) => string
   onClose: () => void
   onInstallRuntime: () => void
   onToggleEnabled: (enabled: boolean) => void
@@ -304,11 +252,6 @@ function PluginDetailModal({
   const runtimeStatus = status.runtime?.status ?? 'not_installed'
   const runtimeNeeded = hasRuntime(plugin.manifest)
   const runtimeReady = runtimeStatus === 'installed'
-  const keys = contributionKeys(plugin.manifest)
-  const capabilityLabels = keys.map(contributionLabel)
-  const mcpServers = contributionNames(plugin.manifest, 'mcp_servers', labels.mcp)
-  const skills = contributionNames(plugin.manifest, 'skills', labels.skill)
-  const hooks = contributionNames(plugin.manifest, 'hooks', labels.hook)
 
   return (
     <SettingsModalFrame
@@ -332,7 +275,7 @@ function PluginDetailModal({
           <SettingsButton
             size="modal"
             variant={enabled ? 'secondary' : 'primary'}
-            icon={busy ? <Loader2 className="animate-spin" /> : <Power />}
+            icon={busy ? <Loader2 className="animate-spin" /> : enabled ? <Check /> : <Plus />}
             disabled={busy || (runtimeNeeded && !runtimeReady && !enabled)}
             onClick={() => onToggleEnabled(!enabled)}
           >
@@ -341,42 +284,32 @@ function PluginDetailModal({
         </>
       }
     >
-      <div className="mt-6 flex flex-col gap-4">
+      <div className="mt-6 min-w-0 space-y-6">
         {plugin.description && (
-          <p className="text-sm leading-relaxed text-[var(--c-text-secondary)]">{plugin.description}</p>
+          <p className="px-2.5 text-[13px] leading-5 text-[var(--c-text-secondary)]">{plugin.description}</p>
         )}
 
         <PluginDetailSection title={labels.overview}>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-            <PluginMetaField className="col-span-2" label={labels.pluginId} value={plugin.id} mono />
-            <PluginMetaField label={labels.version} value={plugin.version} />
-            <PluginMetaField label={labels.source} value={plugin.source_kind} />
-            <PluginMetaField label={labels.runtimeStatus} value={runtimeNeeded ? runtimeStatus : labels.notRequired} />
-            <PluginMetaField label={labels.status} value={enabled ? labels.enabled : labels.disabled} />
-          </div>
-        </PluginDetailSection>
-
-        <PluginDetailSection title={labels.capabilities}>
-          <div className="flex flex-wrap gap-2">
-            <SettingsStatusBadge variant={enabled ? 'success' : 'neutral'}>{enabled ? labels.enabled : labels.disabled}</SettingsStatusBadge>
-            {runtimeNeeded && (
-              <SettingsStatusBadge variant={runtimeReady ? 'success' : 'warning'}>{runtimeReady ? labels.ready : labels.needsSetup}</SettingsStatusBadge>
-            )}
-            {capabilityLabels.map((label) => (
-              <SettingsStatusBadge key={label} variant="neutral">{label}</SettingsStatusBadge>
-            ))}
-          </div>
-        </PluginDetailSection>
-
-        <PluginDetailSection title={labels.contributions}>
-          <div className="flex flex-col gap-3">
-            <PluginContributionList label={labels.mcp} items={mcpServers} />
-            <PluginContributionList label={labels.skill} items={skills} />
-            <PluginContributionList label={labels.hook} items={hooks} />
-            {typeof plugin.manifest.context === 'string' && plugin.manifest.context.trim() && (
-              <PluginContributionList label={labels.context} items={[plugin.manifest.context]} />
-            )}
-          </div>
+          <PluginDetailCard>
+            <PluginDetailRow label={labels.pluginId}>
+              <PluginValue value={plugin.id} mono />
+            </PluginDetailRow>
+            <PluginDetailRow label={labels.version}>
+              <PluginValue value={plugin.version} />
+            </PluginDetailRow>
+            <PluginDetailRow label={labels.source}>
+              <PluginValue value={plugin.source_kind} />
+            </PluginDetailRow>
+            <PluginDetailRow label={labels.status}>
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <PluginPill>{enabled ? labels.enabled : labels.disabled}</PluginPill>
+                {runtimeNeeded && <PluginPill>{runtimeReady ? labels.ready : labels.needsSetup}</PluginPill>}
+              </div>
+            </PluginDetailRow>
+            <PluginDetailRow label={labels.runtimeStatus}>
+              <PluginValue value={runtimeNeeded ? runtimeStatus : labels.notRequired} />
+            </PluginDetailRow>
+          </PluginDetailCard>
         </PluginDetailSection>
       </div>
     </SettingsModalFrame>
@@ -385,52 +318,54 @@ function PluginDetailModal({
 
 function PluginDetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl border-[0.5px] border-[var(--c-border-subtle)] bg-[var(--c-bg-page)] p-4">
-      <div className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-[var(--c-text-muted)]">{title}</div>
+    <section className="flex flex-col gap-2.5">
+      <h4 className="pl-2.5 text-[13px] font-normal text-[var(--c-text-secondary)]">{title}</h4>
       {children}
     </section>
   )
 }
 
-function PluginMetaField({
-  label,
-  value,
-  mono,
-  className,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-  className?: string
-}) {
+function PluginDetailCard({ children }: { children: ReactNode }) {
   return (
-    <div className={className}>
-      <div className="mb-1 block text-[12px] font-medium text-[var(--c-text-secondary)]">{label}</div>
-      <div
-        className={[
-          'min-h-[35px] truncate rounded-lg border-[0.5px] border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] px-3 py-2 text-[13px] leading-[18px] text-[var(--c-text-primary)]',
-          mono ? 'font-mono text-[12px]' : '',
-        ].filter(Boolean).join(' ')}
-        title={value}
-      >
-        {value}
-      </div>
+    <div className="overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)]">
+      {children}
     </div>
   )
 }
 
-function PluginContributionList({ label, items }: { label: string; items: string[] }) {
-  if (items.length === 0) return null
+function PluginDetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-[96px_1fr]">
-      <div className="text-[12px] font-medium leading-6 text-[var(--c-text-secondary)]">{label}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {items.map((item) => (
-          <span key={item} className="rounded-md bg-[var(--c-bg-menu)] px-2 py-1 text-[12px] font-medium leading-4 text-[var(--c-text-secondary)]">
-            {item}
-          </span>
-        ))}
-      </div>
+    <div className="relative grid items-center gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(260px,390px)] sm:gap-6 [&+&]:before:absolute [&+&]:before:left-5 [&+&]:before:right-5 [&+&]:before:top-0 [&+&]:before:h-px [&+&]:before:bg-[var(--c-border-subtle)] [&+&]:before:content-['']">
+      <div className="min-w-0 text-[13px] font-medium text-[var(--c-text-primary)]">{label}</div>
+      <div className="min-w-0 sm:w-full sm:justify-self-end">{children}</div>
     </div>
+  )
+}
+
+function PluginValue({
+  value,
+  mono,
+}: {
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div
+      className={[
+        'truncate text-right text-[13px] font-medium leading-5 text-[var(--c-text-secondary)]',
+        mono ? 'font-mono text-[12px]' : '',
+      ].filter(Boolean).join(' ')}
+      title={value}
+    >
+      {value}
+    </div>
+  )
+}
+
+function PluginPill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-md px-2 py-1 text-xs font-medium text-[var(--c-text-muted)]" style={{ background: 'var(--c-bg-sub)' }}>
+      {children}
+    </span>
   )
 }
