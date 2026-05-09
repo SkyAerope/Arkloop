@@ -12,7 +12,25 @@ export type CopSubSegment = {
   status: 'open' | 'closed'
   items: CopBlockItem[]
   seq: number
-  title: string
+  title: string  // flat string for serialization/compatibility
+  titleSpans?: TitleSpan[]  // structured spans for color rendering (optional)
+}
+
+export type TitleSpan =
+  | { text: string }
+  | { text: string; diffKind: 'added' | 'removed' }
+
+export function titleSpansToText(spans: TitleSpan[]): string {
+  return spans.map(s => s.text).join('')
+}
+
+export function joinTitleSpans(spans: TitleSpan[], separator: string): TitleSpan[] {
+  const result: TitleSpan[] = []
+  for (let i = 0; i < spans.length; i++) {
+    if (i > 0) result.push({ text: separator })
+    result.push(spans[i]!)
+  }
+  return result
 }
 
 export const EXEC_TOOL_NAMES = new Set(['exec_command', 'python_execute', 'continue_process', 'terminate_process'])
@@ -112,14 +130,14 @@ function formatLoadToolsTitle(loadToolsCount: number, loadSkillCount: number, te
   return parts.length > 0 ? `${verb} ${parts.join(', ')}` : `${verb} 0 tools`
 }
 
-export function segmentCompletedTitle(seg: CopSubSegment): string {
+export function segmentCompletedTitle(seg: CopSubSegment): TitleSpan[] {
   const calls = seg.items
     .filter((i): i is Extract<CopBlockItem, { kind: 'call' }> => i.kind === 'call')
     .map((i) => i.call)
-  if (calls.length === 0) return 'Completed'
+  if (calls.length === 0) return [{ text: 'Completed' }]
 
   const imageTitle = imageGenerateCallsTitle(calls)
-  if (imageTitle) return imageTitle
+  if (imageTitle) return [{ text: imageTitle }]
 
   switch (seg.category) {
     case 'explore': {
@@ -139,49 +157,43 @@ export function segmentCompletedTitle(seg: CopSubSegment): string {
         .reduce((count, call) => count + countLoadToolsCall(call), 0)
       const loadSkillCount = calls.filter((c) => normalizeToolName(c.toolName) === 'load_skill').length
       if (calls.every((c) => isLoadTool(c.toolName))) {
-        return formatLoadToolsTitle(loadToolsCount, loadSkillCount, 'done')
+        return [{ text: formatLoadToolsTitle(loadToolsCount, loadSkillCount, 'done') }]
       }
       const parts: string[] = []
       if (readPaths.size > 0) parts.push(`Read ${readPaths.size} file${readPaths.size === 1 ? '' : 's'}`)
       if (searchCount > 0) parts.push(`${searchCount} search${searchCount === 1 ? '' : 'es'}`)
       if (globCount > 0) parts.push(`Listed ${globCount} file${globCount === 1 ? '' : 's'}`)
-      return parts.length > 0 ? parts.join(', ') : 'Explored code'
+      return parts.length > 0 ? [{ text: parts.join(', ') }] : [{ text: 'Explored code' }]
     }
     case 'exec': {
       const n = calls.length
-      return `${n} step${n === 1 ? '' : 's'} completed`
+      return [{ text: `${n} step${n === 1 ? '' : 's'} completed` }]
     }
     case 'edit': {
       const stats = aggregateCallStats(calls)
-      const parts: string[] = []
-      for (const p of stats.writePaths) {
-        parts.push(`Wrote ${p}${formatDiffSuffix(p, stats.writePathDiff)}`)
-      }
-      for (const p of stats.editPaths) {
-        parts.push(`Edited ${p}${formatDiffSuffix(p, stats.editPathDiff)}`)
-      }
-      return parts.length > 0 ? parts.join(', ') : 'Edit completed'
+      const spans = formatStatsSpans(stats)
+      return spans.length > 0 ? spans : [{ text: 'Edit completed' }]
     }
     case 'agent': {
       const n = calls.length
-      return n === 1 ? 'Agent completed' : `${n} agent tasks completed`
+      return [{ text: n === 1 ? 'Agent completed' : `${n} agent tasks completed` }]
     }
-    case 'fetch': return 'Fetch completed'
-    case 'search': return webSearchCompletedTitle(calls)
-    case 'image': return imageGenerateCallsTitle(calls) ?? imageGenerateTitle('success')
+    case 'fetch': return [{ text: 'Fetch completed' }]
+    case 'search': return [{ text: webSearchCompletedTitle(calls) }]
+    case 'image': return [{ text: imageGenerateCallsTitle(calls) ?? imageGenerateTitle('success') }]
     case 'generic': {
       if (calls.length === 1) {
         const call = calls[0]!
-        if (call.toolName === 'exit_plan_mode') return presentationForTool(call.toolName, call.arguments).description
+        if (call.toolName === 'exit_plan_mode') return [{ text: presentationForTool(call.toolName, call.arguments).description }]
         const t = call.toolName
         // Map known generic tool names to readable labels
         const label: Record<string, string> = {
           todo_write: 'Updated todos',
           todo_read: 'Read todos',
         }
-        return label[t] ?? t
+        return [{ text: label[t] ?? t }]
       }
-      return `${calls.length} steps completed`
+      return [{ text: `${calls.length} steps completed` }]
     }
   }
 }
@@ -449,35 +461,57 @@ export function runningToolLabel(
   }
 }
 
-function formatDiffSuffix(path: string, diffMap: Map<string, { added: number; removed: number }>): string {
+function formatDiffSpans(path: string, diffMap: Map<string, { added: number; removed: number }>): TitleSpan[] {
   const d = diffMap.get(path)
-  if (!d) return ''
-  const parts: string[] = []
-  if (d.added > 0) parts.push(`+${d.added}`)
-  if (d.removed > 0) parts.push(`-${d.removed}`)
-  return parts.length > 0 ? ` ${parts.join(' ')}` : ''
+  if (!d) return []
+  const nums: TitleSpan[] = []
+  if (d.added > 0) nums.push({ text: `+${d.added}`, diffKind: 'added' })
+  if (d.removed > 0) nums.push({ text: `-${d.removed}`, diffKind: 'removed' })
+  if (nums.length === 0) return []
+  const spans: TitleSpan[] = [{ text: ' ' }]
+  for (let i = 0; i < nums.length; i++) {
+    if (i > 0) spans.push({ text: ' ' })
+    spans.push(nums[i]!)
+  }
+  return spans
+}
+
+export function formatStatsSpans(stats: AggregatedCallStats): TitleSpan[] {
+  const onlyLoadTools = Array.from(stats.byToolName.keys()).every((toolName) => LOAD_TOOL_NAMES.has(toolName))
+  const groups: TitleSpan[][] = []
+
+  if (stats.writePaths.length === 1) {
+    const spans: TitleSpan[] = [{ text: `Wrote ${stats.writePaths[0]}` }]
+    spans.push(...formatDiffSpans(stats.writePaths[0]!, stats.writePathDiff))
+    groups.push(spans)
+  } else if (stats.writePaths.length > 1) {
+    groups.push([{ text: `Wrote ${stats.writePaths.length} files` }])
+  }
+  if (stats.editPaths.length === 1) {
+    const spans: TitleSpan[] = [{ text: `Edited ${stats.editPaths[0]}` }]
+    spans.push(...formatDiffSpans(stats.editPaths[0]!, stats.editPathDiff))
+    groups.push(spans)
+  } else if (stats.editPaths.length > 1) {
+    groups.push([{ text: `Edited ${stats.editPaths.length} files` }])
+  }
+  if (stats.readPaths.size > 0) groups.push([{ text: `Read ${formatCount(stats.readPaths.size, 'file', 'files')}` }])
+  if (stats.searchCount > 0) groups.push([{ text: formatCount(stats.searchCount, 'search', 'searches') }])
+  if (stats.globCount > 0) groups.push([{ text: `Listed ${formatCount(stats.globCount, 'file', 'files')}` }])
+  if (groups.length === 0 && onlyLoadTools) {
+    groups.push([{ text: formatLoadToolsTitle(stats.loadToolsCount, stats.loadSkillCount, 'done') }])
+  }
+  if (stats.execCount > 0) groups.push([{ text: `Ran ${formatCount(stats.execCount, 'command', 'commands')}` }])
+  if (stats.agentCount > 0) groups.push([{ text: formatCount(stats.agentCount, 'agent task', 'agent tasks') }])
+  if (stats.fetchCount > 0) groups.push([{ text: formatCount(stats.fetchCount, 'fetch', 'fetches') }])
+  if (stats.imageCount > 0) groups.push([{ text: imageGenerateDoneTitle(stats.imageCount, stats.imageFailedCount) }])
+  const webSearchTitle = webSearchStatsTitle(stats)
+  if (webSearchTitle) groups.push([{ text: webSearchTitle }])
+
+  return joinTitleSpans(groups.filter(g => g.length > 0).flatMap(g => g), ', ')
 }
 
 function formatStatsParts(stats: AggregatedCallStats): string {
-  const onlyLoadTools = Array.from(stats.byToolName.keys()).every((toolName) => LOAD_TOOL_NAMES.has(toolName))
-  const parts: string[] = []
-  if (stats.writePaths.length === 1) parts.push(`Wrote ${stats.writePaths[0]}${formatDiffSuffix(stats.writePaths[0]!, stats.writePathDiff)}`)
-  else if (stats.writePaths.length > 1) parts.push(`Wrote ${stats.writePaths.length} files`)
-  if (stats.editPaths.length === 1) parts.push(`Edited ${stats.editPaths[0]}${formatDiffSuffix(stats.editPaths[0]!, stats.editPathDiff)}`)
-  else if (stats.editPaths.length > 1) parts.push(`Edited ${stats.editPaths.length} files`)
-  if (stats.readPaths.size > 0) parts.push(`Read ${formatCount(stats.readPaths.size, 'file', 'files')}`)
-  if (stats.searchCount > 0) parts.push(formatCount(stats.searchCount, 'search', 'searches'))
-  if (stats.globCount > 0) parts.push(`Listed ${formatCount(stats.globCount, 'file', 'files')}`)
-  if (parts.length === 0 && onlyLoadTools) {
-    parts.push(formatLoadToolsTitle(stats.loadToolsCount, stats.loadSkillCount, 'done'))
-  }
-  if (stats.execCount > 0) parts.push(`Ran ${formatCount(stats.execCount, 'command', 'commands')}`)
-  if (stats.agentCount > 0) parts.push(formatCount(stats.agentCount, 'agent task', 'agent tasks'))
-  if (stats.fetchCount > 0) parts.push(formatCount(stats.fetchCount, 'fetch', 'fetches'))
-  if (stats.imageCount > 0) parts.push(imageGenerateDoneTitle(stats.imageCount, stats.imageFailedCount))
-  const webSearchTitle = webSearchStatsTitle(stats)
-  if (webSearchTitle) parts.push(webSearchTitle)
-  return parts.join(', ')
+  return titleSpansToText(formatStatsSpans(stats))
 }
 
 function formatSingleCategoryTitle(cat: CopSegmentCategory, stats: AggregatedCallStats, total: number): string {
@@ -493,10 +527,10 @@ function formatSingleCategoryTitle(cat: CopSegmentCategory, stats: AggregatedCal
         return formatStatsParts(stats)
       }
       if (stats.writePaths.length > 0 && stats.editPaths.length === 0) {
-        if (stats.writePaths.length === 1) return `Wrote ${stats.writePaths[0]}${formatDiffSuffix(stats.writePaths[0]!, stats.writePathDiff)}`
+        if (stats.writePaths.length === 1) return `Wrote ${stats.writePaths[0]}${titleSpansToText(formatDiffSpans(stats.writePaths[0]!, stats.writePathDiff))}`
         return `Wrote ${stats.writePaths.length} files`
       }
-      if (stats.editPaths.length === 1) return `Edited ${stats.editPaths[0]}${formatDiffSuffix(stats.editPaths[0]!, stats.editPathDiff)}`
+      if (stats.editPaths.length === 1) return `Edited ${stats.editPaths[0]}${titleSpansToText(formatDiffSpans(stats.editPaths[0]!, stats.editPathDiff))}`
       if (stats.editPaths.length > 1) return `Edited ${stats.editPaths.length} files`
       return 'Edit completed'
     }
@@ -523,7 +557,7 @@ function collectCalls(segs: ReadonlyArray<CopSubSegment>): CallItem['call'][] {
   return out
 }
 
-function buildLiveMainTitle(segments: ReadonlyArray<CopSubSegment>): string {
+function buildLiveMainTitle(segments: ReadonlyArray<CopSubSegment>): TitleSpan[] {
   // 找最后一个 open（或最后一段）的最后一个 call
   let openSeg: CopSubSegment | null = null
   for (let i = segments.length - 1; i >= 0; i--) {
@@ -549,29 +583,30 @@ function buildLiveMainTitle(segments: ReadonlyArray<CopSubSegment>): string {
   })()
   const closedSegs = segments.filter((s) => s !== openSeg && s.status === 'closed')
   const closedCalls = collectCalls(closedSegs)
-  if (closedCalls.length === 0) return `${current}...`
+  if (closedCalls.length === 0) return [{ text: `${current}...` }]
   const stats = aggregateCallStats(closedCalls)
-  const history = formatStatsParts(stats)
-  return history ? `${history} · ${current}...` : `${current}...`
+  const history = formatStatsSpans(stats)
+  if (history.length === 0) return [{ text: `${current}...` }]
+  return [...history, { text: ` · ${current}...` }]
 }
 
-function buildCompleteMainTitle(segments: ReadonlyArray<CopSubSegment>): string {
+function buildCompleteMainTitle(segments: ReadonlyArray<CopSubSegment>): TitleSpan[] {
   const allCalls = collectCalls(segments)
   if (allCalls.length === 1 && allCalls[0]!.toolName === 'exit_plan_mode') {
-    return presentationForTool(allCalls[0]!.toolName, allCalls[0]!.arguments).description
+    return [{ text: presentationForTool(allCalls[0]!.toolName, allCalls[0]!.arguments).description }]
   }
   if (allCalls.length === 0) {
     // 退化路径：没有真实 call（例如 segments 仅作为 title 占位），沿用旧 segment.title 行为
-    if (segments.length > 1) return `${segments.length} steps completed`
-    return segments[0]!.title || 'Completed'
+    if (segments.length > 1) return [{ text: `${segments.length} steps completed` }]
+    return [{ text: segments[0]!.title || 'Completed' }]
   }
   const stats = aggregateCallStats(allCalls)
   const imageTitle = imageGenerateCallsTitle(allCalls)
-  if (imageTitle) return imageTitle
+  if (imageTitle) return [{ text: imageTitle }]
   const cats = Array.from(new Set(segments.map((s) => s.category)))
-  if (cats.length === 1) return formatSingleCategoryTitle(cats[0]!, stats, allCalls.length)
-  const parts = formatStatsParts(stats)
-  return parts || `${formatCount(allCalls.length, 'step', 'steps')} completed`
+  if (cats.length === 1) return [{ text: formatSingleCategoryTitle(cats[0]!, stats, allCalls.length) }]
+  const parts = formatStatsSpans(stats)
+  return parts.length > 0 ? parts : [{ text: `${formatCount(allCalls.length, 'step', 'steps')} completed` }]
 }
 
 /**
@@ -584,8 +619,8 @@ export function aggregateMainTitle(
   segments: ReadonlyArray<CopSubSegment>,
   isLive: boolean,
   isComplete: boolean,
-): string {
-  if (segments.length === 0) return ''
+): TitleSpan[] {
+  if (segments.length === 0) return []
   if (isLive && !isComplete) return buildLiveMainTitle(segments)
   return buildCompleteMainTitle(segments)
 }
@@ -615,7 +650,9 @@ export function buildSubSegments(items: CopBlockItem[]): CopSubSegment[] {
       seq: allItems[0]?.seq ?? 0,
       title: segmentLiveTitle(currentCat),
     }
-    seg.title = segmentCompletedTitle(seg)
+    const spans = segmentCompletedTitle(seg)
+    seg.title = titleSpansToText(spans)
+    seg.titleSpans = spans
     segments.push(seg)
     currentItems = []
     currentCat = null

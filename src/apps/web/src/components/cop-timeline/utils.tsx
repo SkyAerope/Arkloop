@@ -1,6 +1,8 @@
+import React from 'react'
 import { motion } from 'framer-motion'
 import { Search } from 'lucide-react'
 import { useTypewriter } from '../../hooks/useTypewriter'
+import type { TitleSpan } from '../../copSubSegment'
 
 /** CopTimeline 左轴点线几何；ChatPage 顶层条与之对齐 */
 export const COP_TIMELINE_DOT_NUDGE_Y = 1
@@ -17,6 +19,20 @@ export const COP_TIMELINE_THINKING_PLAIN_LINE_HEIGHT_PX = 18
 export function TypewriterText({ text, className, live }: { text: string; className?: string; live?: boolean }) {
   const displayed = useTypewriter(text, !live)
   return <span className={className}>{live ? displayed : text}</span>
+}
+
+export function RenderTitleSpans({ spans }: { spans: TitleSpan[] }) {
+  return (
+    <>
+      {spans.map((s, i) =>
+        'diffKind' in s ? (
+          <span key={i} className={s.diffKind === 'added' ? 'cop-diff-added' : 'cop-diff-removed'}>{s.text}</span>
+        ) : (
+          <React.Fragment key={i}>{s.text}</React.Fragment>
+        ),
+      )}
+    </>
+  )
 }
 
 export function QueryPill({ text, live }: { text: string; live?: boolean }) {

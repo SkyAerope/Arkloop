@@ -6,13 +6,13 @@ import type { CodeExecution } from '../CodeExecutionCard'
 import type { SubAgentRef } from '../../storage'
 
 import { CopThoughtSummaryRow, TimelineNarrativeBody } from './ThinkingBlock'
-import { FileOpToolRow, FileOpToolCard, summarizeDiff } from './ToolRows'
+import { FileOpToolRow, FileOpToolCard } from './ToolRows'
 import { normalizeToolName } from '../../toolPresentation'
 import { WebFetchItem } from './WebFetchItem'
 import { SubAgentBlock } from '../SubAgentBlock'
 import { CodeExecutionCard } from '../CodeExecutionCard'
 import { ExecutionCard } from '../ExecutionCard'
-import { TypewriterText } from './utils'
+import { TypewriterText, RenderTitleSpans } from './utils'
 import { timelineStepDisplayLabel } from './types'
 import { SourceListCard } from './SourceList'
 import { QueryPill } from './utils'
@@ -102,26 +102,7 @@ export function CopTimelineSegment({
 
   const headerLabel = localizeTimelineLabel(segment.title, locale)
   const headerLive = isOpen && isLive
-
-  // Compute diff suffix for edit segments (colored +/-)
-  const diffSuffix: React.ReactNode = (() => {
-    if (segment.category !== 'edit') return null
-    const editCall = segment.items.find((i) => i.kind === 'call')
-    if (!editCall || editCall.kind !== 'call') return null
-    const result = editCall.call.result
-    if (!result || typeof result !== 'object') return null
-    const r = result as Record<string, unknown>
-    const diff = typeof r.diff === 'string' ? r.diff : typeof r.patch === 'string' ? r.patch : typeof r.unified_diff === 'string' ? r.unified_diff : ''
-    if (typeof diff !== 'string' || !diff) return null
-    const counts = summarizeDiff(diff)
-    if (!counts) return null
-    return (
-      <span style={{ display: 'inline-flex', gap: 2, flexShrink: 0, fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace', fontSize: 11 }}>
-        {counts.added > 0 && <span className="cop-diff-added">+{counts.added}</span>}
-        {counts.removed > 0 && <span className="cop-diff-removed">-{counts.removed}</span>}
-      </span>
-    )
-  })()
+  const hasTitleSpans = segment.titleSpans && segment.titleSpans.length > 0
 
   if (hideHeader) {
     return (
@@ -174,8 +155,11 @@ export function CopTimelineSegment({
         }}
       >
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <TypewriterText text={headerLabel} live={headerLive} className={headerLive ? 'thinking-shimmer-dim' : undefined} />
-          {diffSuffix}
+          {hasTitleSpans ? (
+            <RenderTitleSpans spans={segment.titleSpans!.map(s => 'diffKind' in s ? s : { text: localizeTimelineLabel(s.text, locale) })} />
+          ) : (
+            <TypewriterText text={headerLabel} live={headerLive} className={headerLive ? 'thinking-shimmer-dim' : undefined} />
+          )}
         </span>
         {expanded
           ? <ChevronDown size={13} style={{ flexShrink: 0, color: 'currentColor' }} />

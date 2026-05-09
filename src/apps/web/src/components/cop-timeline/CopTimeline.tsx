@@ -5,13 +5,14 @@ import type { CodeExecution } from '../CodeExecutionCard'
 import type { SubAgentRef } from '../../storage'
 import { useLocale } from '../../contexts/LocaleContext'
 import type { CopSubSegment, ResolvedPool } from '../../copSubSegment'
-import { aggregateMainTitle, TOP_LEVEL_TOOL_NAMES } from '../../copSubSegment'
+import { aggregateMainTitle, titleSpansToText, TOP_LEVEL_TOOL_NAMES } from '../../copSubSegment'
 import { recordPerfCount, recordPerfValue } from '../../perfDebug'
 import {
   COP_TIMELINE_THINKING_PLAIN_LINE_HEIGHT_PX,
   COP_TIMELINE_DOT_TOP,
   COP_TIMELINE_DOT_SIZE,
   extractThinkingTitles,
+  RenderTitleSpans,
 } from './utils'
 import {
   useThinkingElapsedSeconds,
@@ -153,14 +154,14 @@ export function CopTimeline({
             ? 'complete'
             : 'idle'
 
+  const timelineCompleteForTitle = isComplete || (!!live && !timelineLive)
+  const aggregatedSpans = hasSegments ? aggregateMainTitle(timelineSegments, timelineLive, timelineCompleteForTitle) : []
   const headerLabel = headerOverride ?? (() => {
     if (anyThinkingLive || (anyThinking && live)) return thinkingLiveHeaderLabel
     if (anyThinking && isComplete && !hasSegments) return thoughtDurationLabel
     if (pendingShowThinkingHeader) return pendingThinkingHeaderLabel ?? ''
     if (hasSegments) {
-      const timelineComplete = isComplete || (!!live && !timelineLive)
-      const aggregated = aggregateMainTitle(timelineSegments, timelineLive, timelineComplete)
-      if (aggregated) return aggregated
+      if (aggregatedSpans.length > 0) return titleSpansToText(aggregatedSpans)
     }
     if (anyThinking) return thoughtDurationLabel
     if (isComplete) return 'Completed'
@@ -225,13 +226,21 @@ export function CopTimeline({
               alignSelf: 'stretch',
             }}
           >
-            <CopTimelineHeaderLabel
-              text={localizedHeaderLabel}
-              phaseKey={headerPhaseKey}
-              shimmer={!!shimmer}
-              incremental={headerUsesIncrementalTypewriter}
-              animationSeedText={headerAnimationSeedText}
-            />
+            {isComplete && aggregatedSpans.length > 0 && !anyThinking && !headerOverride ? (
+              <span data-phase="complete">
+                <RenderTitleSpans
+                  spans={aggregatedSpans.map(s => 'diffKind' in s ? s : { text: localizeTimelineLabel(s.text, locale) })}
+                />
+              </span>
+            ) : (
+              <CopTimelineHeaderLabel
+                text={localizedHeaderLabel}
+                phaseKey={headerPhaseKey}
+                shimmer={!!shimmer}
+                incremental={headerUsesIncrementalTypewriter}
+                animationSeedText={headerAnimationSeedText}
+              />
+            )}
             {(isComplete || live) && bodyHasContent && (
               <motion.div
                 animate={{ rotate: collapsed ? 0 : 90 }}
