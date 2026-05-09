@@ -453,7 +453,7 @@ func ComposeDesktopEngine(ctx context.Context, db data.DesktopDB, bus eventbus.E
 	// 尝试从 personas 目录加载
 	personaGetter := loadPersonaRegistryFromFS()
 
-	mcpPool := mcp.NewPool()
+	mcpPool := mcp.NewPool(mcp.WithAuthStore(mcp.NewDBAuthStore(db)))
 	mcpCacheTTL, err := loadDesktopMCPCacheTTL()
 	if err != nil {
 		return nil, err
