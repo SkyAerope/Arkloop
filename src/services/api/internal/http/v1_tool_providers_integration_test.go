@@ -158,6 +158,9 @@ func TestToolProvidersListActivateCredentialAndClear(t *testing.T) {
 	if initialExa.RequiresAPIKey {
 		t.Fatal("expected exa hosted MCP to require no api key")
 	}
+	if !initialExa.IsActive || !initialExa.Configured {
+		t.Fatalf("expected exa active and configured by default, active=%v configured=%v", initialExa.IsActive, initialExa.Configured)
+	}
 
 	actExa := doJSON(handler, nethttp.MethodPut, "/v1/tool-providers/web_search/web_search.exa/activate", nil, authHeader(token))
 	if actExa.Code != nethttp.StatusNoContent {
