@@ -147,10 +147,10 @@ func fetchJSONMetadata(ctx context.Context, httpClient HTTPDoer, endpoint string
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if !respOK(resp.StatusCode) {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		if (resp.StatusCode >= 400 && resp.StatusCode < 500) || resp.StatusCode == http.StatusBadGateway {
 			return false, nil
 		}

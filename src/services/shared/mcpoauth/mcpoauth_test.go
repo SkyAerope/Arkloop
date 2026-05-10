@@ -23,13 +23,13 @@ func TestDiscoverServerInfoUsesProtectedResourceAndPathAwareASMetadata(t *testin
 		case "/explicit-prm":
 			http.NotFound(w, r)
 		case "/.well-known/oauth-protected-resource/mcp":
-			json.NewEncoder(w).Encode(ProtectedResourceMetadata{
+			_ = json.NewEncoder(w).Encode(ProtectedResourceMetadata{
 				Resource:             baseURL,
 				AuthorizationServers: []string{baseURL + "/tenant1"},
 				ScopesSupported:      []string{"read"},
 			})
 		case "/.well-known/oauth-authorization-server/tenant1":
-			json.NewEncoder(w).Encode(AuthorizationServerMetadata{
+			_ = json.NewEncoder(w).Encode(AuthorizationServerMetadata{
 				Issuer:                        baseURL + "/tenant1",
 				AuthorizationEndpoint:         baseURL + "/authorize",
 				TokenEndpoint:                 baseURL + "/token",
@@ -112,7 +112,7 @@ func TestExchangeAndRefreshUseClientAuthAndResource(t *testing.T) {
 		}
 		seenResource = r.PostForm.Get("resource")
 		seenGrant = r.PostForm.Get("grant_type")
-		json.NewEncoder(w).Encode(Tokens{AccessToken: "access", ExpiresIn: 3600})
+		_ = json.NewEncoder(w).Encode(Tokens{AccessToken: "access", ExpiresIn: 3600})
 	}))
 	defer server.Close()
 

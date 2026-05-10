@@ -150,7 +150,7 @@ func (i *Installer) Install(ctx context.Context, req InstallRequest) (data.Plugi
 		return data.PluginPackage{}, err
 	}
 	defer cleanup()
-	manifest, normalizedPayload, err := decodeManifest(payload)
+	manifest, _, err := decodeManifest(payload)
 	if err != nil {
 		return data.PluginPackage{}, err
 	}
@@ -163,7 +163,7 @@ func (i *Installer) Install(ctx context.Context, req InstallRequest) (data.Plugi
 	if err := persistPluginAssets(ctx, i.pluginStore, manifest, pluginRoot); err != nil {
 		return data.PluginPackage{}, err
 	}
-	normalizedPayload, err = sharedpluginmanifest.ToManifestJSON(manifest)
+	normalizedPayload, err := sharedpluginmanifest.ToManifestJSON(manifest)
 	if err != nil {
 		return data.PluginPackage{}, err
 	}
@@ -195,7 +195,7 @@ func (i *Installer) Install(ctx context.Context, req InstallRequest) (data.Plugi
 		Version:            manifest.Version,
 		DisplayName:        manifest.Name,
 		Description:        optionalString(manifest.Description),
-		ManifestJSON:       normalizedPayload,
+		ManifestJSON:       json.RawMessage(normalizedPayload),
 		SettingsSchemaJSON: settingsSchemaPayload,
 		SourceKind:         firstNonEmpty(req.SourceKind, "manifest"),
 		SourceURI:          optionalString(firstNonEmpty(req.SourceURI, sourceURI)),
@@ -1191,7 +1191,7 @@ func fetchPluginManifestURL(ctx context.Context, source string) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("fetch plugin manifest: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("fetch plugin manifest http %d", resp.StatusCode)
 	}
@@ -1229,7 +1229,7 @@ func extractRegistryBundle(bundle []byte) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("open plugin bundle: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	reader := tar.NewReader(gz)
 	var manifestData []byte
 	for {
@@ -1249,7 +1249,7 @@ func extractRegistryBundle(bundle []byte) ([]byte, string, error) {
 			if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(name)), 0o755); err != nil {
 				return nil, "", err
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			data, err := io.ReadAll(reader)
 			if err != nil {
 				return nil, "", fmt.Errorf("read plugin bundle file %q: %w", name, err)
