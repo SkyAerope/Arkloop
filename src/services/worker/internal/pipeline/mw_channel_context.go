@@ -98,27 +98,18 @@ func NewChannelContextMiddleware(pool *pgxpool.Pool) RunMiddleware {
 	}
 }
 
-type threadRunOverrides struct {
-	DefaultModel  string
-	ReasoningMode string
-}
-
-func readThreadRunOverrides(ctx context.Context, pool *pgxpool.Pool, threadID uuid.UUID) threadRunOverrides {
+func readThreadRunOverrides(ctx context.Context, pool *pgxpool.Pool, threadID uuid.UUID) data.ThreadConfig {
 	var raw []byte
 	if err := pool.QueryRow(ctx, `SELECT COALESCE(config_json, '{}'::jsonb) FROM threads WHERE id = $1`, threadID).Scan(&raw); err != nil {
-		return threadRunOverrides{}
+		return data.ThreadConfig{}
 	}
-	var payload struct {
-		DefaultModel  string `json:"default_model"`
-		ReasoningMode string `json:"reasoning_mode"`
+	var cfg data.ThreadConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return data.ThreadConfig{}
 	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return threadRunOverrides{}
-	}
-	return threadRunOverrides{
-		DefaultModel:  strings.TrimSpace(payload.DefaultModel),
-		ReasoningMode: normalizeRunReasoningModeOverride(payload.ReasoningMode),
-	}
+	cfg.DefaultModel = strings.TrimSpace(cfg.DefaultModel)
+	cfg.ReasoningMode = normalizeRunReasoningModeOverride(cfg.ReasoningMode)
+	return cfg
 }
 
 func ParseChannelContextPayload(payload map[string]any) (*ChannelContext, error) {

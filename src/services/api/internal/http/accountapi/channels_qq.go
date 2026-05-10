@@ -98,10 +98,6 @@ func (m qqIncomingMessage) IsPrivate() bool {
 	return m.ChatType == "private"
 }
 
-func (m qqIncomingMessage) ShouldCreateRun() bool {
-	return m.IsPrivate() || m.MentionsBot || m.IsReplyToBot || m.MatchesKeyword
-}
-
 func (m qqIncomingMessage) HasContent() bool {
 	return m.Text != "" || len(m.ImageURLs) > 0
 }
@@ -283,10 +279,10 @@ func (c *qqConnector) HandleEvent(ctx context.Context, traceID string, ch data.C
 			PlatformParentMessageID: incoming.ReplyToMsgID,
 			SenderChannelIdentityID: &identity.ID,
 			MetadataJSON: inboundLedgerMetadata(map[string]any{
-				"source":            "qq",
-				"conversation_type": chatType,
-				"mentions_bot":      incoming.MentionsBot,
-				"is_reply_to_bot":   incoming.IsReplyToBot,
+				inboundLedgerKeySource:           "qq",
+				inboundLedgerKeyConversationType: chatType,
+				inboundLedgerKeyMentionsBot:      incoming.MentionsBot,
+				inboundLedgerKeyIsReplyToBot:     incoming.IsReplyToBot,
 			}, inboundStateReceived),
 		})
 		if err != nil {
@@ -481,7 +477,7 @@ func (c *qqConnector) HandleEvent(ctx context.Context, traceID string, ch data.C
 	}
 
 	// --- Passive persist（群消息无 @/回复 bot） ---
-	if !isPrivate && !incoming.ShouldCreateRun() {
+	if !isPrivate && !incoming.inboundMessage().ShouldCreateRun() {
 		slog.InfoContext(ctx, "qq_inbound_processed",
 			"stage", "passive_persisted",
 			"channel_id", ch.ID,
@@ -510,10 +506,10 @@ func (c *qqConnector) HandleEvent(ctx context.Context, traceID string, ch data.C
 		RunEventRepo: c.runEventRepo,
 		JobRepo:      c.jobRepo,
 		ReceivedLedgerMetadata: inboundLedgerMetadata(map[string]any{
-			"source":            "qq",
-			"conversation_type": chatType,
-			"mentions_bot":      incoming.MentionsBot,
-			"is_reply_to_bot":   incoming.IsReplyToBot,
+			inboundLedgerKeySource:           "qq",
+			inboundLedgerKeyConversationType: chatType,
+			inboundLedgerKeyMentionsBot:      incoming.MentionsBot,
+			inboundLedgerKeyIsReplyToBot:     incoming.IsReplyToBot,
 		}, inboundStateReceived),
 		ResolveAndPersist: func(ctx context.Context, tx pgx.Tx) (InboundPipelinePersistResult, error) {
 			threadProjectID := derefUUID(persona.ProjectID)
@@ -758,10 +754,10 @@ func (c *qqConnector) persistQQGroupPassiveMessage(
 			nil,
 			&msg.ID,
 			inboundLedgerMetadata(map[string]any{
-				"source":            "qq",
-				"conversation_type": incoming.ChatType,
-				"mentions_bot":      incoming.MentionsBot,
-				"is_reply_to_bot":   incoming.IsReplyToBot,
+				inboundLedgerKeySource:           "qq",
+				inboundLedgerKeyConversationType: incoming.ChatType,
+				inboundLedgerKeyMentionsBot:      incoming.MentionsBot,
+				inboundLedgerKeyIsReplyToBot:     incoming.IsReplyToBot,
 				"passive":           true,
 			}, inboundStatePassivePersisted),
 		); err != nil {
@@ -1074,6 +1070,9 @@ func buildQQEnvelopeText(identityID uuid.UUID, displayName, chatType, body strin
 	}
 	if incoming.MentionsBot {
 		lines = append(lines, `mentions-bot: true`)
+	}
+	if incoming.IsReplyToBot {
+		lines = append(lines, `is-reply-to-bot: true`)
 	}
 	if ts != "" {
 		lines = append(lines, fmt.Sprintf(`time: "%s"`, ts))

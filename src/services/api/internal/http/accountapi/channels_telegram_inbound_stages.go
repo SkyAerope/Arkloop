@@ -31,10 +31,10 @@ type telegramInboundStageAResult struct {
 
 func telegramInboundBaseMetadata(incoming telegramIncomingMessage) map[string]any {
 	return map[string]any{
-		"source":            "telegram",
-		"conversation_type": incoming.ChatType,
-		"mentions_bot":      incoming.MentionsBot,
-		"is_reply_to_bot":   incoming.IsReplyToBot,
+		inboundLedgerKeySource:           "telegram",
+		inboundLedgerKeyConversationType: incoming.ChatType,
+		inboundLedgerKeyMentionsBot:      incoming.MentionsBot,
+		inboundLedgerKeyIsReplyToBot:     incoming.IsReplyToBot,
 	}
 }
 
@@ -802,13 +802,13 @@ func buildTelegramIncomingFromLedger(entry data.ChannelInboundLedgerEntry) teleg
 		ReplyToMsgID:    entry.PlatformParentMessageID,
 		MessageThreadID: entry.PlatformThreadID,
 	}
-	if chatType, ok := inboundLedgerString(entry.MetadataJSON, "conversation_type"); ok {
+	if chatType, ok := inboundLedgerString(entry.MetadataJSON, inboundLedgerKeyConversationType); ok {
 		incoming.ChatType = strings.TrimSpace(chatType)
 	}
-	if mentionsBot, ok := inboundLedgerBool(entry.MetadataJSON, "mentions_bot"); ok {
+	if mentionsBot, ok := inboundLedgerBool(entry.MetadataJSON, inboundLedgerKeyMentionsBot); ok {
 		incoming.MentionsBot = mentionsBot
 	}
-	if replyToBot, ok := inboundLedgerBool(entry.MetadataJSON, "is_reply_to_bot"); ok {
+	if replyToBot, ok := inboundLedgerBool(entry.MetadataJSON, inboundLedgerKeyIsReplyToBot); ok {
 		incoming.IsReplyToBot = replyToBot
 	}
 	return incoming

@@ -177,8 +177,8 @@ func (c *weixinConnector) HandleWeChatMessage(ctx context.Context, traceID strin
 		RunEventRepo: c.runEventRepo,
 		JobRepo:      c.jobRepo,
 		ReceivedLedgerMetadata: inboundLedgerMetadata(map[string]any{
-			"source":            "weixin",
-			"conversation_type": chatType,
+			inboundLedgerKeySource:           "weixin",
+			inboundLedgerKeyConversationType: chatType,
 		}, inboundStateReceived),
 		ResolveAndPersist: func(ctx context.Context, tx pgx.Tx) (InboundPipelinePersistResult, error) {
 			threadProjectID := derefUUID(persona.ProjectID)

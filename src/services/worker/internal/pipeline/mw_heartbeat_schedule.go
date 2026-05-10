@@ -243,21 +243,17 @@ func getThreadHeartbeatConfig(ctx context.Context, db data.DB, threadID uuid.UUI
 	if err := db.QueryRow(ctx, `SELECT COALESCE(config_json, '{}') FROM threads WHERE id = $1`, threadID).Scan(&raw); err != nil {
 		return nil, err
 	}
-	var payload struct {
-		HeartbeatEnabled         *bool  `json:"heartbeat_enabled"`
-		HeartbeatIntervalMinutes int    `json:"heartbeat_interval_minutes"`
-		HeartbeatModel           string `json:"heartbeat_model"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
+	var cfg data.ThreadConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, err
 	}
-	if payload.HeartbeatEnabled == nil {
+	if cfg.HeartbeatEnabled == nil {
 		return nil, nil
 	}
 	return &data.HeartbeatIdentityConfig{
-		Enabled:         *payload.HeartbeatEnabled,
-		IntervalMinutes: payload.HeartbeatIntervalMinutes,
-		Model:           strings.TrimSpace(payload.HeartbeatModel),
+		Enabled:         *cfg.HeartbeatEnabled,
+		IntervalMinutes: cfg.HeartbeatIntervalMinute,
+		Model:           strings.TrimSpace(cfg.HeartbeatModel),
 	}, nil
 }
 

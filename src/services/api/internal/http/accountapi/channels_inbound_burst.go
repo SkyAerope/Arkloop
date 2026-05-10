@@ -2,6 +2,7 @@ package accountapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -422,6 +423,19 @@ func (r channelInboundBurstRunner) recoverBatch(
 	if err != nil {
 		return err
 	}
+
+	var chCfg struct {
+		DefaultModel string `json:"default_model,omitempty"`
+	}
+	if len(ch.ConfigJSON) > 0 {
+		_ = json.Unmarshal(ch.ConfigJSON, &chCfg)
+	}
+	if strings.TrimSpace(chCfg.DefaultModel) != "" {
+		if err := ensureInboundThreadDefaultModel(ctx, tx, openBatch.ThreadID, strings.TrimSpace(chCfg.DefaultModel)); err != nil {
+			return err
+		}
+	}
+
 	dispatchResult, err := DispatchInbound(ctx, tx, InboundDispatchRequest{
 		TraceID:             observability.NewTraceID(),
 		Channel:             ch,
@@ -588,15 +602,15 @@ func buildChannelBurstInboundMessage(ch data.Channel, entry data.ChannelInboundL
 		replyTo := strings.TrimSpace(*entry.PlatformParentMessageID)
 		incoming.ReplyToMsgID = &replyTo
 	}
-	if conversationType, ok := inboundLedgerString(entry.MetadataJSON, "conversation_type"); ok {
+	if conversationType, ok := inboundLedgerString(entry.MetadataJSON, inboundLedgerKeyConversationType); ok {
 		incoming.ConversationType = conversationType
 	} else {
 		incoming.ConversationType = "private"
 	}
-	if mentionsBot, ok := inboundLedgerBool(entry.MetadataJSON, "mentions_bot"); ok {
+	if mentionsBot, ok := inboundLedgerBool(entry.MetadataJSON, inboundLedgerKeyMentionsBot); ok {
 		incoming.MentionsBot = mentionsBot
 	}
-	if replyToBot, ok := inboundLedgerBool(entry.MetadataJSON, "is_reply_to_bot"); ok {
+	if replyToBot, ok := inboundLedgerBool(entry.MetadataJSON, inboundLedgerKeyIsReplyToBot); ok {
 		incoming.IsReplyToBot = replyToBot
 	}
 	return incoming, nil

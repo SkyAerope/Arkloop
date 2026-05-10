@@ -80,11 +80,11 @@ func DispatchInboundImmediate(ctx context.Context, tx pgx.Tx, req InboundImmedia
 	ledgerMeta := req.ReceivedLedgerMetadata
 	if len(ledgerMeta) == 0 {
 		ledgerMeta = inboundLedgerMetadata(map[string]any{
-			"source":            firstNonEmptySelector(req.Source, req.Channel.ChannelType),
-			"conversation_type": req.Incoming.ConversationType,
-			"mentions_bot":      req.Incoming.MentionsBot,
-			"is_reply_to_bot":   req.Incoming.IsReplyToBot,
-			"matches_keyword":   req.Incoming.MatchesKeyword,
+			inboundLedgerKeySource:           firstNonEmptySelector(req.Source, req.Channel.ChannelType),
+			inboundLedgerKeyConversationType: req.Incoming.ConversationType,
+			inboundLedgerKeyMentionsBot:      req.Incoming.MentionsBot,
+			inboundLedgerKeyIsReplyToBot:     req.Incoming.IsReplyToBot,
+			inboundLedgerKeyMatchesKeyword:   req.Incoming.MatchesKeyword,
 		}, inboundStateReceived)
 	}
 	if req.SkipDedup {

@@ -17,6 +17,7 @@ import (
 	"arkloop/services/shared/pgnotify"
 	"arkloop/services/shared/runkind"
 	"arkloop/services/shared/telegrambot"
+	"arkloop/services/worker/internal/data"
 	"arkloop/services/worker/internal/tools"
 
 	"github.com/google/uuid"
@@ -213,16 +214,16 @@ func (e *Executor) getStatus(ctx context.Context, threadID uuid.UUID) (string, e
 		return "", fmt.Errorf("query heartbeat status: %w", err)
 	}
 	status := "disabled"
-	if cfg.Enabled != nil && *cfg.Enabled {
+	if cfg.HeartbeatEnabled != nil && *cfg.HeartbeatEnabled {
 		status = "enabled"
 	}
-	interval := cfg.Interval
+	interval := cfg.HeartbeatIntervalMinute
 	if interval <= 0 {
 		interval = runkind.DefaultHeartbeatIntervalMinutes
 	}
 	modelDisplay := "(follow conversation)"
-	if cfg.Model != "" {
-		modelDisplay = cfg.Model
+	if cfg.HeartbeatModel != "" {
+		modelDisplay = cfg.HeartbeatModel
 	}
 	return fmt.Sprintf("Heartbeat: %s\nInterval: %d min\nModel: %s", status, interval, modelDisplay), nil
 }
@@ -232,10 +233,10 @@ func (e *Executor) setEnabled(ctx context.Context, threadID uuid.UUID, enabled, 
 		interval = runkind.DefaultHeartbeatIntervalMinutes
 	}
 	slog.DebugContext(ctx, "heartbeat_command: setEnabled", "thread_id", threadID, "enabled", enabled, "interval", interval)
-	if err := e.updateThreadHeartbeatConfig(ctx, threadID, func(cfg *threadHeartbeatConfig) {
+	if err := e.updateThreadHeartbeatConfig(ctx, threadID, func(cfg *data.ThreadConfig) {
 		value := enabled == 1
-		cfg.Enabled = &value
-		cfg.Interval = interval
+		cfg.HeartbeatEnabled = &value
+		cfg.HeartbeatIntervalMinute = interval
 	}); err != nil {
 		return "", fmt.Errorf("update heartbeat enabled: %w", err)
 	}
@@ -256,10 +257,10 @@ func (e *Executor) setEnabled(ctx context.Context, threadID uuid.UUID, enabled, 
 }
 
 func (e *Executor) setInterval(ctx context.Context, threadID uuid.UUID, interval int) (string, error) {
-	if err := e.updateThreadHeartbeatConfig(ctx, threadID, func(cfg *threadHeartbeatConfig) {
+	if err := e.updateThreadHeartbeatConfig(ctx, threadID, func(cfg *data.ThreadConfig) {
 		enabled := true
-		cfg.Enabled = &enabled
-		cfg.Interval = interval
+		cfg.HeartbeatEnabled = &enabled
+		cfg.HeartbeatIntervalMinute = interval
 	}); err != nil {
 		return "", fmt.Errorf("update heartbeat interval: %w", err)
 	}
@@ -282,10 +283,10 @@ func (e *Executor) setInterval(ctx context.Context, threadID uuid.UUID, interval
 
 func (e *Executor) setModel(ctx context.Context, threadID uuid.UUID, model string) (string, error) {
 	model = strings.TrimSpace(model)
-	if err := e.updateThreadHeartbeatConfig(ctx, threadID, func(cfg *threadHeartbeatConfig) {
+	if err := e.updateThreadHeartbeatConfig(ctx, threadID, func(cfg *data.ThreadConfig) {
 		enabled := true
-		cfg.Enabled = &enabled
-		cfg.Model = model
+		cfg.HeartbeatEnabled = &enabled
+		cfg.HeartbeatModel = model
 	}); err != nil {
 		return "", fmt.Errorf("update heartbeat model: %w", err)
 	}
@@ -308,36 +309,23 @@ func (e *Executor) setModel(ctx context.Context, threadID uuid.UUID, model strin
 	return fmt.Sprintf("Heartbeat model set to %s", modelDisplay), nil
 }
 
-type threadHeartbeatConfig struct {
-	Enabled  *bool
-	Interval int
-	Model    string
-}
-
-func (e *Executor) getThreadHeartbeatConfig(ctx context.Context, threadID uuid.UUID) (threadHeartbeatConfig, error) {
+func (e *Executor) getThreadHeartbeatConfig(ctx context.Context, threadID uuid.UUID) (data.ThreadConfig, error) {
 	if threadID == uuid.Nil {
-		return threadHeartbeatConfig{}, fmt.Errorf("thread_id is empty")
+		return data.ThreadConfig{}, fmt.Errorf("thread_id is empty")
 	}
 	var raw []byte
 	if err := e.db.QueryRow(ctx, `SELECT COALESCE(config_json, '{}') FROM threads WHERE id = $1`, threadID.String()).Scan(&raw); err != nil {
-		return threadHeartbeatConfig{}, err
+		return data.ThreadConfig{}, err
 	}
-	var payload struct {
-		HeartbeatEnabled         *bool  `json:"heartbeat_enabled"`
-		HeartbeatIntervalMinutes int    `json:"heartbeat_interval_minutes"`
-		HeartbeatModel           string `json:"heartbeat_model"`
+	var cfg data.ThreadConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return data.ThreadConfig{}, err
 	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return threadHeartbeatConfig{}, err
-	}
-	return threadHeartbeatConfig{
-		Enabled:  payload.HeartbeatEnabled,
-		Interval: payload.HeartbeatIntervalMinutes,
-		Model:    strings.TrimSpace(payload.HeartbeatModel),
-	}, nil
+	cfg.HeartbeatModel = strings.TrimSpace(cfg.HeartbeatModel)
+	return cfg, nil
 }
 
-func (e *Executor) updateThreadHeartbeatConfig(ctx context.Context, threadID uuid.UUID, mutate func(*threadHeartbeatConfig)) error {
+func (e *Executor) updateThreadHeartbeatConfig(ctx context.Context, threadID uuid.UUID, mutate func(*data.ThreadConfig)) error {
 	if threadID == uuid.Nil {
 		return fmt.Errorf("thread_id is empty")
 	}
@@ -351,33 +339,33 @@ func (e *Executor) updateThreadHeartbeatConfig(ctx context.Context, threadID uui
 			return err
 		}
 	}
-	cfg := threadHeartbeatConfig{}
+	cfg := data.ThreadConfig{}
 	if enabled, ok := config["heartbeat_enabled"].(bool); ok {
-		cfg.Enabled = &enabled
+		cfg.HeartbeatEnabled = &enabled
 	}
 	if interval, ok := config["heartbeat_interval_minutes"].(float64); ok {
-		cfg.Interval = int(interval)
+		cfg.HeartbeatIntervalMinute = int(interval)
 	}
 	if model, ok := config["heartbeat_model"].(string); ok {
-		cfg.Model = strings.TrimSpace(model)
+		cfg.HeartbeatModel = strings.TrimSpace(model)
 	}
 	if mutate != nil {
 		mutate(&cfg)
 	}
-	if cfg.Enabled == nil {
+	if cfg.HeartbeatEnabled == nil {
 		delete(config, "heartbeat_enabled")
 	} else {
-		config["heartbeat_enabled"] = *cfg.Enabled
+		config["heartbeat_enabled"] = *cfg.HeartbeatEnabled
 	}
-	if cfg.Interval > 0 {
-		config["heartbeat_interval_minutes"] = cfg.Interval
+	if cfg.HeartbeatIntervalMinute > 0 {
+		config["heartbeat_interval_minutes"] = cfg.HeartbeatIntervalMinute
 	} else {
 		delete(config, "heartbeat_interval_minutes")
 	}
-	if strings.TrimSpace(cfg.Model) == "" {
+	if strings.TrimSpace(cfg.HeartbeatModel) == "" {
 		delete(config, "heartbeat_model")
 	} else {
-		config["heartbeat_model"] = strings.TrimSpace(cfg.Model)
+		config["heartbeat_model"] = strings.TrimSpace(cfg.HeartbeatModel)
 	}
 	encoded, err := json.Marshal(config)
 	if err != nil {
