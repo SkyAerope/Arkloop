@@ -797,6 +797,8 @@ func (c telegramConnector) continueTelegramInboundDispatch(
 
 func buildTelegramIncomingFromLedger(entry data.ChannelInboundLedgerEntry) telegramIncomingMessage {
 	incoming := telegramIncomingMessage{
+		ChannelID:       entry.ChannelID,
+		ChannelType:     entry.ChannelType,
 		PlatformChatID:  strings.TrimSpace(entry.PlatformConversationID),
 		PlatformMsgID:   strings.TrimSpace(entry.PlatformMessageID),
 		ReplyToMsgID:    entry.PlatformParentMessageID,
