@@ -38,10 +38,9 @@ GET /v1/tool-providers?scope=platform
           "group_name": "web_search",
           "provider_name": "web_search.exa",
           "is_active": false,
-          "base_url": "https://api.exa.ai",
-          "requires_api_key": true,
+          "requires_api_key": false,
           "requires_base_url": false,
-          "configured": false
+          "configured": true
         },
         {
           "group_name": "web_search",
@@ -96,7 +95,8 @@ PUT /v1/tool-providers/{group}/{provider}/credential?scope=platform
 
 Notes:
 - `web_search.searxng` must provide `base_url`.
-- `web_search.tavily` / `web_search.exa` / `web_fetch.jina` / `web_fetch.firecrawl` must provide `api_key`.
+- `web_search.tavily` / `web_fetch.firecrawl` must provide `api_key`; `web_fetch.jina` may run without one.
+- `web_search.exa` uses Exa hosted MCP and does not require credentials.
 - If both `api_key` and `base_url` are missing, the endpoint returns `204` and makes no changes.
 
 Returns `204 No Content` on success.

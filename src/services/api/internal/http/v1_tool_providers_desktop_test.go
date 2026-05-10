@@ -522,8 +522,8 @@ func TestDesktopToolProvidersListShowsOnlySelectedSearchProviderRunning(t *testi
 				}
 			case "web_search.exa":
 				exaFound = true
-				if provider.RuntimeStatus != "unavailable" {
-					t.Fatalf("expected exa unavailable, got %q", provider.RuntimeStatus)
+				if provider.RuntimeStatus != "available" {
+					t.Fatalf("expected exa available, got %q", provider.RuntimeStatus)
 				}
 			}
 		}

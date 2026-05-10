@@ -38,10 +38,9 @@ GET /v1/tool-providers?scope=platform
           "group_name": "web_search",
           "provider_name": "web_search.exa",
           "is_active": false,
-          "base_url": "https://api.exa.ai",
-          "requires_api_key": true,
+          "requires_api_key": false,
           "requires_base_url": false,
-          "configured": false
+          "configured": true
         },
         {
           "group_name": "web_search",
@@ -96,7 +95,8 @@ PUT /v1/tool-providers/{group}/{provider}/credential?scope=platform
 
 说明：
 - `web_search.searxng` 必须提供 `base_url`
-- `web_search.tavily` / `web_search.exa` / `web_fetch.jina` / `web_fetch.firecrawl` 必须提供 `api_key`
+- `web_search.tavily` / `web_fetch.firecrawl` 必须提供 `api_key`；`web_fetch.jina` 可以不配置 key 运行
+- `web_search.exa` 使用 Exa hosted MCP，不需要凭证
 - 同时缺失 `api_key` 与 `base_url` 时，接口返回 `204` 且不做变更
 
 成功返回 `204 No Content`。

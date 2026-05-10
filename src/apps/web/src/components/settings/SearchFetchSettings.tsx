@@ -296,36 +296,6 @@ export function SearchFetchSettings({ accessToken }: Props) {
                   )}
                 />
               )}
-              {config.search.provider === 'exa' && (
-                <>
-                  <SettingsRow
-                    title={ds.apiKeyLabel}
-                    description={ds.searchProviderExa}
-                    control={(
-                      <PasswordInput
-                        value={config.search.exaApiKey ?? ''}
-                        onChange={(value) => patchSearch({ exaApiKey: value || undefined, exaApiKeyStored: false })}
-                        placeholder="exa-..."
-                        showLabel={ds.connectorShowSecret}
-                        hideLabel={ds.connectorHideSecret}
-                      />
-                    )}
-                  />
-                  <SettingsRow
-                    title={ds.baseUrlLabel}
-                    description={ds.searchProviderExa}
-                    control={(
-                      <SettingsInput
-                        type="text"
-                        value={config.search.exaBaseUrl ?? ''}
-                        onChange={(event) => patchSearch({ exaBaseUrl: event.target.value || undefined })}
-                        placeholder="https://api.exa.ai"
-                        variant="md"
-                      />
-                    )}
-                  />
-                </>
-              )}
               {config.search.provider === 'searxng' && (
                 <SettingsRow
                   title={ds.baseUrlLabel}

@@ -463,11 +463,17 @@ func TestToolBuildMiddleware_UsesProviderOwnedWebSearchSpec(t *testing.T) {
 			t.Fatalf("expected logical web_search spec, got %s", spec.Name)
 		}
 		props := schemaProperties(t, spec)
-		if _, ok := props["contents"]; !ok {
-			t.Fatalf("expected exa contents in schema: %#v", props)
+		if _, ok := props["numResults"]; !ok {
+			t.Fatalf("expected exa numResults in schema: %#v", props)
 		}
 		if _, ok := props["queries"]; ok {
 			t.Fatalf("did not expect generic queries in exa schema: %#v", props)
+		}
+		if _, ok := props["count"]; ok {
+			t.Fatalf("did not expect direct exa count in schema: %#v", props)
+		}
+		if _, ok := props["contents"]; ok {
+			t.Fatalf("did not expect direct exa contents in schema: %#v", props)
 		}
 		return nil
 	})
@@ -508,11 +514,17 @@ func TestToolBuildMiddleware_ProviderOwnedSpecIsSearchable(t *testing.T) {
 			t.Fatalf("expected web_search searchable spec, got %#v", searchable)
 		}
 		props := schemaProperties(t, spec)
-		if _, ok := props["contents"]; !ok {
-			t.Fatalf("expected exa contents in searchable schema: %#v", props)
+		if _, ok := props["numResults"]; !ok {
+			t.Fatalf("expected exa numResults in searchable schema: %#v", props)
 		}
 		if _, ok := props["queries"]; ok {
 			t.Fatalf("did not expect generic queries in searchable exa schema: %#v", props)
+		}
+		if _, ok := props["count"]; ok {
+			t.Fatalf("did not expect direct exa count in searchable schema: %#v", props)
+		}
+		if _, ok := props["contents"]; ok {
+			t.Fatalf("did not expect direct exa contents in searchable schema: %#v", props)
 		}
 		return nil
 	})

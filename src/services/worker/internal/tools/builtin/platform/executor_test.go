@@ -105,9 +105,8 @@ func TestExecutor_AddToolProviderWritesCredential(t *testing.T) {
 
 	result := exec(e, "add_tool_provider", map[string]any{
 		"group":    "web_search",
-		"provider": "web_search.exa",
-		"api_key":  "exa-key",
-		"base_url": "https://api.exa.ai",
+		"provider": "web_search.tavily",
+		"api_key":  "tvly-key",
 	})
 	if result.Error != nil {
 		t.Fatalf("unexpected error: %v", result.Error)
@@ -115,13 +114,13 @@ func TestExecutor_AddToolProviderWritesCredential(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("expected activate and credential calls, got %d", len(calls))
 	}
-	if calls[0].method != http.MethodPut || calls[0].path != "/v1/tool-providers/web_search/web_search.exa/activate" {
+	if calls[0].method != http.MethodPut || calls[0].path != "/v1/tool-providers/web_search/web_search.tavily/activate" {
 		t.Fatalf("wrong activate call: %+v", calls[0])
 	}
-	if calls[1].method != http.MethodPut || calls[1].path != "/v1/tool-providers/web_search/web_search.exa/credential" {
+	if calls[1].method != http.MethodPut || calls[1].path != "/v1/tool-providers/web_search/web_search.tavily/credential" {
 		t.Fatalf("wrong credential call: %+v", calls[1])
 	}
-	if calls[1].body["api_key"] != "exa-key" || calls[1].body["base_url"] != "https://api.exa.ai" {
+	if calls[1].body["api_key"] != "tvly-key" {
 		t.Fatalf("wrong credential body: %+v", calls[1].body)
 	}
 }

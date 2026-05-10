@@ -83,7 +83,7 @@ describe('desktop connectors API', () => {
     expect((init?.headers as Headers).get('Authorization')).toBe('Bearer local-jwt')
   })
 
-  it('maps exa search provider credentials', async () => {
+  it('maps exa search provider', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({
         groups: [
@@ -93,8 +93,6 @@ describe('desktop connectors API', () => {
               {
                 provider_name: 'web_search.exa',
                 is_active: true,
-                key_prefix: 'exa-12345678',
-                base_url: 'https://api.exa.ai',
               },
             ],
           },
@@ -107,9 +105,6 @@ describe('desktop connectors API', () => {
     const config = await api!.get()
     expect(config.search).toMatchObject({
       provider: 'exa',
-      exaApiKey: 'exa-12345678',
-      exaApiKeyStored: true,
-      exaBaseUrl: 'https://api.exa.ai',
     })
   })
 
@@ -129,9 +124,6 @@ describe('desktop connectors API', () => {
       },
       search: {
         provider: 'exa',
-        exaApiKey: 'exa-1234567',
-        exaApiKeyStored: true,
-        exaBaseUrl: 'https://api.exa.ai',
       },
     })
 
@@ -140,12 +132,11 @@ describe('desktop connectors API', () => {
       .map(([, init]) => JSON.parse(String(init?.body ?? '{}')) as Record<string, string>)
 
     expect(credentialBodies).toEqual([
-      { base_url: 'https://api.exa.ai' },
       { base_url: 'https://firecrawl.local' },
     ])
   })
 
-  it('clears exa base url when the field is empty', async () => {
+  it('activates exa without credential writes', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockImplementation(() => Promise.resolve(jsonResponse({ groups: [] })))
 
@@ -154,18 +145,16 @@ describe('desktop connectors API', () => {
 
     await api!.set({
       fetch: { provider: 'basic' },
-      search: {
-        provider: 'exa',
-        exaApiKey: 'exa-1234567',
-        exaApiKeyStored: true,
-      },
+      search: { provider: 'exa' },
     })
 
-    const credentialBodies = fetchMock.mock.calls
+    const credentialCalls = fetchMock.mock.calls
       .filter(([url]) => String(url).endsWith('/credential?scope=platform'))
-      .map(([, init]) => JSON.parse(String(init?.body ?? '{}')) as Record<string, string | null>)
+    const activateCalls = fetchMock.mock.calls
+      .filter(([url]) => String(url).endsWith('/v1/tool-providers/web_search/web_search.exa/activate?scope=platform'))
 
-    expect(credentialBodies).toContainEqual({ base_url: null })
+    expect(credentialCalls).toHaveLength(0)
+    expect(activateCalls).toHaveLength(1)
   })
 
   it('prefers Electron preload connectors API when present', () => {

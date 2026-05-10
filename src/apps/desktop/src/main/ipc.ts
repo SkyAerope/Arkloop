@@ -746,13 +746,6 @@ function connectorsFromProviderGroups(groups: ToolProviderGroup[]): ConnectorsCo
         ? secretPreview(activeSearch.key_prefix)
         : undefined,
       tavilyApiKeyStored: activeSearch?.provider_name === 'web_search.tavily' && Boolean(activeSearch.key_prefix),
-      exaApiKey: activeSearch?.provider_name === 'web_search.exa'
-        ? secretPreview(activeSearch.key_prefix)
-        : undefined,
-      exaApiKeyStored: activeSearch?.provider_name === 'web_search.exa' && Boolean(activeSearch.key_prefix),
-      exaBaseUrl: activeSearch?.provider_name === 'web_search.exa'
-        ? activeSearch.base_url
-        : undefined,
       searxngBaseUrl: activeSearch?.provider_name === 'web_search.searxng'
         ? activeSearch.base_url ?? DEFAULT_CONFIG.connectors.search.searxngBaseUrl
         : DEFAULT_CONFIG.connectors.search.searxngBaseUrl,
@@ -808,7 +801,7 @@ async function migrateLegacyConnectorsIfNeeded(config: AppConfig): Promise<void>
 function hasLegacySearchConfig(connectors: ConnectorsConfig): boolean {
   return connectors.search.provider === 'basic'
     || (connectors.search.provider === 'tavily' && Boolean(connectors.search.tavilyApiKey))
-    || (connectors.search.provider === 'exa' && Boolean(connectors.search.exaApiKey))
+    || connectors.search.provider === 'exa'
     || (connectors.search.provider === 'searxng' && Boolean(connectors.search.searxngBaseUrl))
 }
 
@@ -840,17 +833,6 @@ async function applySearchConnector(search: ConnectorsConfig['search']): Promise
   }
   if (search.provider === 'exa') {
     await activateToolProvider('web_search', 'web_search.exa')
-    const baseUrl = search.exaBaseUrl?.trim() ? search.exaBaseUrl : null
-    if (!search.exaApiKeyStored) {
-      await upsertToolProviderCredential('web_search', 'web_search.exa', {
-        api_key: search.exaApiKey ?? '',
-        base_url: baseUrl,
-      })
-    } else {
-      await upsertToolProviderCredential('web_search', 'web_search.exa', {
-        base_url: baseUrl,
-      })
-    }
     return
   }
   if (search.provider === 'searxng') {

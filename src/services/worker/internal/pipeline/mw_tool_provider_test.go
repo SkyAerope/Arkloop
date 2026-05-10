@@ -144,22 +144,7 @@ func TestBuildProviderExecutor_ImageMiniMaxUsesReadExecutor(t *testing.T) {
 	}
 }
 
-func TestBuildProviderExecutor_ExaRequiresAPIKey(t *testing.T) {
-	t.Setenv("EXA_API_KEY", "")
-
-	exec := pipeline.BuildProviderExecutor(toolprovider.ActiveProviderConfig{
-		GroupName:    "web_search",
-		ProviderName: websearch.AgentSpecExa.Name,
-	})
-	checker, ok := exec.(tools.NotConfiguredChecker)
-	if !ok || !checker.IsNotConfigured() {
-		t.Fatalf("expected not configured executor, got %T", exec)
-	}
-}
-
-func TestBuildProviderExecutor_ExaUsesEnvAPIKey(t *testing.T) {
-	t.Setenv("EXA_API_KEY", "exa-env-key")
-
+func TestBuildProviderExecutor_ExaUsesHostedMCPWithoutCredential(t *testing.T) {
 	exec := pipeline.BuildProviderExecutor(toolprovider.ActiveProviderConfig{
 		GroupName:    "web_search",
 		ProviderName: websearch.AgentSpecExa.Name,
@@ -173,9 +158,9 @@ func TestBuildProviderExecutor_ExaUsesEnvAPIKey(t *testing.T) {
 	}
 }
 
-func TestBuildProviderExecutor_ExaUsesConfiguredProvider(t *testing.T) {
+func TestBuildProviderExecutor_ExaIgnoresLegacyCredential(t *testing.T) {
 	key := "exa-test-key"
-	baseURL := "https://api.exa.ai"
+	baseURL := "https://legacy.exa.local"
 	exec := pipeline.BuildProviderExecutor(toolprovider.ActiveProviderConfig{
 		GroupName:    "web_search",
 		ProviderName: websearch.AgentSpecExa.Name,

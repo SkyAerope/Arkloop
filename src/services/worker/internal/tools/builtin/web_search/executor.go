@@ -107,88 +107,20 @@ var LlmSpecTavily = LlmSpec
 
 var LlmSpecExa = llm.ToolSpec{
 	Name:        "web_search",
-	Description: stringPtr("Search the web using Exa AI. Supports neural or keyword search, publication date filters, and optional highlights or text extraction."),
+	Description: stringPtr("Search the web using Exa hosted MCP and return clean text content from top search results."),
 	JSONSchema: map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"query": map[string]any{
 				"type":        "string",
-				"description": "search query string",
+				"description": "natural language search query; describe the ideal page, not just keywords",
 			},
-			"count": map[string]any{
+			"numResults": map[string]any{
 				"type":        "integer",
 				"description": "number of results to return",
 				"default":     defaultMaxResults,
 				"minimum":     1,
 				"maximum":     exaMaxSearchCount,
-			},
-			"freshness": map[string]any{
-				"type":        "string",
-				"enum":        []any{"day", "week", "month", "year"},
-				"description": "filter by recent publication time",
-			},
-			"date_after": map[string]any{
-				"type":        "string",
-				"format":      "date",
-				"description": "only results published after this date, in YYYY-MM-DD format",
-			},
-			"date_before": map[string]any{
-				"type":        "string",
-				"format":      "date",
-				"description": "only results published before this date, in YYYY-MM-DD format",
-			},
-			"type": map[string]any{
-				"type":        "string",
-				"enum":        []any{"auto", "neural", "fast", "deep", "deep-reasoning", "instant"},
-				"description": "Exa search mode",
-			},
-			"contents": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"highlights": map[string]any{
-						"description": "true, or an object with maxCharacters, query, numSentences, or highlightsPerUrl",
-						"anyOf": []any{
-							map[string]any{"type": "boolean"},
-							map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"maxCharacters":    map[string]any{"type": "integer", "minimum": 1},
-									"query":            map[string]any{"type": "string"},
-									"numSentences":     map[string]any{"type": "integer", "minimum": 1},
-									"highlightsPerUrl": map[string]any{"type": "integer", "minimum": 1},
-								},
-								"additionalProperties": false,
-							},
-						},
-					},
-					"text": map[string]any{
-						"description": "true, or an object with maxCharacters",
-						"anyOf": []any{
-							map[string]any{"type": "boolean"},
-							map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"maxCharacters": map[string]any{"type": "integer", "minimum": 1},
-								},
-								"additionalProperties": false,
-							},
-						},
-					},
-					"summary": map[string]any{
-						"description": "true, or an object with query",
-						"anyOf": []any{
-							map[string]any{"type": "boolean"},
-							map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"query": map[string]any{"type": "string"},
-								},
-								"additionalProperties": false,
-							},
-						},
-					},
-				},
-				"additionalProperties": false,
 			},
 		},
 		"required":             []any{"query"},

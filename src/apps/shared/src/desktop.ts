@@ -18,9 +18,6 @@ export type SearchConnectorConfig = {
   provider: SearchProvider
   tavilyApiKey?: string
   tavilyApiKeyStored?: boolean
-  exaApiKey?: string
-  exaApiKeyStored?: boolean
-  exaBaseUrl?: string
   searxngBaseUrl?: string
 }
 
