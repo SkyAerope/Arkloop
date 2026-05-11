@@ -2,6 +2,7 @@ import type { KeyboardEvent } from 'react'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import { ConfirmDialog } from '@arkloop/shared'
 import { Download, Github, Loader2, MessageSquare, MoreHorizontal, RefreshCw, Trash2 } from 'lucide-react'
 import { openExternal } from '../../openExternal'
 import type { ViewSkill } from './types'
@@ -49,6 +50,9 @@ type Props = {
     download: string
     replace: string
     remove: string
+    cancelAction: string
+    removeConfirmTitle: string
+    removeConfirmBody: (displayName: string, skillKey: string, version: string) => string
     manualAvailable: string
     scanStatusLabel: (status: string) => string
   }
@@ -85,7 +89,7 @@ type SkillListCardProps = {
   onDetailSkill: (skill: ViewSkill) => void
   onEnable: (item: ViewSkill) => void
   onDisable: (item: ViewSkill) => void
-  onRemove: (item: ViewSkill) => void
+  onRequestRemoveConfirm: (item: ViewSkill) => void
   onTrySkill?: (prompt: string) => void
   skillText: Props['skillText']
   locale: string
@@ -104,7 +108,7 @@ function SkillListCard({
   onDetailSkill,
   onEnable,
   onDisable,
-  onRemove,
+  onRequestRemoveConfirm,
   onTrySkill,
   skillText,
   locale,
@@ -232,7 +236,10 @@ function SkillListCard({
               label={skillText.remove}
               disabled={!item.installed || !item.version}
               destructive
-              onClick={() => { setMenuSkillId(null); onRemove(item) }}
+              onClick={() => {
+                setMenuSkillId(null)
+                onRequestRemoveConfirm(item)
+              }}
             />
           </div>,
           document.body,
@@ -350,6 +357,8 @@ export function SkillList({
   active,
   cardMenuRef,
 }: Props) {
+  const [removeConfirmItem, setRemoveConfirmItem] = useState<ViewSkill | null>(null)
+
   if (loading) {
     return (
       <div className={`${SETTINGS_TWO_COLUMN_GRID_CLASS}`}>
@@ -374,28 +383,50 @@ export function SkillList({
   }
 
   return (
-    <div className={SETTINGS_TWO_COLUMN_GRID_CLASS}>
-      {items.map((item) => (
-        <SkillListCard
-          key={item.id}
-          item={item}
-          busySkillId={busySkillId}
-          menuSkillId={menuSkillId}
-          setMenuSkillId={setMenuSkillId}
-          onDetailSkill={onDetailSkill}
-          onEnable={onEnable}
-          onDisable={onDisable}
-          onRemove={onRemove}
-          onTrySkill={onTrySkill}
-          skillText={skillText}
-          locale={locale}
-          platformAvailabilityLabel={platformAvailabilityLabel}
-          platformAvailabilityStyle={platformAvailabilityStyle}
-          scanStatusBadge={scanStatusBadge}
-          active={active}
-          cardMenuRef={cardMenuRef}
-        />
-      ))}
-    </div>
+    <>
+      <div className={SETTINGS_TWO_COLUMN_GRID_CLASS}>
+        {items.map((item) => (
+          <SkillListCard
+            key={item.id}
+            item={item}
+            busySkillId={busySkillId}
+            menuSkillId={menuSkillId}
+            setMenuSkillId={setMenuSkillId}
+            onDetailSkill={onDetailSkill}
+            onEnable={onEnable}
+            onDisable={onDisable}
+            onRequestRemoveConfirm={setRemoveConfirmItem}
+            onTrySkill={onTrySkill}
+            skillText={skillText}
+            locale={locale}
+            platformAvailabilityLabel={platformAvailabilityLabel}
+            platformAvailabilityStyle={platformAvailabilityStyle}
+            scanStatusBadge={scanStatusBadge}
+            active={active}
+            cardMenuRef={cardMenuRef}
+          />
+        ))}
+      </div>
+      <ConfirmDialog
+        open={removeConfirmItem != null}
+        title={skillText.removeConfirmTitle}
+        message={
+          removeConfirmItem?.version
+            ? skillText.removeConfirmBody(
+              removeConfirmItem.display_name,
+              removeConfirmItem.skill_key,
+              removeConfirmItem.version,
+            )
+            : ''
+        }
+        confirmLabel={skillText.remove}
+        cancelLabel={skillText.cancelAction}
+        onClose={() => setRemoveConfirmItem(null)}
+        onConfirm={() => {
+          if (removeConfirmItem?.version) onRemove(removeConfirmItem)
+          setRemoveConfirmItem(null)
+        }}
+      />
+    </>
   )
 }

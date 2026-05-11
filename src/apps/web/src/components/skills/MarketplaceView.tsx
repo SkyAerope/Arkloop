@@ -18,6 +18,9 @@ type SkillTextSubset = {
   download: string
   replace: string
   remove: string
+  cancelAction: string
+  removeConfirmTitle: string
+  removeConfirmBody: (displayName: string, skillKey: string, version: string) => string
   manualAvailable: string
   scanStatusLabel: (status: string) => string
 }
