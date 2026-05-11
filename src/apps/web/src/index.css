@@ -110,6 +110,7 @@ button:not(:disabled) {
   --c-text-body: var(--c-text-primary);
   --c-text-body-weight: 325;
   --c-accent: #FAF9F6;
+  --c-token-cache-read: #4fb5ff;
   --c-pro-bg: rgba(70, 145, 246, 0.12);
   --c-overlay: rgba(0, 0, 0, 0.60);
   --c-lightbox-overlay: rgba(255, 255, 255, 0.12);
@@ -256,6 +257,7 @@ button:not(:disabled) {
     --c-plan-icon: #C78B00;
     --c-text-body: var(--c-text-primary);
     --c-text-body-weight: 365;
+    --c-token-cache-read: #0969da;
     --c-pro-bg: #EAF2FC;
     --c-overlay: rgba(0, 0, 0, 0.25);
     --c-lightbox-overlay: rgba(255, 255, 255, 0.55);
@@ -384,6 +386,7 @@ button:not(:disabled) {
   --c-plan-icon: #C78B00;
   --c-text-body: var(--c-text-primary);
   --c-text-body-weight: 365;
+  --c-token-cache-read: #0969da;
   --c-pro-bg: #EAF2FC;
   --c-overlay: rgba(0, 0, 0, 0.25);
   --c-lightbox-overlay: rgba(255, 255, 255, 0.55);

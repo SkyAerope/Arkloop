@@ -1149,6 +1149,8 @@ export interface LocaleStrings {
     runsHistoryColModel: string;
     runsHistoryColStatus: string;
     runsHistoryColTokens: string;
+    runsHistoryColCost: string;
+    runsHistoryColCacheHit: string;
     runsHistoryColTime: string;
     runsHistoryOpen: string;
     runsHistoryPrev: string;

@@ -1911,6 +1911,9 @@ export type RunDetail = {
   total_cost_usd?: number
   duration_ms?: number
   cache_hit_rate?: number
+  cache_creation_tokens?: number
+  cache_read_tokens?: number
+  cached_tokens?: number
   credits_used?: number
   created_at: string
   completed_at?: string
@@ -1940,6 +1943,9 @@ export type Run = {
   total_cost_usd?: number
   duration_ms?: number
   cache_hit_rate?: number
+  cache_creation_tokens?: number
+  cache_read_tokens?: number
+  cached_tokens?: number
   credits_used?: number
   created_at: string
   completed_at?: string
