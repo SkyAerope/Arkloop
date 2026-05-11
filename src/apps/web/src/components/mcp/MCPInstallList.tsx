@@ -4,10 +4,6 @@ import { DropdownAction } from '../skills/DropdownAction'
 import { statusLabel, statusVariant, type MCPCopy } from './types'
 import type { MCPInstall } from '../../api'
 import { SettingsSwitch } from '../settings/_SettingsSwitch'
-import {
-  SETTINGS_CARD_SURFACE_OVERFLOW_VISIBLE_CLASS,
-  SETTINGS_TWO_COLUMN_GRID_CLASS,
-} from '../settings/_SettingsLayout'
 
 type Props = {
   installs: MCPInstall[]
@@ -37,6 +33,21 @@ function statusBadgeStyle(status: string): CSSProperties {
   }
 }
 
+/** 与 PluginListRow 副行一致：错误优先，否则 URL / 命令 / transport */
+function rowSubtitle(install: MCPInstall): { text: string; tone: 'error' | 'muted' } {
+  if (install.last_error_message?.trim()) {
+    return { text: install.last_error_message.trim(), tone: 'error' }
+  }
+  const launch = install.launch_spec ?? {}
+  if (install.transport === 'stdio') {
+    const cmd = typeof launch.command === 'string' ? launch.command.trim() : ''
+    return { text: cmd || install.transport, tone: 'muted' }
+  }
+  const url = typeof launch.url === 'string' ? launch.url.trim() : ''
+  return { text: url || install.source_uri?.trim() || install.transport, tone: 'muted' }
+}
+
+export function MCPInstallList({
   installs,
   loading,
   busyID,
@@ -51,7 +62,7 @@ function statusBadgeStyle(status: string): CSSProperties {
 }: Props) {
   if (loading) {
     return (
-      <div className="grid min-h-[160px] place-items-center rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] text-[var(--c-text-muted)]">
+      <div className="grid min-h-[220px] place-items-center rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] text-[var(--c-text-muted)]">
         <Loader2 size={18} className="animate-spin" />
       </div>
     )
@@ -66,29 +77,45 @@ function statusBadgeStyle(status: string): CSSProperties {
   }
 
   return (
-    <div className={SETTINGS_TWO_COLUMN_GRID_CLASS}>
+    <div className="grid gap-3">
       {installs.map((install) => {
         const busy = busyID === install.id
         const isOpen = menuID === install.id
+        const sub = rowSubtitle(install)
 
         return (
-          <div key={install.id} className={SETTINGS_CARD_SURFACE_OVERFLOW_VISIBLE_CLASS}>
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-2.5">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold text-[var(--c-text-heading)]">
-                  {install.display_name}
-                </span>
-                <span
-                  className="inline-flex h-5 shrink-0 items-center rounded px-1.5 text-[10px] font-medium leading-none"
-                  style={busy ? statusBadgeStyle('needs_check') : statusBadgeStyle(install.discovery_status)}
+          <div
+            key={install.id}
+            className="overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)]"
+          >
+            <div className="grid min-h-[76px] w-full grid-cols-1 items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="truncate text-[14px] font-semibold leading-5 text-[var(--c-text-primary)]">
+                    {install.display_name}
+                  </h3>
+                  <span
+                    className="inline-flex h-5 shrink-0 items-center rounded px-1.5 text-[10px] font-medium leading-none"
+                    style={busy ? statusBadgeStyle('needs_check') : statusBadgeStyle(install.discovery_status)}
+                  >
+                    {busy && <Loader2 size={10} className="mr-0.5 animate-spin" />}
+                    {busy ? copy.loading : statusLabel(install.discovery_status, copy.status)}
+                  </span>
+                </div>
+                <p
+                  className={[
+                    'mt-1 truncate text-[12.5px] leading-5',
+                    sub.tone === 'error' ? '' : 'text-[var(--c-text-tertiary)]',
+                  ].filter(Boolean).join(' ')}
+                  style={sub.tone === 'error' ? { color: 'var(--c-status-error-text)' } : undefined}
+                  title={sub.text}
                 >
-                  {busy && <Loader2 size={10} className="mr-0.5 animate-spin" />}
-                  {busy ? copy.loading : statusLabel(install.discovery_status, copy.status)}
-                </span>
+                  {sub.text}
+                </p>
               </div>
 
               <div
-                className="flex shrink-0 items-center gap-2"
+                className="flex shrink-0 items-center gap-2 justify-self-end"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
               >
@@ -152,14 +179,6 @@ function statusBadgeStyle(status: string): CSSProperties {
                 </div>
               </div>
             </div>
-
-            {install.last_error_message ? (
-              <div className="border-t border-[var(--c-border-subtle)] px-5 py-2">
-                <p className="line-clamp-2 text-xs leading-snug" style={{ color: 'var(--c-status-error-text)' }}>
-                  {install.last_error_message}
-                </p>
-              </div>
-            ) : null}
           </div>
         )
       })}

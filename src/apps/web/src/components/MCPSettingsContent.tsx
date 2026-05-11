@@ -82,8 +82,7 @@ function needsOAuthAuthorization(install: MCPInstall): boolean {
 }
 
 export function MCPSettingsContent({ accessToken }: Props) {
-  const { locale, t } = useLocale()
-  const ds = t.desktopSettings
+  const { locale } = useLocale()
 
   const copy: MCPCopy = useMemo(() => {
     if (locale === 'zh') {
@@ -441,28 +440,22 @@ export function MCPSettingsContent({ accessToken }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-[24px] font-semibold leading-tight text-[var(--c-text-heading)]">{ds.mcpTitle}</h2>
-          <p className="mt-2 max-w-[560px] text-[13px] leading-5 text-[var(--c-text-muted)]">{ds.mcpDesc}</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <SettingsButton
-            variant="secondary"
-            onClick={() => void loadInstalls()}
-            disabled={loading}
-            icon={loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          >
-            {copy.refresh}
-          </SettingsButton>
-          <SettingsButton
-            variant="primary"
-            onClick={openCreate}
-            icon={<Plus size={14} />}
-          >
-            {copy.add}
-          </SettingsButton>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <SettingsButton
+          variant="secondary"
+          onClick={() => void loadInstalls()}
+          disabled={loading}
+          icon={loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+        >
+          {copy.refresh}
+        </SettingsButton>
+        <SettingsButton
+          variant="primary"
+          onClick={openCreate}
+          icon={<Plus size={14} />}
+        >
+          {copy.add}
+        </SettingsButton>
       </div>
 
       {notice && (
