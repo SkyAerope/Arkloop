@@ -183,6 +183,7 @@ export type MCPCopy = {
   delete: string
   edit: string
   recheck: string
+  actions: string
   enable: string
   disable: string
   import: string

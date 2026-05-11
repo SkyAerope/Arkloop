@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, Plus, RefreshCw } from 'lucide-react'
 import { ConfirmDialog } from '@arkloop/shared'
 import {
@@ -82,7 +82,8 @@ function needsOAuthAuthorization(install: MCPInstall): boolean {
 }
 
 export function MCPSettingsContent({ accessToken }: Props) {
-  const { locale } = useLocale()
+  const { locale, t } = useLocale()
+  const ds = t.desktopSettings
 
   const copy: MCPCopy = useMemo(() => {
     if (locale === 'zh') {
@@ -96,6 +97,7 @@ export function MCPSettingsContent({ accessToken }: Props) {
         delete: '删除',
         edit: '编辑',
         recheck: '重检',
+        actions: '操作',
         enable: '启用',
         disable: '禁用',
         import: '导入',
@@ -161,6 +163,7 @@ export function MCPSettingsContent({ accessToken }: Props) {
       delete: 'Delete',
       edit: 'Edit',
       recheck: 'Recheck',
+      actions: 'Actions',
       enable: 'Enable',
       disable: 'Disable',
       import: 'Import',
@@ -225,21 +228,8 @@ export function MCPSettingsContent({ accessToken }: Props) {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [busyID, setBusyID] = useState<string | null>(null)
-  const [menuID, setMenuID] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<MCPInstall | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  // close menu on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as HTMLElement)) {
-        setMenuID(null)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   const loadInstalls = useCallback(async () => {
     setLoading(true)
@@ -440,22 +430,28 @@ export function MCPSettingsContent({ accessToken }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <SettingsButton
-          variant="secondary"
-          onClick={() => void loadInstalls()}
-          disabled={loading}
-          icon={loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-        >
-          {copy.refresh}
-        </SettingsButton>
-        <SettingsButton
-          variant="primary"
-          onClick={openCreate}
-          icon={<Plus size={14} />}
-        >
-          {copy.add}
-        </SettingsButton>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-[24px] font-semibold leading-tight text-[var(--c-text-heading)]">{ds.mcpTitle}</h2>
+          <p className="mt-2 max-w-[560px] text-[13px] leading-5 text-[var(--c-text-muted)]">{ds.mcpDesc}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <SettingsButton
+            variant="secondary"
+            onClick={() => void loadInstalls()}
+            disabled={loading}
+            icon={loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          >
+            {copy.refresh}
+          </SettingsButton>
+          <SettingsButton
+            variant="primary"
+            onClick={openCreate}
+            icon={<Plus size={14} />}
+          >
+            {copy.add}
+          </SettingsButton>
+        </div>
       </div>
 
       {notice && (
@@ -469,14 +465,11 @@ export function MCPSettingsContent({ accessToken }: Props) {
         installs={installs}
         loading={loading}
         busyID={busyID}
-        menuID={menuID}
-        setMenuID={setMenuID}
         onEdit={openEdit}
         onDelete={setDeleteTarget}
         onToggle={(i) => void handleToggle(i)}
         onCheck={(i) => void handleCheck(i)}
         copy={copy}
-        menuRef={menuRef}
       />
 
       {/* scan & import */}
