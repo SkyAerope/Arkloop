@@ -5,5 +5,9 @@ type Props = {
 }
 
 export function MCPSettings({ accessToken }: Props) {
-  return <MCPSettingsContent accessToken={accessToken} />
+  return (
+    <div className="mx-auto flex w-full max-w-[760px] flex-col px-1 pb-8">
+      <MCPSettingsContent accessToken={accessToken} />
+    </div>
+  )
 }

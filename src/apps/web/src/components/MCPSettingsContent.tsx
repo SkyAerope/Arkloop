@@ -82,7 +82,7 @@ function needsOAuthAuthorization(install: MCPInstall): boolean {
 }
 
 export function MCPSettingsContent({ accessToken }: Props) {
-  const { t, locale } = useLocale()
+  const { locale, t } = useLocale()
   const ds = t.desktopSettings
 
   const copy: MCPCopy = useMemo(() => {
@@ -440,14 +440,13 @@ export function MCPSettingsContent({ accessToken }: Props) {
   }, [accessToken, copy.toastCheckFailed, copy.toastChecked, loadInstalls])
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-[var(--c-text-heading)]">{ds.mcpTitle}</h3>
-          <p className="mt-1 text-sm text-[var(--c-text-secondary)]">{ds.mcpDesc}</p>
+          <h2 className="text-[24px] font-semibold leading-tight text-[var(--c-text-heading)]">{ds.mcpTitle}</h2>
+          <p className="mt-2 max-w-[560px] text-[13px] leading-5 text-[var(--c-text-muted)]">{ds.mcpDesc}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <SettingsButton
             variant="secondary"
             onClick={() => void loadInstalls()}
@@ -466,12 +465,8 @@ export function MCPSettingsContent({ accessToken }: Props) {
         </div>
       </div>
 
-      {/* notice */}
       {notice && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm text-[var(--c-text-secondary)]"
-          style={{ border: '0.5px solid var(--c-border-subtle)', background: 'var(--c-bg-menu)' }}
-        >
+        <div className="rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] px-5 py-4 text-sm text-[var(--c-text-secondary)]">
           {notice}
         </div>
       )}

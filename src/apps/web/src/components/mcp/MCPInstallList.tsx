@@ -1,8 +1,13 @@
+import type { CSSProperties, RefObject } from 'react'
 import { Loader2, MoreHorizontal, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { DropdownAction } from '../skills/DropdownAction'
 import { statusLabel, statusVariant, type MCPCopy } from './types'
 import type { MCPInstall } from '../../api'
 import { SettingsSwitch } from '../settings/_SettingsSwitch'
+import {
+  SETTINGS_CARD_SURFACE_OVERFLOW_VISIBLE_CLASS,
+  SETTINGS_TWO_COLUMN_GRID_CLASS,
+} from '../settings/_SettingsLayout'
 
 type Props = {
   installs: MCPInstall[]
@@ -15,10 +20,10 @@ type Props = {
   onToggle: (install: MCPInstall) => void
   onCheck: (install: MCPInstall) => void
   copy: MCPCopy
-  menuRef: React.RefObject<HTMLDivElement | null>
+  menuRef: RefObject<HTMLDivElement | null>
 }
 
-function statusBadgeStyle(status: string): React.CSSProperties {
+function statusBadgeStyle(status: string): CSSProperties {
   const variant = statusVariant(status)
   switch (variant) {
     case 'success':
@@ -32,7 +37,6 @@ function statusBadgeStyle(status: string): React.CSSProperties {
   }
 }
 
-export function MCPInstallList({
   installs,
   loading,
   busyID,
@@ -47,119 +51,115 @@ export function MCPInstallList({
 }: Props) {
   if (loading) {
     return (
-      <div className="flex h-40 items-center justify-center">
-        <Loader2 size={16} className="animate-spin text-[var(--c-text-tertiary)]" />
+      <div className="grid min-h-[160px] place-items-center rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] text-[var(--c-text-muted)]">
+        <Loader2 size={18} className="animate-spin" />
       </div>
     )
   }
 
   if (installs.length === 0) {
     return (
-      <div
-        className="flex flex-col items-center justify-center gap-1 rounded-xl py-12 text-center"
-        style={{ border: '0.5px solid var(--c-border-subtle)' }}
-      >
-        <span className="text-sm font-medium text-[var(--c-text-heading)]">{copy.empty}</span>
+      <div className="rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] px-5 py-6 text-center text-sm text-[var(--c-text-tertiary)]">
+        {copy.empty}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={SETTINGS_TWO_COLUMN_GRID_CLASS}>
       {installs.map((install) => {
         const busy = busyID === install.id
         const isOpen = menuID === install.id
 
         return (
-          <div
-            key={install.id}
-            className="flex items-center gap-3 rounded-xl px-4 py-3 bg-[var(--c-bg-menu)]"
-            style={{ border: '0.5px solid var(--c-border-subtle)' }}
-          >
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="truncate text-[13px] font-medium text-[var(--c-text-heading)]">
+          <div key={install.id} className={SETTINGS_CARD_SURFACE_OVERFLOW_VISIBLE_CLASS}>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-2.5">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <span className="min-w-0 truncate text-sm font-semibold text-[var(--c-text-heading)]">
                   {install.display_name}
                 </span>
                 <span
-                  className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-[10px] font-medium leading-tight"
+                  className="inline-flex h-5 shrink-0 items-center rounded px-1.5 text-[10px] font-medium leading-none"
                   style={busy ? statusBadgeStyle('needs_check') : statusBadgeStyle(install.discovery_status)}
                 >
-                  {busy && <Loader2 size={10} className="animate-spin" />}
+                  {busy && <Loader2 size={10} className="mr-0.5 animate-spin" />}
                   {busy ? copy.loading : statusLabel(install.discovery_status, copy.status)}
                 </span>
               </div>
-              {install.last_error_message && (
-                <p className="text-xs" style={{ color: 'var(--c-status-error-text)' }}>
+
+              <div
+                className="flex shrink-0 items-center gap-2"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <SettingsSwitch
+                  checked={install.workspace_state?.enabled ?? false}
+                  disabled={busy}
+                  onChange={() => onToggle(install)}
+                />
+
+                <div className="relative shrink-0" ref={isOpen ? menuRef : undefined}>
+                  <button
+                    type="button"
+                    onClick={() => setMenuID(isOpen ? null : install.id)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--c-text-tertiary)] transition-colors hover:bg-[var(--c-bg-deep)]"
+                  >
+                    {busy ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <MoreHorizontal size={14} />
+                    )}
+                  </button>
+                  {isOpen && (
+                    <div
+                      className="dropdown-menu absolute right-0 top-[calc(100%+4px)] z-50"
+                      style={{
+                        border: '0.5px solid var(--c-border-subtle)',
+                        borderRadius: '10px',
+                        padding: '4px',
+                        background: 'var(--c-bg-menu)',
+                        width: '180px',
+                        boxShadow: 'var(--c-dropdown-shadow)',
+                      }}
+                    >
+                      <DropdownAction
+                        icon={<Pencil size={14} />}
+                        label={copy.edit}
+                        onClick={() => {
+                          setMenuID(null)
+                          onEdit(install)
+                        }}
+                      />
+                      <DropdownAction
+                        icon={<RefreshCw size={14} />}
+                        label={copy.recheck}
+                        onClick={() => {
+                          setMenuID(null)
+                          onCheck(install)
+                        }}
+                      />
+                      <DropdownAction
+                        icon={<Trash2 size={14} />}
+                        label={copy.delete}
+                        destructive
+                        onClick={() => {
+                          setMenuID(null)
+                          onDelete(install)
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {install.last_error_message ? (
+              <div className="border-t border-[var(--c-border-subtle)] px-5 py-2">
+                <p className="line-clamp-2 text-xs leading-snug" style={{ color: 'var(--c-status-error-text)' }}>
                   {install.last_error_message}
                 </p>
-              )}
-            </div>
-
-            <div className="flex shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
-              <SettingsSwitch
-                checked={install.workspace_state?.enabled ?? false}
-                disabled={busy}
-                onChange={() => onToggle(install)}
-              />
-            </div>
-
-            <div
-              className="relative shrink-0"
-              ref={isOpen ? menuRef : undefined}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={() => setMenuID(isOpen ? null : install.id)}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--c-text-tertiary)] transition-colors hover:bg-[var(--c-bg-deep)]"
-              >
-                {busy ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <MoreHorizontal size={14} />
-                )}
-              </button>
-              {isOpen && (
-                <div
-                  className="dropdown-menu absolute right-0 top-[calc(100%+4px)] z-50"
-                  style={{
-                    border: '0.5px solid var(--c-border-subtle)',
-                    borderRadius: '10px',
-                    padding: '4px',
-                    background: 'var(--c-bg-menu)',
-                    width: '180px',
-                    boxShadow: 'var(--c-dropdown-shadow)',
-                  }}
-                >
-                  <DropdownAction
-                    icon={<Pencil size={14} />}
-                    label={copy.edit}
-                    onClick={() => {
-                      setMenuID(null)
-                      onEdit(install)
-                    }}
-                  />
-                  <DropdownAction
-                    icon={<RefreshCw size={14} />}
-                    label={copy.recheck}
-                    onClick={() => {
-                      setMenuID(null)
-                      onCheck(install)
-                    }}
-                  />
-                  <DropdownAction
-                    icon={<Trash2 size={14} />}
-                    label={copy.delete}
-                    destructive
-                    onClick={() => {
-                      setMenuID(null)
-                      onDelete(install)
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+              </div>
+            ) : null}
           </div>
         )
       })}
