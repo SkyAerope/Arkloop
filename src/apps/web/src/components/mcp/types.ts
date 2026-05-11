@@ -175,15 +175,12 @@ export type MCPStatusCopy = {
 
 export type MCPCopy = {
   add: string
-  refresh: string
   scan: string
   create: string
   save: string
   cancel: string
   delete: string
-  edit: string
   recheck: string
-  actions: string
   enable: string
   disable: string
   import: string
@@ -192,6 +189,9 @@ export type MCPCopy = {
   loading: string
   empty: string
   sourceEmpty: string
+  externalEmpty: string
+  externalScanSummary: (sourceCount: number, proposalCount: number) => string
+  externalRemoveDir: string
   formTitleCreate: string
   formTitleEdit: string
   scanTitle: string

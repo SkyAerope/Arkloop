@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, Plus, RefreshCw } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { ConfirmDialog } from '@arkloop/shared'
 import {
   checkMCPInstall,
@@ -89,15 +89,12 @@ export function MCPSettingsContent({ accessToken }: Props) {
     if (locale === 'zh') {
       return {
         add: '添加服务器',
-        refresh: '刷新',
-        scan: '扫描导入',
+        scan: '扫描',
         create: '创建',
         save: '保存',
         cancel: '取消',
         delete: '删除',
-        edit: '编辑',
         recheck: '重检',
-        actions: '操作',
         enable: '启用',
         disable: '禁用',
         import: '导入',
@@ -106,6 +103,9 @@ export function MCPSettingsContent({ accessToken }: Props) {
         loading: '加载中...',
         empty: '还没有 MCP 安装项。',
         sourceEmpty: '扫描结果会显示在这里。',
+        externalEmpty: '未配置 MCP 来源文件',
+        externalScanSummary: (s: number, p: number) => `已扫描 ${s} 个来源，共 ${p} 个可导入项`,
+        externalRemoveDir: '移除',
         formTitleCreate: '新建 MCP 服务器',
         formTitleEdit: '编辑 MCP 服务器',
         scanTitle: '从文件导入',
@@ -155,15 +155,12 @@ export function MCPSettingsContent({ accessToken }: Props) {
     }
     return {
       add: 'Add Server',
-      refresh: 'Refresh',
-      scan: 'Scan & Import',
+      scan: 'Scan',
       create: 'Create',
       save: 'Save',
       cancel: 'Cancel',
       delete: 'Delete',
-      edit: 'Edit',
       recheck: 'Recheck',
-      actions: 'Actions',
       enable: 'Enable',
       disable: 'Disable',
       import: 'Import',
@@ -172,6 +169,9 @@ export function MCPSettingsContent({ accessToken }: Props) {
       loading: 'Loading...',
       empty: 'No MCP installs yet.',
       sourceEmpty: 'Scan results will appear here.',
+      externalEmpty: 'No MCP source files configured',
+      externalScanSummary: (s: number, p: number) => `Scanned ${s} source${s !== 1 ? 's' : ''}, ${p} importable`,
+      externalRemoveDir: 'Remove',
       formTitleCreate: 'New MCP Server',
       formTitleEdit: 'Edit MCP Server',
       scanTitle: 'Import From File',
@@ -271,6 +271,15 @@ export function MCPSettingsContent({ accessToken }: Props) {
     setEditing(null)
     setFormError('')
   }, [saving])
+
+  const requestDeleteFromModal = useCallback(() => {
+    if (!editing || saving) return
+    const target = editing
+    setFormOpen(false)
+    setEditing(null)
+    setFormError('')
+    setDeleteTarget(target)
+  }, [editing, saving])
 
   const handleSave = useCallback(async () => {
     try {
@@ -437,14 +446,6 @@ export function MCPSettingsContent({ accessToken }: Props) {
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <SettingsButton
-            variant="secondary"
-            onClick={() => void loadInstalls()}
-            disabled={loading}
-            icon={loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          >
-            {copy.refresh}
-          </SettingsButton>
-          <SettingsButton
             variant="primary"
             onClick={openCreate}
             icon={<Plus size={14} />}
@@ -466,9 +467,7 @@ export function MCPSettingsContent({ accessToken }: Props) {
         loading={loading}
         busyID={busyID}
         onEdit={openEdit}
-        onDelete={setDeleteTarget}
         onToggle={(i) => void handleToggle(i)}
-        onCheck={(i) => void handleCheck(i)}
         copy={copy}
       />
 
@@ -494,8 +493,11 @@ export function MCPSettingsContent({ accessToken }: Props) {
         setField={setField}
         formError={formError}
         saving={saving}
+        recheckBusy={editing != null && busyID === editing.id}
         onSave={() => void handleSave()}
         onClose={closeForm}
+        onRecheck={editing ? () => void handleCheck(editing) : undefined}
+        onRequestDelete={editing ? requestDeleteFromModal : undefined}
         copy={copy}
       />
       <ConfirmDialog
