@@ -53,7 +53,7 @@ import {
   buildMessageThinkingFromAgentEvents,
   buildTodosFromAgentEvents,
 } from '../agentEventProcessing'
-import { getThreadTodos, setThreadTodos, clearThreadTodos } from '../todoDb'
+import { getThreadTodos, setThreadTodos, clearThreadTodos, type TodoItem } from '../todoDb'
 import {
   buildAssistantTurnFromAgentEvents,
   copSegmentCalls,
@@ -1316,6 +1316,7 @@ export const ChatView = memo(function ChatView() {
             ))
           )
         let replayThreadHandoff: ReturnType<typeof readThreadRunHandoff> = null
+        let replayedTodos: TodoItem[] = []
         if (shouldReplayLatestRun && latest) {
           try {
             const replayEvents = await readAgentUIEvents(
@@ -1436,9 +1437,8 @@ export const ChatView = memo(function ChatView() {
                 searchSteps: replaySearchSteps,
               }
             }
-            const replayedTodos = buildTodosFromAgentEvents(replayEvents)
+            replayedTodos = buildTodosFromAgentEvents(replayEvents)
             if (replayedTodos.length > 0) {
-              setWorkTodos(replayedTodos)
               setThreadTodos(threadId, replayedTodos).catch(() => {})
             }
             if (lastAssistant && (latest.status === 'completed' || latest.status === 'cancelled' || latest.status === 'interrupted')) {
@@ -1486,6 +1486,9 @@ export const ChatView = memo(function ChatView() {
         if (latest?.status === 'failed') {
           setTerminalRunDisplayId(latest.run_id)
           setTerminalRunHandoffStatus('failed')
+        }
+        if (replayedTodos.length > 0) {
+          setWorkTodos(replayedTodos)
         }
 
         const restoreThreadHandoffUi = (

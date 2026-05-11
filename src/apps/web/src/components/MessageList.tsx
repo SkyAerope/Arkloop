@@ -1,4 +1,4 @@
-import { memo, Fragment, type ComponentProps, useMemo } from 'react'
+import { memo, Fragment, type ComponentProps, useCallback, useMemo } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { CopTimeline, type WebSearchPhaseStep } from './cop-timeline/CopTimeline'
 import { CopSegmentBlocks } from './CopSegmentBlocks'
@@ -18,12 +18,12 @@ import { useAuth } from '../contexts/auth'
 import { useThreadList } from '../contexts/thread-list'
 import { apiBaseUrl } from '@arkloop/shared/api'
 import type { AgentMessage } from '../agent-ui'
-import { copTimelinePayloadForSegment } from '../copSegmentTimeline'
+import { copTimelinePayloadForSegment, type CopTimelinePayload, type TodoWriteRef } from '../copSegmentTimeline'
 import { buildResolvedPool, EMPTY_POOL, buildFallbackSegments } from '../copSubSegment'
 import { assistantTurnPlainText } from '../assistantTurnSegments'
 import { resolveMessageSourcesForRender } from './chatSourceResolver'
 import { createThreadShare } from '../api'
-import { readMessageTerminalStatus, readMessageWidgets, type ArtifactRef, type SubAgentRef, type WebSource } from '../storage'
+import { readMessageTerminalStatus, readMessageWidgets, type ArtifactRef, type SubAgentRef, type WebSource, type WidgetRef } from '../storage'
 import { useLocation } from 'react-router-dom'
 import type { CodeExecution } from './CodeExecutionCard'
 import type { ResourceRef } from './resource-preview/types'
@@ -158,7 +158,7 @@ export const MessageList = memo(function MessageList({
   const sharingMessageId = panels.shareModal.sharingMessageId
   const sharedMessageId = panels.shareModal.sharedMessageId
 
-  const createShareForMessage = (messageId: string) => {
+  const createShareForMessage = useCallback((messageId: string) => {
     if (!threadId || sharingMessageId) return
     panels.setShareState(messageId, null)
     createThreadShare(accessToken, threadId, 'public')
@@ -171,7 +171,106 @@ export const MessageList = memo(function MessageList({
       .catch(() => {
         panels.setShareState(null, null)
       })
-  }
+  }, [threadId, sharingMessageId, accessToken, panels])
+
+  // Pre-build stable callbacks per message to make MessageBubble's React.memo effective.
+  // Rebuilds only when messages, streaming state, or parent callbacks change —
+  // not on every bumpSnapshot/liveAssistantTurn change during streaming.
+  const bubbleCallbacksByMessageId = useMemo(() => {
+    const map = new Map<string, {
+      onRetry?: () => void
+      onEdit?: (newContent: string) => void
+      onFork?: () => void
+      onShare?: () => void
+      onOpenDocument?: typeof openDocumentPanel
+      onOpenResource?: typeof openResourcePanel
+      onViewRunDetail?: () => void
+    }>()
+
+    for (const msg of messages) {
+      if (msg.role === 'user' && !isStreaming && !sending) {
+        map.set(msg.id, {
+          onRetry: () => handleRetryUserMessage(msg),
+          onEdit: (newContent: string) => handleEditMessage(msg, newContent),
+        })
+      } else if (msg.role === 'assistant') {
+        const callbacks: {
+          onFork?: () => void
+          onShare?: () => void
+          onOpenDocument?: typeof openDocumentPanel
+          onOpenResource?: typeof openResourcePanel
+          onViewRunDetail?: () => void
+        } = {
+          onOpenDocument: openDocumentPanel,
+          onOpenResource: openResourcePanel,
+        }
+        if (!isStreaming && !sending) {
+          callbacks.onFork = () => { void handleFork(msg.id) }
+          if (threadId && !privateThreadIds.has(threadId)) {
+            callbacks.onShare = () => createShareForMessage(msg.id)
+          }
+        }
+        if (showRunDetailButton && msg.streamId) {
+          callbacks.onViewRunDetail = () => setRunDetailPanelRunId(msg.streamId!)
+        }
+        map.set(msg.id, callbacks)
+      }
+    }
+    return map
+  }, [messages, isStreaming, sending, threadId, privateThreadIds, handleRetryUserMessage, handleEditMessage, handleFork, openDocumentPanel, openResourcePanel, showRunDetailButton, setRunDetailPanelRunId, createShareForMessage])
+
+  // Pre-compute cop timeline payloads to avoid calling copTimelinePayloadForSegment
+  // on every render for every message with cop segments.
+  // Uses meta.getMeta (stable ref-read) so it does not rebuild when meta state bumps
+  // during streaming — only when messages actually change.
+  const copPayloadsByMessageId = useMemo(() => {
+    const getMeta = meta.getMeta
+    const map = new Map<string, {
+      payloads: Map<string, CopTimelinePayload>
+      turnTodoWrites: TodoWriteRef[]
+      histWidgetsMap: Map<string, WidgetRef[]>
+    }>()
+
+    for (const msg of messages) {
+      if (msg.role !== 'assistant') continue
+      const msgMeta = getMeta(msg.id)
+      const historicalTurn = msgMeta?.assistantTurn
+      if (!historicalTurn || historicalTurn.segments.length === 0) continue
+
+      const msgWidgetsRaw = msgMeta?.widgets ?? readMessageWidgets(msg.id) ?? undefined
+
+      const timelinePools = {
+        codeExecutions: msgMeta?.codeExecutions ?? undefined,
+        fileOps: msgMeta?.fileOps,
+        webFetches: msgMeta?.webFetches,
+        subAgents: msgMeta?.subAgents,
+        searchSteps: msgMeta?.searchSteps ?? [],
+        sources: [] as WebSource[],
+      }
+
+      const payloads = new Map<string, CopTimelinePayload>()
+      const turnTodoWrites: TodoWriteRef[] = []
+      const histWidgetsMap = new Map<string, WidgetRef[]>()
+
+      for (let si = 0; si < historicalTurn.segments.length; si++) {
+        const seg = historicalTurn.segments[si]!
+        if (seg.type === 'cop') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const payload = copTimelinePayloadForSegment(seg, timelinePools as any)
+          payloads.set(String(si), payload)
+          if (payload.todoWrites) turnTodoWrites.push(...payload.todoWrites)
+          const histWidgets = historicWidgetsForCop(seg, msgWidgetsRaw)
+          histWidgetsMap.set(String(si), histWidgets)
+        }
+      }
+
+      map.set(msg.id, { payloads, turnTodoWrites, histWidgetsMap })
+    }
+    return map
+    // meta.getMeta is a stable useCallback (empty deps), intentionally excluded
+    // to avoid rebuilds when meta state changes during streaming.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages])
 
   const renderMessage = (msg: AgentMessage, idx: number) => {
     const hideTerminalRunMessage =
@@ -219,6 +318,7 @@ export const MessageList = memo(function MessageList({
     const messageFileOps = msg.role === 'assistant' ? msgMeta?.fileOps : undefined
     const messageWebFetches = msg.role === 'assistant' ? msgMeta?.webFetches : undefined
     const msgThinking = msg.role === 'assistant' ? msgMeta?.thinking : undefined
+    const bubbleCallbacks = bubbleCallbacksByMessageId.get(msg.id)
     return (
       <div
         key={msg.id}
@@ -262,6 +362,7 @@ export const MessageList = memo(function MessageList({
                 />
               ) : (
                 (() => {
+                  const precomputed = copPayloadsByMessageId.get(msg.id)
                   const timelinePools = {
                     codeExecutions: messageCodeExecutions,
                     fileOps: messageFileOps,
@@ -270,12 +371,12 @@ export const MessageList = memo(function MessageList({
                     searchSteps: messageSearchSteps ?? [],
                     sources: resolvedSources ?? [],
                   }
-                  const turnTodoWrites = historicalSegments
+                  const turnTodoWrites = precomputed?.turnTodoWrites ?? historicalSegments
                     .flatMap((entry) => entry.type === 'cop'
                       ? copTimelinePayloadForSegment(entry, timelinePools).todoWrites ?? []
                       : [])
-                  const payload = copTimelinePayloadForSegment(seg, timelinePools)
-                  const histWidgets = historicWidgetsForCop(seg, msgWidgetsRaw)
+                  const payload = precomputed?.payloads.get(String(si)) ?? copTimelinePayloadForSegment(seg, timelinePools)
+                  const histWidgets = precomputed?.histWidgetsMap.get(String(si)) ?? historicWidgetsForCop(seg, msgWidgetsRaw)
                   const segmentLive = currentRunMessageLive && si === historicalSegments.length - 1
 
                   const timelineTitleOverride = displayTerminalStatus != null
@@ -390,26 +491,10 @@ export const MessageList = memo(function MessageList({
           }
           animateUserEnter={msg.role === 'user' && msg.id === userEnterMessageId}
           onUserEnterAnimationEnd={msg.role === 'user' && msg.id === userEnterMessageId ? clearUserEnterAnimation : undefined}
-          onRetry={
-            msg.role === 'user' && !isStreaming && !sending
-              ? () => handleRetryUserMessage(msg)
-              : undefined
-          }
-          onEdit={
-            msg.role === 'user' && !isStreaming && !sending
-              ? (newContent) => handleEditMessage(msg, newContent)
-              : undefined
-          }
-          onFork={
-            msg.role === 'assistant' && !isStreaming && !sending
-              ? () => void handleFork(msg.id)
-              : undefined
-          }
-          onShare={
-            msg.role === 'assistant' && !isStreaming && !sending && threadId && !privateThreadIds.has(threadId)
-              ? () => createShareForMessage(msg.id)
-              : undefined
-          }
+          onRetry={bubbleCallbacks?.onRetry}
+          onEdit={bubbleCallbacks?.onEdit}
+          onFork={bubbleCallbacks?.onFork}
+          onShare={bubbleCallbacks?.onShare}
           shareState={
             sharingMessageId === msg.id ? 'sharing' : sharedMessageId === msg.id ? 'shared' : 'idle'
           }
@@ -433,13 +518,9 @@ export const MessageList = memo(function MessageList({
                 }
               : undefined
           }
-          onOpenDocument={msg.role === 'assistant' ? openDocumentPanel : undefined}
-          onOpenResource={msg.role === 'assistant' ? openResourcePanel : undefined}
-          onViewRunDetail={
-            showRunDetailButton && msg.role === 'assistant' && msg.streamId
-              ? () => setRunDetailPanelRunId(msg.streamId!)
-              : undefined
-          }
+          onOpenDocument={bubbleCallbacks?.onOpenDocument}
+          onOpenResource={bubbleCallbacks?.onOpenResource}
+          onViewRunDetail={bubbleCallbacks?.onViewRunDetail}
           contentOverride={msg.role === 'assistant' && hasAssistantTurn ? '' : undefined}
           plainTextForCopy={msg.role === 'assistant' && hasAssistantTurn ? assistantTurnPlainText(historicalTurn!) : undefined}
           suppressActionBar={msg.role === 'assistant' && hasAssistantTurn && idx === messages.length - 1 && !isStreaming && !sending}
