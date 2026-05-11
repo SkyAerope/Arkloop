@@ -910,6 +910,8 @@ export interface LocaleStrings {
     title: string;
     description: string;
     auditLoading: string;
+    sectionDetect: string;
+    sectionResponse: string;
   };
 
   // desktop settings navigation

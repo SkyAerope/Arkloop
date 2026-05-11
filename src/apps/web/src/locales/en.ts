@@ -975,6 +975,8 @@ export const en: LocaleStrings = {
     semanticApiKeyLabel: "API Key",
     semanticApiKeyHint: "Enter your OpenRouter or Groq API key",
     semanticBridgeRequired: "Bridge service is not available. Start Bridge first.",
+    sectionDetect: "Detection",
+    sectionResponse: "Blocking",
     toastUpdated: "Updated",
     toastFailed: "Update failed",
     toastLoadFailed: "Failed to load",

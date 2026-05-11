@@ -65,7 +65,7 @@ export function MCPInstallList({
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       {installs.map((install) => {
         const busy = busyID === install.id
         const sub = rowSubtitle(install)
@@ -82,17 +82,15 @@ export function MCPInstallList({
             key={install.id}
             className="overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)]"
           >
-            <div className="grid w-full grid-cols-1 items-center sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center">
               <div
                 role="button"
                 tabIndex={busy ? -1 : 0}
                 className={[
-                  'flex min-h-[76px] cursor-pointer items-center px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]',
+                  'flex cursor-pointer items-center px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--c-accent)]',
                   busy ? 'pointer-events-none opacity-50' : '',
                 ].join(' ')}
-                onClick={() => {
-                  if (!busy) onEdit(install)
-                }}
+                onClick={() => { if (!busy) onEdit(install) }}
                 onKeyDown={handleMainKeyDown}
               >
                 <div className="min-w-0 flex-1">
@@ -122,7 +120,7 @@ export function MCPInstallList({
               </div>
 
               <div
-                className="flex items-center justify-end px-4 py-3 sm:justify-center sm:px-4"
+                className="flex items-center px-4"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
               >

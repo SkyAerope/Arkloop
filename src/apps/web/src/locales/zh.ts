@@ -966,6 +966,8 @@ export const zh: LocaleStrings = {
     semanticApiKeyLabel: "API Key",
     semanticApiKeyHint: "输入 OpenRouter / Groq API Key",
     semanticBridgeRequired: "Bridge 服务不可用，请先启动 Bridge。",
+    sectionDetect: "检测扫描",
+    sectionResponse: "拦截防护",
     toastUpdated: "已更新",
     toastFailed: "更新失败",
     toastLoadFailed: "加载失败",
