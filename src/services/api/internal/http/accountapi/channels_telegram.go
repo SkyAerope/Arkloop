@@ -44,7 +44,6 @@ type telegramChannelConfig struct {
 	AllowedUserIDs        []string `json:"allowed_user_ids,omitempty"`
 	PrivateAllowedUserIDs []string `json:"private_allowed_user_ids"`
 	AllowedGroupIDs       []string `json:"allowed_group_ids"`
-	DefaultModel          string   `json:"default_model,omitempty"`
 	BotUsername           string   `json:"bot_username,omitempty"`
 	BotFirstName          string   `json:"bot_first_name,omitempty"`
 	TelegramBotUserID     int64    `json:"telegram_bot_user_id,omitempty"`
@@ -210,6 +209,7 @@ func normalizeChannelConfigJSON(channelType string, raw json.RawMessage) (json.R
 	}
 
 	if channelType != "telegram" {
+		delete(generic, "default_model")
 		normalized, err := json.Marshal(generic)
 		if err != nil {
 			return nil, nil, err
@@ -232,7 +232,6 @@ func normalizeChannelConfigJSON(channelType string, raw json.RawMessage) (json.R
 	}
 	cfg.AllowedGroupIDs = normalizedGroupIDs
 	cfg.AllowedUserIDs = nil
-	cfg.DefaultModel = strings.TrimSpace(cfg.DefaultModel)
 	cfg.BotUsername = strings.TrimSpace(strings.TrimPrefix(cfg.BotUsername, "@"))
 	cfg.TelegramReactionEmoji = strings.TrimSpace(cfg.TelegramReactionEmoji)
 	cfg.TriggerKeywords = normalizeTelegramTriggerKeywords(cfg.TriggerKeywords)
@@ -383,13 +382,6 @@ type telegramSelectorCandidate struct {
 	priority       int
 	accountScoped  bool
 	tags           []string
-}
-
-func validateTelegramChannelConfigSelectors(ctx context.Context, db data.Querier, accountID uuid.UUID, cfg telegramChannelConfig, allowUserScoped bool) error {
-	if err := validateModelSelector(ctx, db, accountID, cfg.DefaultModel, allowUserScoped); err != nil {
-		return fmt.Errorf("default_model %w", err)
-	}
-	return nil
 }
 
 func validateModelSelector(ctx context.Context, db data.Querier, accountID uuid.UUID, selector string, allowUserScoped bool) error {
@@ -589,7 +581,6 @@ func syncTelegramChannelHeartbeatTriggers(
 	accountID uuid.UUID,
 	channelID uuid.UUID,
 	personaID *uuid.UUID,
-	defaultModel string,
 	allowUserScoped bool,
 	personasRepo *data.PersonasRepository,
 ) error {
@@ -611,7 +602,7 @@ func syncTelegramChannelHeartbeatTriggers(
 		if err := rows.Scan(&identityID, &threadID); err != nil {
 			return err
 		}
-		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identityID, threadID, defaultModel, allowUserScoped, personasRepo); err != nil {
+		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identityID, threadID, allowUserScoped, personasRepo); err != nil {
 			return err
 		}
 	}
@@ -626,7 +617,6 @@ func syncTelegramThreadHeartbeatTrigger(
 	personaID *uuid.UUID,
 	identityID uuid.UUID,
 	threadID uuid.UUID,
-	defaultModel string,
 	allowUserScoped bool,
 	personasRepo *data.PersonasRepository,
 ) error {
@@ -642,12 +632,12 @@ func syncTelegramThreadHeartbeatTrigger(
 		return repo.DeleteHeartbeatForThread(ctx, tx, threadID)
 	}
 	model = strings.TrimSpace(model)
-	if model == "" {
-		model = strings.TrimSpace(defaultModel)
+	if model != "" {
+		if err := validateModelSelector(ctx, tx, accountID, model, allowUserScoped); err != nil {
+			return err
+		}
 	}
-	if err := validateModelSelector(ctx, tx, accountID, model, allowUserScoped); err != nil {
-		return err
-	}
+	resolveModelAtRuntime := model == ""
 	if personaID == nil || *personaID == uuid.Nil {
 		return fmt.Errorf("heartbeat persona not configured")
 	}
@@ -658,7 +648,7 @@ func syncTelegramThreadHeartbeatTrigger(
 	if persona == nil {
 		return fmt.Errorf("heartbeat persona not found")
 	}
-	return repo.UpsertHeartbeatForThread(ctx, tx, accountID, channelID, identityID, threadID, persona.PersonaKey, model, intervalMin)
+	return repo.UpsertHeartbeatForThread(ctx, tx, accountID, channelID, identityID, threadID, persona.PersonaKey, model, resolveModelAtRuntime, intervalMin)
 }
 
 func deleteTelegramChannelHeartbeatTriggers(ctx context.Context, tx pgx.Tx, channelID uuid.UUID) error {
@@ -1127,10 +1117,8 @@ func (c telegramConnector) persistTelegramGroupPassiveMessageTx(
 	if err != nil {
 		return uuid.Nil, "", err
 	}
-	if cfg, cfgErr := resolveTelegramConfig(ch.ChannelType, ch.ConfigJSON); cfgErr == nil {
-		if err := ensureInboundThreadDefaultModel(ctx, tx, threadID, cfg.DefaultModel); err != nil {
-			return uuid.Nil, "", err
-		}
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+		return uuid.Nil, "", err
 	}
 	timeCtx := c.resolveInboundTimeContext(ctx, ch, identity, incoming)
 	content, contentJSON, metadataJSON, stickers, err := buildTelegramStructuredMessageWithMediaAndStickers(
@@ -1584,7 +1572,7 @@ func (c telegramConnector) notifyActiveRunInput(ctx context.Context, runID uuid.
 	c.inputNotify(ctx, runID)
 }
 
-func buildChannelRunStartedData(personaRef string, _ string, reasoningMode string, channelDelivery map[string]any) map[string]any {
+func buildChannelRunStartedData(personaRef string, reasoningMode string, channelDelivery map[string]any) map[string]any {
 	dataJSON := map[string]any{
 		"persona_id":          personaRef,
 		"continuation_source": "none",
@@ -1601,7 +1589,6 @@ func buildChannelRunStartedData(personaRef string, _ string, reasoningMode strin
 
 func buildTelegramRunStartedData(
 	personaRef string,
-	defaultModel string,
 	reasoningMode string,
 	channelID uuid.UUID,
 	channelIdentityID uuid.UUID,
@@ -1609,7 +1596,6 @@ func buildTelegramRunStartedData(
 ) map[string]any {
 	return buildChannelRunStartedData(
 		personaRef,
-		defaultModel,
 		reasoningMode,
 		buildTelegramChannelDeliveryPayload(channelID, channelIdentityID, incoming),
 	)
@@ -1703,6 +1689,7 @@ func trimOptional(value *string) string {
 	}
 	return strings.TrimSpace(*value)
 }
+
 // 支持：/heartbeat、/heartbeat on、/heartbeat off、/heartbeat interval N、/heartbeat model NAME
 func handleTelegramHeartbeatCommand(
 	ctx context.Context,
@@ -1710,7 +1697,6 @@ func handleTelegramHeartbeatCommand(
 	channelID uuid.UUID,
 	accountID uuid.UUID,
 	personaID *uuid.UUID,
-	defaultModel string,
 	threadID uuid.UUID,
 	identity data.ChannelIdentity,
 	rawText string,
@@ -1732,10 +1718,9 @@ func handleTelegramHeartbeatCommand(
 		return "", err
 	}
 	if !ok {
-		enabled, intervalMin, model, err = channelIdentitiesRepo.WithTx(tx).GetHeartbeatConfig(ctx, identity.ID)
-		if err != nil {
-			return "", err
-		}
+		enabled = false
+		intervalMin = 0
+		model = ""
 	}
 
 	if len(parts) == 1 {
@@ -1756,13 +1741,15 @@ func handleTelegramHeartbeatCommand(
 		if intervalMin <= 0 {
 			intervalMin = runkind.DefaultHeartbeatIntervalMinutes
 		}
-		if err := validateModelSelector(ctx, tx, accountID, firstNonEmptySelector(model, defaultModel), allowUserScoped); err != nil {
-			return "当前心跳模型无效，请先重新设置 /heartbeat model <模型选择器>。", nil
+		if strings.TrimSpace(model) != "" {
+			if err := validateModelSelector(ctx, tx, accountID, model, allowUserScoped); err != nil {
+				return "当前心跳模型无效，请先重新设置 /heartbeat model <模型选择器>。", nil
+			}
 		}
 		if err := updateInboundThreadHeartbeatConfig(ctx, tx, threadID, true, intervalMin, model); err != nil {
 			return "", err
 		}
-		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, defaultModel, allowUserScoped, personasRepo); err != nil {
+		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, allowUserScoped, personasRepo); err != nil {
 			return "", err
 		}
 		return "心跳已开启。", nil
@@ -1770,7 +1757,7 @@ func handleTelegramHeartbeatCommand(
 		if err := updateInboundThreadHeartbeatConfig(ctx, tx, threadID, false, intervalMin, model); err != nil {
 			return "", err
 		}
-		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, defaultModel, allowUserScoped, personasRepo); err != nil {
+		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, allowUserScoped, personasRepo); err != nil {
 			return "", err
 		}
 		return "心跳已关闭。", nil
@@ -1782,13 +1769,15 @@ func handleTelegramHeartbeatCommand(
 		if parseErr != nil || n <= 0 {
 			return "最长间隔必须是正整数（分钟）。", nil
 		}
-		if err := validateModelSelector(ctx, tx, accountID, firstNonEmptySelector(model, defaultModel), allowUserScoped); err != nil {
-			return "当前心跳模型无效，请先重新设置 /heartbeat model <模型选择器>。", nil
+		if strings.TrimSpace(model) != "" {
+			if err := validateModelSelector(ctx, tx, accountID, model, allowUserScoped); err != nil {
+				return "当前心跳模型无效，请先重新设置 /heartbeat model <模型选择器>。", nil
+			}
 		}
 		if err := updateInboundThreadHeartbeatConfig(ctx, tx, threadID, enabled, n, model); err != nil {
 			return "", err
 		}
-		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, defaultModel, allowUserScoped, personasRepo); err != nil {
+		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, allowUserScoped, personasRepo); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("心跳最长间隔已设为 %d 分钟。", n), nil
@@ -1803,7 +1792,7 @@ func handleTelegramHeartbeatCommand(
 		if err := updateInboundThreadHeartbeatConfig(ctx, tx, threadID, enabled, intervalMin, newModel); err != nil {
 			return "", err
 		}
-		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, defaultModel, allowUserScoped, personasRepo); err != nil {
+		if err := syncTelegramThreadHeartbeatTrigger(ctx, tx, accountID, channelID, personaID, identity.ID, threadID, allowUserScoped, personasRepo); err != nil {
 			return "", err
 		}
 		if newModel == "" {

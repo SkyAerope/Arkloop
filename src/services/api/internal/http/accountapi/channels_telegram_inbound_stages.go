@@ -157,7 +157,7 @@ func (c telegramConnector) persistTelegramInboundStageA(
 		handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 			ctx, tx, ch, *persona, identity,
 			trimmedCommandText, true, incoming.PlatformChatID,
-			cfg.DefaultModel, c.entitlementSvc,
+			c.entitlementSvc,
 			ChannelCommandResolver{
 				ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 					return c.resolveTelegramThreadID(ctx, tx, ch, personaID, projectID, identity, incoming)
@@ -231,7 +231,7 @@ func (c telegramConnector) persistTelegramInboundStageA(
 			handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 				ctx, tx, ch, *persona, commandIdentity,
 				cmdText, false, incoming.PlatformChatID,
-				cfg.DefaultModel, c.entitlementSvc,
+				c.entitlementSvc,
 				ChannelCommandResolver{
 					ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 						return c.resolveTelegramThreadID(ctx, tx, ch, personaID, projectID, identity, incoming)
@@ -333,7 +333,7 @@ createRun:
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureInboundThreadDefaultModel(ctx, tx, threadID, cfg.DefaultModel); err != nil {
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
 		return nil, err
 	}
 	timeCtx := c.resolveInboundTimeContext(ctx, ch, identity, incoming)
@@ -411,7 +411,6 @@ func (c telegramConnector) continueTelegramInboundDispatch(
 	traceID string,
 	ch data.Channel,
 	personaRef string,
-	defaultModel string,
 	entry data.ChannelInboundLedgerEntry,
 ) error {
 	if c.channelLedgerRepo == nil {
@@ -537,7 +536,6 @@ func (c telegramConnector) continueTelegramInboundDispatch(
 		"thread_id", latestEntry.ThreadID.String(),
 		"platform_chat_id", latestEntry.PlatformConversationID,
 		"platform_message_id", latestEntry.PlatformMessageID,
-		"default_model", strings.TrimSpace(defaultModel),
 	)
 	return nil
 }
@@ -697,10 +695,6 @@ func (c telegramConnector) recoverPendingTelegramInboundDispatches(ctx context.C
 	if err != nil {
 		return err
 	}
-	cfg, err := resolveTelegramConfig(ch.ChannelType, ch.ConfigJSON)
-	if err != nil {
-		return err
-	}
 	items, err := c.channelLedgerRepo.ListInboundEntriesByState(ctx, ch.ID, inboundStatePendingDispatch, 256)
 	if err != nil {
 		return err
@@ -792,7 +786,7 @@ func (c telegramConnector) recoverPendingTelegramInboundDispatches(ctx context.C
 			return err
 		}
 
-		if err := c.continueTelegramInboundDispatch(ctx, observability.NewTraceID(), *ch, personaRef, cfg.DefaultModel, latest); err != nil {
+		if err := c.continueTelegramInboundDispatch(ctx, observability.NewTraceID(), *ch, personaRef, latest); err != nil {
 			if errors.Is(err, errInboundDispatchDeferred) {
 				continue
 			}

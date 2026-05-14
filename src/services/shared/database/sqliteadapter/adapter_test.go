@@ -202,15 +202,30 @@ func TestMigrateLegacyGroupHeartbeatThreads(t *testing.T) {
 		`CREATE TABLE channel_identities (
 			id TEXT PRIMARY KEY,
 			channel_type TEXT NOT NULL,
-			platform_subject_id TEXT NOT NULL
+			platform_subject_id TEXT NOT NULL,
+			heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
+			heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 30,
+			heartbeat_model TEXT NOT NULL DEFAULT '',
+			preferred_model TEXT NOT NULL DEFAULT '',
+			reasoning_mode TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE channel_identity_links (
+			id TEXT PRIMARY KEY,
+			channel_id TEXT NOT NULL,
+			channel_identity_id TEXT NOT NULL,
+			heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
+			heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 30,
+			heartbeat_model TEXT NOT NULL DEFAULT ''
 		)`,
 		`CREATE TABLE channels (
 			id TEXT PRIMARY KEY,
-			account_id TEXT NOT NULL
+			account_id TEXT NOT NULL,
+			config_json TEXT NOT NULL DEFAULT '{}'
 		)`,
 		`CREATE TABLE threads (
 			id TEXT PRIMARY KEY,
 			account_id TEXT NOT NULL,
+			config_json TEXT NOT NULL DEFAULT '{}',
 			deleted_at TEXT
 		)`,
 		`CREATE TABLE channel_group_threads (
@@ -218,6 +233,14 @@ func TestMigrateLegacyGroupHeartbeatThreads(t *testing.T) {
 			channel_id TEXT NOT NULL,
 			platform_chat_id TEXT NOT NULL,
 			persona_id TEXT NOT NULL,
+			thread_id TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE channel_dm_threads (
+			id TEXT PRIMARY KEY,
+			channel_id TEXT NOT NULL,
+			channel_identity_id TEXT NOT NULL,
 			thread_id TEXT NOT NULL,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
@@ -314,15 +337,16 @@ func TestMigrateLegacyGroupHeartbeatThreads(t *testing.T) {
 	}
 
 	var keptThreadModel string
+	var keptRuntimeResolve int
 	if err := pool.QueryRow(ctx, `
-		SELECT model
+		SELECT model, resolve_model_at_runtime
 		  FROM scheduled_triggers
 		 WHERE id = 'trigger-conflict-thread'`,
-	).Scan(&keptThreadModel); err != nil {
+	).Scan(&keptThreadModel, &keptRuntimeResolve); err != nil {
 		t.Fatalf("read kept thread trigger: %v", err)
 	}
-	if keptThreadModel != "thread-conflict" {
-		t.Fatalf("thread trigger model = %q, want thread-conflict", keptThreadModel)
+	if keptThreadModel != "" || keptRuntimeResolve != 1 {
+		t.Fatalf("thread trigger model = %q resolve=%d, want runtime", keptThreadModel, keptRuntimeResolve)
 	}
 }
 

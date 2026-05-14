@@ -41,7 +41,6 @@ type feishuChannelConfig struct {
 	AllowedUserIDs    []string `json:"allowed_user_ids,omitempty"`
 	AllowedChatIDs    []string `json:"allowed_chat_ids,omitempty"`
 	AllowAllUsers     bool     `json:"allow_all_users,omitempty"`
-	DefaultModel      string   `json:"default_model,omitempty"`
 	BotOpenID         string   `json:"bot_open_id,omitempty"`
 	BotUserID         string   `json:"bot_user_id,omitempty"`
 	BotName           string   `json:"bot_name,omitempty"`
@@ -172,7 +171,6 @@ func normalizeFeishuChannelConfig(raw json.RawMessage) (json.RawMessage, *feishu
 	if !validFeishuDomain(cfg.Domain) {
 		return nil, nil, fmt.Errorf("feishu domain must be feishu or lark")
 	}
-	cfg.DefaultModel = strings.TrimSpace(cfg.DefaultModel)
 	cfg.BotOpenID = strings.TrimSpace(cfg.BotOpenID)
 	cfg.BotUserID = strings.TrimSpace(cfg.BotUserID)
 	cfg.BotName = strings.TrimSpace(cfg.BotName)
@@ -945,7 +943,7 @@ func (c *feishuConnector) HandleIncoming(ctx context.Context, traceID string, ch
 	handled, replyText, _, _, cancelRunID, err := DispatchChannelCommand(
 		ctx, tx, ch, *persona, identity,
 		cmdText, incoming.ConversationType == "private", incoming.ChatID,
-		cfg.DefaultModel, nil,
+		nil,
 		ChannelCommandResolver{
 			ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 				return c.resolveFeishuThreadID(ctx, tx, ch, personaID, projectID, identity, incoming)
@@ -1041,7 +1039,7 @@ func (c *feishuConnector) HandleIncoming(ctx context.Context, traceID string, ch
 			if err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
-			if err := ensureInboundThreadDefaultModel(ctx, tx, threadID, cfg.DefaultModel); err != nil {
+			if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
 			content, err := messagecontent.Normalize(messagecontent.FromText(incoming.Text).Parts)

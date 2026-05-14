@@ -212,7 +212,6 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 	persona *data.Persona,
 ) error {
 	now := time.Now().UTC()
-	cfg, _ := resolveTelegramConfig(ch.ChannelType, ch.ConfigJSON)
 	tx, err := c.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
@@ -243,7 +242,7 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 		handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 			ctx, tx, ch, *persona, identity,
 			trimmedCommandText, true, incoming.PlatformChatID,
-			cfg.DefaultModel, c.entitlementSvc,
+			c.entitlementSvc,
 			ChannelCommandResolver{
 				ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 					return c.resolveTelegramThreadID(ctx, tx, ch, personaID, projectID, identity, incoming)
@@ -323,7 +322,7 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 			handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 				ctx, tx, ch, *persona, commandIdentity,
 				cmdText, false, incoming.PlatformChatID,
-				cfg.DefaultModel, c.entitlementSvc,
+				c.entitlementSvc,
 				ChannelCommandResolver{
 					ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 						return c.resolveTelegramThreadID(ctx, tx, ch, personaID, projectID, identity, incoming)
@@ -429,10 +428,8 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 	if err != nil {
 		return err
 	}
-	if cfg, cfgErr := resolveTelegramConfig(ch.ChannelType, ch.ConfigJSON); cfgErr == nil {
-		if err := ensureInboundThreadDefaultModel(ctx, tx, threadID, cfg.DefaultModel); err != nil {
-			return err
-		}
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+		return err
 	}
 	timeCtx := c.resolveInboundTimeContext(ctx, ch, identity, incoming)
 	content, contentJSON, metadataJSON, err := buildTelegramStructuredMessageWithMedia(

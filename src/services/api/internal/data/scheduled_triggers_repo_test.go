@@ -95,7 +95,7 @@ func TestScheduledTriggersRepositoryIdentityMethodsIgnoreThreadScopedRows(t *tes
 	if err := repo.UpsertHeartbeat(ctx, pool, account, channelID, identity, "legacy", "legacy-model", 10); err != nil {
 		t.Fatalf("upsert legacy heartbeat: %v", err)
 	}
-	if err := repo.UpsertHeartbeatForThread(ctx, pool, account, channelID, identity, threadID, "thread", "thread-model", 5); err != nil {
+	if err := repo.UpsertHeartbeatForThread(ctx, pool, account, channelID, identity, threadID, "thread", "thread-model", false, 5); err != nil {
 		t.Fatalf("upsert thread heartbeat: %v", err)
 	}
 	if row, err := repo.GetHeartbeat(ctx, pool, channelID, identity); err != nil {
@@ -145,7 +145,7 @@ func TestScheduledTriggersRepositoryResetCooldownForMessageForThread(t *testing.
 	nextFire := now.Add(15 * time.Second)
 	burstStart := now.Add(-10 * time.Second)
 
-	if err := repo.UpsertHeartbeatForThread(ctx, pool, account, channelID, identity, threadID, "thread", "thread-model", 5); err != nil {
+	if err := repo.UpsertHeartbeatForThread(ctx, pool, account, channelID, identity, threadID, "thread", "thread-model", false, 5); err != nil {
 		t.Fatalf("upsert thread heartbeat: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE scheduled_triggers SET cooldown_level = 2, next_fire_at = $1 WHERE thread_id = $2`, now.Add(time.Hour), threadID); err != nil {

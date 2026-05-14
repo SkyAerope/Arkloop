@@ -25,7 +25,6 @@ type qqbotChannelConfig struct {
 	AppID           string   `json:"app_id"`
 	AllowedUserIDs  []string `json:"allowed_user_ids,omitempty"`
 	AllowedGroupIDs []string `json:"allowed_group_ids,omitempty"`
-	DefaultModel    string   `json:"default_model,omitempty"`
 }
 
 func normalizeQQBotChannelConfig(raw json.RawMessage) (json.RawMessage, qqbotChannelConfig, error) {
@@ -37,7 +36,6 @@ func normalizeQQBotChannelConfig(raw json.RawMessage) (json.RawMessage, qqbotCha
 		return nil, qqbotChannelConfig{}, fmt.Errorf("config_json must be a valid JSON object")
 	}
 	cfg.AppID = strings.TrimSpace(cfg.AppID)
-	cfg.DefaultModel = strings.TrimSpace(cfg.DefaultModel)
 	cfg.AllowedUserIDs = normalizeQQBotIDList(cfg.AllowedUserIDs)
 	cfg.AllowedGroupIDs = normalizeQQBotIDList(cfg.AllowedGroupIDs)
 	if cfg.AppID == "" {
@@ -410,7 +408,7 @@ func (c qqbotConnector) HandleMessage(ctx context.Context, traceID string, ch da
 	handled, replyText, _, _, cancelRunID, err := DispatchChannelCommand(
 		ctx, tx, ch, *persona, identity,
 		text, conversationType == "private", platformChatID,
-		cfg.DefaultModel, nil,
+		nil,
 		ChannelCommandResolver{
 			ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 				return c.resolveThreadID(ctx, tx, ch, personaID, projectID, identity, isPrivate, chatID, displayName)
@@ -535,7 +533,7 @@ func (c qqbotConnector) HandleMessage(ctx context.Context, traceID string, ch da
 		return tx.Commit(ctx)
 	}
 	deliveryPayload := buildQQBotChannelDeliveryPayload(ch.ID, identity.ID, platformChatID, messageID, conversationType)
-	runData := buildChannelRunStartedData(personaRef, cfg.DefaultModel, "", deliveryPayload)
+	runData := buildChannelRunStartedData(personaRef, "", deliveryPayload)
 	run, _, err := runRepoTx.CreateRunWithStartedEvent(ctx, ch.AccountID, threadID, channelOwnerUserID(ch), "run.started", runData)
 	if err != nil {
 		return err

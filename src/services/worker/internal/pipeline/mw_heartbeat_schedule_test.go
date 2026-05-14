@@ -42,12 +42,12 @@ func TestHeartbeatScheduleMiddlewareCreatesTriggerForDiscordPrivateIdentity(t *t
 		t.Fatalf("insert channel identity: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO channel_identity_links (channel_id, channel_identity_id, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_model)
-		 VALUES ($1, $2, 1, 17, 'discord-model')`,
-		channelID,
-		senderIdentityID,
+		`UPDATE threads
+		    SET config_json = '{"heartbeat_enabled":true,"heartbeat_interval_minutes":17,"heartbeat_model":"discord-model"}'::jsonb
+		  WHERE id = $1`,
+		threadID,
 	); err != nil {
-		t.Fatalf("insert channel identity link: %v", err)
+		t.Fatalf("update thread config: %v", err)
 	}
 
 	rc := &RunContext{
@@ -107,14 +107,22 @@ func TestHeartbeatScheduleMiddlewareKeepsTelegramGroupIdentityBehavior(t *testin
 	seedPipelineRun(t, pool, accountID, threadID, runID, nil)
 
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO channel_identities (id, channel_type, platform_subject_id, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_model, metadata)
+		`INSERT INTO channel_identities (id, channel_type, platform_subject_id, metadata)
 		 VALUES
-		 ($1, 'telegram', 'chat-1001', 1, 9, 'group-model', '{}'::jsonb),
-		 ($2, 'telegram', 'user-1002', 1, 21, 'sender-model', '{}'::jsonb)`,
+		 ($1, 'telegram', 'chat-1001', '{}'::jsonb),
+		 ($2, 'telegram', 'user-1002', '{}'::jsonb)`,
 		groupIdentityID,
 		senderIdentityID,
 	); err != nil {
 		t.Fatalf("insert channel identities: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE threads
+		    SET config_json = '{"heartbeat_enabled":true,"heartbeat_interval_minutes":9,"heartbeat_model":"group-model"}'::jsonb
+		  WHERE id = $1`,
+		threadID,
+	); err != nil {
+		t.Fatalf("update thread config: %v", err)
 	}
 
 	rc := &RunContext{
@@ -173,18 +181,26 @@ func TestHeartbeatScheduleMiddlewarePreservesThreadCooldown(t *testing.T) {
 	seedPipelineRun(t, pool, accountID, threadID, runID, nil)
 
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO channel_identities (id, channel_type, platform_subject_id, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_model, metadata)
+		`INSERT INTO channel_identities (id, channel_type, platform_subject_id, metadata)
 		 VALUES
-		 ($1, 'telegram', 'chat-2001', 1, 9, 'group-model', '{}'::jsonb),
-		 ($2, 'telegram', 'user-2002', 1, 21, 'sender-model', '{}'::jsonb)`,
+		 ($1, 'telegram', 'chat-2001', '{}'::jsonb),
+		 ($2, 'telegram', 'user-2002', '{}'::jsonb)`,
 		groupIdentityID,
 		senderIdentityID,
 	); err != nil {
 		t.Fatalf("insert channel identities: %v", err)
 	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE threads
+		    SET config_json = '{"heartbeat_enabled":true,"heartbeat_interval_minutes":9,"heartbeat_model":"group-model"}'::jsonb
+		  WHERE id = $1`,
+		threadID,
+	); err != nil {
+		t.Fatalf("update thread config: %v", err)
+	}
 
 	repo := data.ScheduledTriggersRepository{}
-	if err := repo.UpsertHeartbeatForThread(ctx, pool, accountID, channelID, groupIdentityID, threadID, "telegram-persona", "group-model", 9); err != nil {
+	if err := repo.UpsertHeartbeatForThread(ctx, pool, accountID, channelID, groupIdentityID, threadID, "telegram-persona", "group-model", false, 9); err != nil {
 		t.Fatalf("upsert thread heartbeat: %v", err)
 	}
 	suspendedUntil := time.Now().UTC().Truncate(time.Microsecond).AddDate(1, 0, 0)

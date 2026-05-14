@@ -707,6 +707,210 @@ func TestMigrateLegacyGroupHeartbeatThreads(t *testing.T) {
 	}
 }
 
+func TestMigrateThreadCentricModel(t *testing.T) {
+	db := testutil.SetupPostgresDatabase(t, "migrate_thread_centric_model")
+	ctx := context.Background()
+
+	sqlDB, err := openDB(db.DSN)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	for _, stmt := range []string{
+		`CREATE TABLE goose_db_version (
+			id SERIAL PRIMARY KEY,
+			version_id BIGINT NOT NULL,
+			is_applied BOOLEAN NOT NULL,
+			tstamp TIMESTAMP DEFAULT now()
+		)`,
+		`CREATE TABLE channels (
+			id UUID PRIMARY KEY,
+			config_json JSONB NOT NULL DEFAULT '{}'::jsonb
+		)`,
+		`CREATE TABLE threads (
+			id UUID PRIMARY KEY,
+			config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+			deleted_at TIMESTAMPTZ
+		)`,
+		`CREATE TABLE channel_group_threads (
+			channel_id UUID NOT NULL,
+			thread_id UUID NOT NULL
+		)`,
+		`CREATE TABLE channel_dm_threads (
+			channel_id UUID NOT NULL,
+			thread_id UUID NOT NULL
+		)`,
+		`CREATE TABLE channel_identities (
+			id UUID PRIMARY KEY,
+			heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
+			heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 30,
+			heartbeat_model TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE channel_identity_links (
+			channel_id UUID NOT NULL,
+			channel_identity_id UUID NOT NULL,
+			heartbeat_enabled INTEGER NOT NULL DEFAULT 0,
+			heartbeat_interval_minutes INTEGER NOT NULL DEFAULT 30,
+			heartbeat_model TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE scheduled_triggers (
+			id UUID PRIMARY KEY,
+			channel_id UUID,
+			channel_identity_id UUID,
+			thread_id UUID,
+			trigger_kind TEXT NOT NULL DEFAULT 'heartbeat',
+			model TEXT NOT NULL DEFAULT ''
+		)`,
+	} {
+		if _, err := sqlDB.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("prepare schema: %v", err)
+		}
+	}
+	for v := int64(0); v <= 195; v++ {
+		if _, err := sqlDB.ExecContext(ctx, `INSERT INTO goose_db_version (version_id, is_applied) VALUES ($1, true)`, v); err != nil {
+			t.Fatalf("seed goose version %d: %v", v, err)
+		}
+	}
+
+	channelID := uuid.New()
+	renamedThreadID := uuid.New()
+	groupThreadID := uuid.New()
+	dmThreadID := uuid.New()
+	existingThreadID := uuid.New()
+	deletedThreadID := uuid.New()
+	runtimeTriggerID := uuid.New()
+	legacyTriggerID := uuid.New()
+	clearSnapshotThreadID := uuid.New()
+	clearSnapshotTriggerID := uuid.New()
+	groupIdentityID := uuid.New()
+	clearIdentityID := uuid.New()
+	linkIdentityID := uuid.New()
+	if _, err := sqlDB.ExecContext(ctx, `
+		INSERT INTO channels (id, config_json)
+		VALUES ($1, '{"default_model":"channel-model"}'::jsonb);
+		INSERT INTO channel_identities (id, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_model)
+		VALUES
+			($9, 1, 11, 'group-heartbeat-model'),
+			($10, 0, 30, ''),
+			($11, 1, 17, 'identity-model-overridden-by-link');
+		INSERT INTO channel_identity_links (channel_id, channel_identity_id, heartbeat_enabled, heartbeat_interval_minutes, heartbeat_model)
+		VALUES ($1, $11, 1, 19, 'link-heartbeat-model');
+		INSERT INTO threads (id, config_json, deleted_at)
+		VALUES
+			($2, '{"default_model":"old-model","reasoning_mode":"high"}'::jsonb, NULL),
+			($3, '{}'::jsonb, NULL),
+			($4, '{}'::jsonb, NULL),
+			($5, '{"chat_model":"keep-model"}'::jsonb, NULL),
+			($6, '{}'::jsonb, now()),
+			($12, '{}'::jsonb, NULL);
+		INSERT INTO channel_group_threads (channel_id, thread_id)
+		VALUES ($1, $3), ($1, $5), ($1, $6), ($1, $12);
+		INSERT INTO channel_dm_threads (channel_id, thread_id)
+		VALUES ($1, $4);
+		INSERT INTO scheduled_triggers (id, channel_id, channel_identity_id, thread_id, trigger_kind, model)
+		VALUES
+			($7, $1, $9, $3, 'heartbeat', 'snapshot-model'),
+			($8, $1, $9, NULL, 'heartbeat', 'legacy-model'),
+			($13, $1, $10, $12, 'heartbeat', 'stale-channel-snapshot'),
+			($14, $1, $11, $4, 'heartbeat', 'dm-snapshot');`,
+		channelID,
+		renamedThreadID,
+		groupThreadID,
+		dmThreadID,
+		existingThreadID,
+		deletedThreadID,
+		runtimeTriggerID,
+		legacyTriggerID,
+		groupIdentityID,
+		clearIdentityID,
+		linkIdentityID,
+		clearSnapshotThreadID,
+		clearSnapshotTriggerID,
+		uuid.New(),
+	); err != nil {
+		t.Fatalf("seed thread model data: %v", err)
+	}
+
+	if _, err := Up(ctx, db.DSN); err != nil {
+		t.Fatalf("upgrade migrations: %v", err)
+	}
+
+	assertThreadConfig := func(threadID uuid.UUID, wantModel string, wantDefaultKey bool) {
+		t.Helper()
+		var chatModel string
+		var hasDefault bool
+		if err := sqlDB.QueryRowContext(ctx, `
+			SELECT COALESCE(config_json->>'chat_model', ''), config_json ? 'default_model'
+			  FROM threads
+			 WHERE id = $1`,
+			threadID,
+		).Scan(&chatModel, &hasDefault); err != nil {
+			t.Fatalf("read thread config: %v", err)
+		}
+		if chatModel != wantModel || hasDefault != wantDefaultKey {
+			t.Fatalf("thread %s config: chat_model=%q has_default=%v", threadID, chatModel, hasDefault)
+		}
+	}
+	assertThreadConfig(renamedThreadID, "old-model", false)
+	assertThreadConfig(groupThreadID, "channel-model", false)
+	assertThreadConfig(dmThreadID, "channel-model", false)
+	assertThreadConfig(existingThreadID, "keep-model", false)
+	assertThreadConfig(deletedThreadID, "", false)
+	assertThreadConfig(clearSnapshotThreadID, "channel-model", false)
+
+	var groupHeartbeatModel string
+	var groupHeartbeatEnabled bool
+	var groupHeartbeatInterval int
+	if err := sqlDB.QueryRowContext(ctx, `
+		SELECT COALESCE(config_json->>'heartbeat_model', ''),
+		       COALESCE((config_json->>'heartbeat_enabled')::boolean, false),
+		       COALESCE((config_json->>'heartbeat_interval_minutes')::int, 0)
+		  FROM threads
+		 WHERE id = $1`,
+		groupThreadID,
+	).Scan(&groupHeartbeatModel, &groupHeartbeatEnabled, &groupHeartbeatInterval); err != nil {
+		t.Fatalf("read group heartbeat config: %v", err)
+	}
+	if groupHeartbeatModel != "group-heartbeat-model" || !groupHeartbeatEnabled || groupHeartbeatInterval != 11 {
+		t.Fatalf("unexpected group heartbeat config: model=%q enabled=%v interval=%d", groupHeartbeatModel, groupHeartbeatEnabled, groupHeartbeatInterval)
+	}
+
+	var dmHeartbeatModel string
+	if err := sqlDB.QueryRowContext(ctx, `SELECT COALESCE(config_json->>'heartbeat_model', '') FROM threads WHERE id = $1`, dmThreadID).Scan(&dmHeartbeatModel); err != nil {
+		t.Fatalf("read dm heartbeat config: %v", err)
+	}
+	if dmHeartbeatModel != "link-heartbeat-model" {
+		t.Fatalf("unexpected dm heartbeat model: %q", dmHeartbeatModel)
+	}
+
+	var runtimeResolve, legacyResolve bool
+	if err := sqlDB.QueryRowContext(ctx, `SELECT resolve_model_at_runtime FROM scheduled_triggers WHERE id = $1`, runtimeTriggerID).Scan(&runtimeResolve); err != nil {
+		t.Fatalf("read runtime trigger: %v", err)
+	}
+	if err := sqlDB.QueryRowContext(ctx, `SELECT resolve_model_at_runtime FROM scheduled_triggers WHERE id = $1`, legacyTriggerID).Scan(&legacyResolve); err != nil {
+		t.Fatalf("read legacy trigger: %v", err)
+	}
+	if runtimeResolve || legacyResolve {
+		t.Fatalf("unexpected resolve flags: runtime=%v legacy=%v", runtimeResolve, legacyResolve)
+	}
+	var runtimeModel string
+	if err := sqlDB.QueryRowContext(ctx, `SELECT model FROM scheduled_triggers WHERE id = $1`, runtimeTriggerID).Scan(&runtimeModel); err != nil {
+		t.Fatalf("read runtime trigger model: %v", err)
+	}
+	if runtimeModel != "group-heartbeat-model" {
+		t.Fatalf("unexpected runtime trigger model: %q", runtimeModel)
+	}
+	var clearResolve bool
+	var clearModel string
+	if err := sqlDB.QueryRowContext(ctx, `SELECT resolve_model_at_runtime, model FROM scheduled_triggers WHERE id = $1`, clearSnapshotTriggerID).Scan(&clearResolve, &clearModel); err != nil {
+		t.Fatalf("read cleared trigger: %v", err)
+	}
+	if !clearResolve || clearModel != "" {
+		t.Fatalf("expected cleared runtime trigger, resolve=%v model=%q", clearResolve, clearModel)
+	}
+}
+
 func TestReasoningIterationsBudgetMigration(t *testing.T) {
 	db := testutil.SetupPostgresDatabase(t, "migrate_reasoning_budget")
 	ctx := context.Background()

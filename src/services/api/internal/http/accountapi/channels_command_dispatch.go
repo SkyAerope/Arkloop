@@ -93,7 +93,6 @@ func DispatchChannelCommand(
 	commandText string,
 	isPrivate bool,
 	platformChatID string,
-	defaultModel string,
 	entSvc *entitlement.Service,
 	resolver ChannelCommandResolver,
 	deps ChannelCommandDeps,
@@ -159,7 +158,6 @@ func DispatchChannelCommand(
 		replyText, err = handleTelegramHeartbeatCommand(
 			ctx, tx,
 			ch.ID, ch.AccountID, ch.PersonaID,
-			defaultModel,
 			threadID,
 			heartbeatIdentity,
 			strings.TrimSpace(commandText),

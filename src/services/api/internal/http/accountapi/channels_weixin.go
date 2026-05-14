@@ -24,7 +24,6 @@ type weixinChannelConfig struct {
 	AllowedUserIDs  []string `json:"allowed_user_ids,omitempty"`
 	AllowedGroupIDs []string `json:"allowed_group_ids,omitempty"`
 	AllowAllUsers   bool     `json:"allow_all_users,omitempty"`
-	DefaultModel    string   `json:"default_model,omitempty"`
 	BaseURL         string   `json:"base_url,omitempty"`
 }
 
@@ -174,7 +173,7 @@ func (c *weixinConnector) HandleWeChatMessage(ctx context.Context, traceID strin
 	handled, replyText, _, _, cancelRunID, err := DispatchChannelCommand(
 		ctx, tx, ch, *persona, identity,
 		cmdText, isPrivate, platformChatID,
-		cfg.DefaultModel, nil,
+		nil,
 		ChannelCommandResolver{
 			ResolveThreadID: func(ctx context.Context, tx pgx.Tx, personaID, projectID uuid.UUID, isPrivate bool, chatID string) (uuid.UUID, error) {
 				return c.resolveWeixinThreadID(ctx, tx, ch, personaID, projectID, identity, isPrivate, chatID)
@@ -262,7 +261,7 @@ func (c *weixinConnector) HandleWeChatMessage(ctx context.Context, traceID strin
 			if err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
-			if err := ensureInboundThreadDefaultModel(ctx, tx, threadID, cfg.DefaultModel); err != nil {
+			if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
 			content, err := messagecontent.Normalize(messagecontent.FromText(text).Parts)

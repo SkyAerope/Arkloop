@@ -280,11 +280,7 @@ func (c telegramConnector) enqueueTelegramStickerRegisterRunTx(
 		return err
 	}
 	if identityID != nil && *identityID != uuid.Nil {
-		cfg, err := resolveTelegramConfig(ch.ChannelType, ch.ConfigJSON)
-		if err != nil {
-			return err
-		}
-		if err := ensureInboundThreadDefaultModel(ctx, tx, thread.ID, cfg.DefaultModel); err != nil {
+		if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, thread.ID); err != nil {
 			return err
 		}
 	}
@@ -355,22 +351,7 @@ func (c telegramConnector) resolveTelegramStickerModelSelector(
 	ch data.Channel,
 	identityID *uuid.UUID,
 ) (string, error) {
-	cfg, err := resolveTelegramConfig(ch.ChannelType, ch.ConfigJSON)
-	if err != nil {
-		return "", err
-	}
-	selector := strings.TrimSpace(cfg.DefaultModel)
-	if identityID == nil || *identityID == uuid.Nil || c.channelIdentitiesRepo == nil {
-		return selector, nil
-	}
-	preferredModel, _, err := c.channelIdentitiesRepo.WithTx(tx).GetPreferenceConfig(ctx, *identityID)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(preferredModel) != "" {
-		selector = strings.TrimSpace(preferredModel)
-	}
-	return selector, nil
+	return "", nil
 }
 
 func telegramStickerObjectKey(accountID uuid.UUID, contentHash, mimeType string, preview bool) string {
