@@ -204,7 +204,7 @@ func DispatchChannelCommand(
 		if activeRun == nil {
 			return true, "当前没有运行中的任务。", nil, nil, uuid.Nil, nil
 		}
-		if _, err := runEventRepo.WithTx(tx).RequestCancel(ctx, activeRun.ID, nil, "", 0, nil); err != nil {
+		if _, err := runEventRepo.WithTx(tx).RequestCancel(ctx, activeRun.ID, identity.UserID, "", 0, nil); err != nil {
 			return true, "", nil, nil, uuid.Nil, err
 		}
 		return true, "已请求停止当前任务。", nil, nil, activeRun.ID, nil
@@ -322,6 +322,14 @@ func DispatchChannelCommand(
 	case cmd == "/persona":
 		if ch.PersonaID == nil || *ch.PersonaID == uuid.Nil {
 			return true, "当前会话未配置 persona。", nil, nil, uuid.Nil, nil
+		}
+		if !isPrivate {
+			if identity.UserID == nil {
+				return true, "无权限。", nil, nil, uuid.Nil, nil
+			}
+			if resolver.IsGroupAdmin != nil && !resolver.IsGroupAdmin(ctx) {
+				return true, "无权限。", nil, nil, uuid.Nil, nil
+			}
 		}
 		currentPersona, err := personasRepo.GetByIDForAccount(ctx, ch.AccountID, *ch.PersonaID)
 		if err != nil {
