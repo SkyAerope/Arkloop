@@ -280,7 +280,7 @@ func (c telegramConnector) enqueueTelegramStickerRegisterRunTx(
 		return err
 	}
 	if identityID != nil && *identityID != uuid.Nil {
-		if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, thread.ID); err != nil {
+		if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, thread.ID, extractChannelDefaultModel(ch)); err != nil {
 			return err
 		}
 	}

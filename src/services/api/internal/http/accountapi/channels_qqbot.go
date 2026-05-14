@@ -476,6 +476,9 @@ func (c qqbotConnector) HandleMessage(ctx context.Context, traceID string, ch da
 	if err != nil {
 		return err
 	}
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID, extractChannelDefaultModel(ch)); err != nil {
+		return err
+	}
 
 	projection := buildQQBotEnvelopeText(identity.ID, displayName, conversationType, text, msg.Timestamp, senderID, messageID)
 	contentJSON, err := messagecontent.FromText(projection).JSON()

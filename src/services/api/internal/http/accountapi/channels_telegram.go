@@ -1117,7 +1117,7 @@ func (c telegramConnector) persistTelegramGroupPassiveMessageTx(
 	if err != nil {
 		return uuid.Nil, "", err
 	}
-	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID, extractChannelDefaultModel(ch)); err != nil {
 		return uuid.Nil, "", err
 	}
 	timeCtx := c.resolveInboundTimeContext(ctx, ch, identity, incoming)

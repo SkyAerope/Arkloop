@@ -261,7 +261,7 @@ func (c *weixinConnector) HandleWeChatMessage(ctx context.Context, traceID strin
 			if err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
-			if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+			if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID, extractChannelDefaultModel(ch)); err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
 			content, err := messagecontent.Normalize(messagecontent.FromText(text).Parts)

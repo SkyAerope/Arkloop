@@ -428,7 +428,7 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 	if err != nil {
 		return err
 	}
-	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID, extractChannelDefaultModel(ch)); err != nil {
 		return err
 	}
 	timeCtx := c.resolveInboundTimeContext(ctx, ch, identity, incoming)

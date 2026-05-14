@@ -92,6 +92,7 @@ UPDATE threads
    )
  WHERE json_type(COALESCE(config_json, '{}'), '$.heartbeat_enabled') IS NULL
    AND deleted_at IS NULL
+   AND EXISTS (SELECT 1 FROM pragma_table_info('channel_identity_links') WHERE name = 'heartbeat_enabled')
    AND EXISTS (
        SELECT 1
          FROM scheduled_triggers AS st
@@ -120,6 +121,7 @@ UPDATE threads
    )
  WHERE json_type(COALESCE(config_json, '{}'), '$.heartbeat_model') IS NULL
    AND deleted_at IS NULL
+   AND EXISTS (SELECT 1 FROM pragma_table_info('channel_identity_links') WHERE name = 'heartbeat_model')
    AND EXISTS (
        SELECT 1
          FROM scheduled_triggers AS st
@@ -157,6 +159,7 @@ UPDATE threads
    )
  WHERE json_type(COALESCE(config_json, '{}'), '$.heartbeat_enabled') IS NULL
    AND deleted_at IS NULL
+   AND EXISTS (SELECT 1 FROM pragma_table_info('channel_identities') WHERE name = 'heartbeat_enabled')
    AND EXISTS (
        SELECT 1
          FROM scheduled_triggers AS st
@@ -183,6 +186,7 @@ UPDATE threads
    )
  WHERE json_type(COALESCE(config_json, '{}'), '$.heartbeat_model') IS NULL
    AND deleted_at IS NULL
+   AND EXISTS (SELECT 1 FROM pragma_table_info('channel_identities') WHERE name = 'heartbeat_model')
    AND EXISTS (
        SELECT 1
          FROM scheduled_triggers AS st

@@ -250,11 +250,11 @@ type inboundThreadConfig struct {
 	HeartbeatModel          string `json:"heartbeat_model,omitempty"`
 }
 
-func ensureInboundThreadChatModel(ctx context.Context, db data.Querier, accountID uuid.UUID, threadID uuid.UUID) error {
+func ensureInboundThreadChatModel(ctx context.Context, db data.Querier, accountID uuid.UUID, threadID uuid.UUID, channelDefaultModel string) error {
 	if db == nil || threadID == uuid.Nil {
 		return nil
 	}
-	model := strings.TrimSpace(resolveNewThreadChatModel(ctx, db, accountID))
+	model := strings.TrimSpace(resolveNewThreadChatModel(ctx, db, accountID, channelDefaultModel))
 	if model == "" {
 		return nil
 	}
@@ -270,9 +270,23 @@ func ensureInboundThreadChatModel(ctx context.Context, db data.Querier, accountI
 	return writeInboundThreadConfigMap(ctx, db, threadID, config)
 }
 
-func resolveNewThreadChatModel(ctx context.Context, db data.Querier, accountID uuid.UUID) string {
-	if db == nil || accountID == uuid.Nil {
+func extractChannelDefaultModel(ch data.Channel) string {
+	if ch.ConfigJSON == nil {
 		return ""
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(ch.ConfigJSON, &cfg); err != nil {
+		return ""
+	}
+	if dm, ok := cfg["default_model"].(string); ok {
+		return strings.TrimSpace(dm)
+	}
+	return ""
+}
+
+func resolveNewThreadChatModel(ctx context.Context, db data.Querier, accountID uuid.UUID, channelDefaultModel string) string {
+	if db == nil || accountID == uuid.Nil {
+		return strings.TrimSpace(channelDefaultModel)
 	}
 	var model string
 	if err := db.QueryRow(ctx, `
@@ -282,9 +296,12 @@ func resolveNewThreadChatModel(ctx context.Context, db data.Querier, accountID u
 		   AND deleted_at IS NULL`,
 		accountID,
 	).Scan(&model); err != nil {
-		return ""
+		return strings.TrimSpace(channelDefaultModel)
 	}
-	return strings.TrimSpace(model)
+	if strings.TrimSpace(model) != "" {
+		return strings.TrimSpace(model)
+	}
+	return strings.TrimSpace(channelDefaultModel)
 }
 
 func readInboundThreadConfig(ctx context.Context, db data.Querier, threadID uuid.UUID) (inboundThreadConfig, bool, error) {

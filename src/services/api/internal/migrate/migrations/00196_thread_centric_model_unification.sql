@@ -9,7 +9,7 @@ UPDATE threads AS t
   FROM channels AS ch, channel_group_threads AS cgt
  WHERE cgt.channel_id = ch.id
    AND cgt.thread_id = t.id
-   AND NOT t.config_json ? 'chat_model'
+   AND NOT COALESCE(t.config_json, '{}'::jsonb) ? 'chat_model'
    AND ch.config_json ? 'default_model'
    AND ch.config_json->>'default_model' <> ''
    AND t.deleted_at IS NULL;
@@ -19,7 +19,7 @@ UPDATE threads AS t
   FROM channels AS ch, channel_dm_threads AS cdt
  WHERE cdt.channel_id = ch.id
    AND cdt.thread_id = t.id
-   AND NOT t.config_json ? 'chat_model'
+   AND NOT COALESCE(t.config_json, '{}'::jsonb) ? 'chat_model'
    AND ch.config_json ? 'default_model'
    AND ch.config_json->>'default_model' <> ''
    AND t.deleted_at IS NULL;
@@ -111,5 +111,10 @@ UPDATE scheduled_triggers AS st
    AND st.thread_id IS NOT NULL;
 
 -- +goose Down
+UPDATE threads
+   SET config_json = (config_json - 'chat_model')
+                  || jsonb_build_object('default_model', config_json->>'chat_model')
+ WHERE config_json ? 'chat_model';
+
 ALTER TABLE scheduled_triggers
     DROP COLUMN IF EXISTS resolve_model_at_runtime;

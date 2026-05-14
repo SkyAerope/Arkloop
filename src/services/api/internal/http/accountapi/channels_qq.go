@@ -523,7 +523,7 @@ func (c *qqConnector) HandleEvent(ctx context.Context, traceID string, ch data.C
 			if err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
-			if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+			if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID, extractChannelDefaultModel(ch)); err != nil {
 				return InboundPipelinePersistResult{}, err
 			}
 			_, contentJSON, err := c.buildQQContentWithMedia(ctx, cfg, projection, incoming, ch.AccountID, threadID, identity.UserID)
@@ -657,7 +657,7 @@ func (c *qqConnector) persistQQGroupPassiveMessage(
 	if err != nil {
 		return err
 	}
-	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID); err != nil {
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, threadID, extractChannelDefaultModel(ch)); err != nil {
 		return err
 	}
 

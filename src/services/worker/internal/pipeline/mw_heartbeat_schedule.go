@@ -198,6 +198,9 @@ func resolveHeartbeatIdentityConfig(ctx context.Context, db data.DB, rc *RunCont
 
 func resolveHeartbeatThreadConfig(ctx context.Context, db data.DB, rc *RunContext) (uuid.UUID, uuid.UUID, *data.HeartbeatIdentityConfig, string, string) {
 	channelID, identityID, _, targetKind, lookupKey := resolveHeartbeatIdentityConfig(ctx, db, rc)
+	if channelID != uuid.Nil {
+		slog.WarnContext(ctx, "heartbeat_schedule: legacy identity-based heartbeat config path is deprecated, will be removed in next release", "channel_id", channelID, "identity_id", identityID)
+	}
 	if rc == nil || rc.Run.ThreadID == uuid.Nil || db == nil {
 		return channelID, identityID, nil, targetKind, lookupKey
 	}

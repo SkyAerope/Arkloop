@@ -423,7 +423,7 @@ func (r channelInboundBurstRunner) recoverBatch(
 		return err
 	}
 
-	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, openBatch.ThreadID); err != nil {
+	if err := ensureInboundThreadChatModel(ctx, tx, ch.AccountID, openBatch.ThreadID, extractChannelDefaultModel(ch)); err != nil {
 		return err
 	}
 
