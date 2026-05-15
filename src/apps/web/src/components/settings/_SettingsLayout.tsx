@@ -4,9 +4,25 @@ import { SettingsSwitch } from './_SettingsSwitch'
 /** 与 ProvidersSettings 列表区一致：一行两列、窄屏单列 */
 export const SETTINGS_TWO_COLUMN_GRID_CLASS = 'grid gap-3 sm:grid-cols-2'
 
-/** 与 PluginsSettings PluginListRow 单项外壳一致 */
+/** 设置页可点击卡片：默认轻量，hover 只强调可进入。 */
+export const SETTINGS_INTERACTIVE_CARD_BASE_CLASS =
+  'rounded-xl border-[0.5px] bg-[var(--c-bg-menu)] outline-none transition-[border-color,background-color,box-shadow] duration-[140ms]'
+
+export const SETTINGS_INTERACTIVE_CARD_HOVER_CLASS =
+  'border-[var(--c-border-subtle)] cursor-pointer hover:border-[var(--c-border-mid)] hover:bg-[color-mix(in_srgb,var(--c-bg-deep)_28%,var(--c-bg-menu)_72%)] focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]'
+
+export const SETTINGS_INTERACTIVE_CARD_CLASS =
+  `${SETTINGS_INTERACTIVE_CARD_BASE_CLASS} ${SETTINGS_INTERACTIVE_CARD_HOVER_CLASS}`
+
+export const SETTINGS_INTERACTIVE_CARD_OVERFLOW_HIDDEN_CLASS =
+  `${SETTINGS_INTERACTIVE_CARD_CLASS} overflow-hidden`
+
+export const SETTINGS_INTERACTIVE_CARD_OVERFLOW_VISIBLE_CLASS =
+  `${SETTINGS_INTERACTIVE_CARD_CLASS} overflow-visible`
+
+/** 独立列表项外壳，适合整行点击进入详情。 */
 export const SETTINGS_STANDALONE_LIST_CARD_CLASS =
-  'overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)]'
+  SETTINGS_INTERACTIVE_CARD_OVERFLOW_HIDDEN_CLASS
 
 export function SettingsPage({
   title,

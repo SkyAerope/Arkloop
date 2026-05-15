@@ -1,5 +1,9 @@
 import type { KeyboardEvent, ReactNode } from 'react'
 import { motion } from 'framer-motion'
+import {
+  SETTINGS_INTERACTIVE_CARD_CLASS,
+  SETTINGS_INTERACTIVE_CARD_BASE_CLASS,
+} from './_SettingsLayout'
 
 export function SettingsSummaryCard({
   children,
@@ -30,13 +34,11 @@ export function SettingsSummaryCard({
       whileTap={interactive ? { scale: 0.96 } : undefined}
       transition={interactive ? { type: 'spring', stiffness: 620, damping: 22, mass: 0.42 } : undefined}
       className={[
-        'group relative flex flex-col rounded-xl bg-[var(--c-bg-input)] p-4 text-left outline-none transition-[border-color,box-shadow,background-color] duration-[120ms]',
+        'group relative flex flex-col p-4 text-left',
+        interactive ? SETTINGS_INTERACTIVE_CARD_CLASS : `${SETTINGS_INTERACTIVE_CARD_BASE_CLASS} border-[var(--c-border-subtle)]`,
         minHeightClass,
-        interactive ? 'cursor-pointer focus-visible:[box-shadow:0_0_0_1px_var(--c-input-border-color-hover)]' : '',
-        'hover:[box-shadow:0_0_0_0.35px_var(--c-input-border-color-hover)]',
         className,
       ].filter(Boolean).join(' ')}
-      style={{ border: '0.5px solid var(--c-input-border-color)' }}
     >
       {children}
     </motion.div>

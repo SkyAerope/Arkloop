@@ -15,6 +15,10 @@ import { DesktopQQBotSettingsPanel } from './DesktopQQBotSettingsPanel'
 import { DesktopQQSettingsPanel } from './DesktopQQSettingsPanel'
 import { DesktopTelegramSettingsPanel } from './DesktopTelegramSettingsPanel'
 import { DesktopWeixinSettingsPanel } from './DesktopWeixinSettingsPanel'
+import {
+  SETTINGS_INTERACTIVE_CARD_BASE_CLASS,
+  SETTINGS_INTERACTIVE_CARD_CLASS,
+} from './_SettingsLayout'
 import { SettingsModalFrame } from './_SettingsModalFrame'
 
 type Props = {
@@ -79,10 +83,10 @@ function ChannelSummaryCard({
       type="button"
       onClick={onOpen}
       className={[
-        'group relative min-h-[88px] rounded-xl border bg-[var(--c-bg-menu)] p-4 text-left transition-[border-color,background-color] duration-150',
+        'group relative min-h-[88px] p-4 text-left',
         active
-          ? 'border-[var(--c-btn-bg)]'
-          : 'border-[var(--c-border-subtle)] hover:border-[color-mix(in_srgb,var(--c-border)_76%,var(--c-text-primary)_24%)] hover:bg-[var(--c-bg-sub)]',
+          ? `${SETTINGS_INTERACTIVE_CARD_BASE_CLASS} cursor-pointer border-[var(--c-btn-bg)] bg-[color-mix(in_srgb,var(--c-bg-deep)_30%,var(--c-bg-menu)_70%)] focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]`
+          : SETTINGS_INTERACTIVE_CARD_CLASS,
       ].join(' ')}
     >
       <div className="flex items-center gap-3">

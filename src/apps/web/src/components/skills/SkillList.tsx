@@ -11,7 +11,7 @@ import { DropdownAction } from './DropdownAction'
 import { SettingsSwitch } from '../settings/_SettingsSwitch'
 import {
   SETTINGS_CARD_INSET_RULE_CLASS,
-  SETTINGS_CARD_SURFACE_OVERFLOW_VISIBLE_CLASS,
+  SETTINGS_INTERACTIVE_CARD_OVERFLOW_VISIBLE_CLASS,
   SETTINGS_TWO_COLUMN_GRID_CLASS,
 } from '../settings/_SettingsLayout'
 
@@ -256,9 +256,8 @@ function SkillListCard({
         whileTap={{ scale: 0.98 }}
         transition={{ type: 'spring', stiffness: 620, damping: 22, mass: 0.42 }}
         className={[
-          SETTINGS_CARD_SURFACE_OVERFLOW_VISIBLE_CLASS,
+          SETTINGS_INTERACTIVE_CARD_OVERFLOW_VISIBLE_CLASS,
           'flex h-full cursor-pointer flex-col outline-none',
-          'focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]',
         ].join(' ')}
       >
         <div className="grid items-center gap-2 px-5 pt-3 pb-1.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6">

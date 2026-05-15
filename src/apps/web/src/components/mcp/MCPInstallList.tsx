@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { statusLabel, statusVariant, type MCPCopy } from './types'
 import type { MCPInstall } from '../../api'
 import { SettingsSwitch } from '../settings/_SettingsSwitch'
+import { SETTINGS_INTERACTIVE_CARD_OVERFLOW_HIDDEN_CLASS } from '../settings/_SettingsLayout'
 
 type Props = {
   installs: MCPInstall[]
@@ -80,7 +81,7 @@ export function MCPInstallList({
         return (
           <div
             key={install.id}
-            className="overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)]"
+            className={SETTINGS_INTERACTIVE_CARD_OVERFLOW_HIDDEN_CLASS}
           >
             <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center">
               <div
@@ -95,7 +96,7 @@ export function MCPInstallList({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <h3 className="truncate text-[14px] font-semibold leading-5 text-[var(--c-text-primary)]">
+                    <h3 className="truncate text-[14px] font-medium leading-5 text-[var(--c-text-primary)]">
                       {install.display_name}
                     </h3>
                     <span

@@ -24,7 +24,10 @@ import {
   type PluginRuntimeState,
 } from '../../api'
 import { useLocale } from '../../contexts/LocaleContext'
-import { SettingsPage } from './_SettingsLayout'
+import {
+  SETTINGS_INTERACTIVE_CARD_OVERFLOW_HIDDEN_CLASS,
+  SettingsPage,
+} from './_SettingsLayout'
 import { SettingsButton, SettingsIconButton } from './_SettingsButton'
 import { SettingsInput } from './_SettingsInput'
 import { SettingsSelect } from './_SettingsSelect'
@@ -476,7 +479,7 @@ function PluginListRow({
       onKeyDown={handleKeyDown}
       whileTap={{ scale: 0.972 }}
       transition={{ type: 'spring', stiffness: 680, damping: 20, mass: 0.38 }}
-      className="cursor-pointer overflow-hidden rounded-xl border border-[var(--c-border-subtle)] bg-[var(--c-bg-menu)] outline-none transition-colors duration-[140ms] hover:bg-[var(--c-bg-deep)] focus-visible:ring-2 focus-visible:ring-[var(--c-accent)]"
+      className={SETTINGS_INTERACTIVE_CARD_OVERFLOW_HIDDEN_CLASS}
     >
       <div className="grid min-h-[76px] w-full grid-cols-1 items-center gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg text-left">
