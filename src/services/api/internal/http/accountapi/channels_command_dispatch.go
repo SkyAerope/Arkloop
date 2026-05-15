@@ -311,9 +311,10 @@ func DispatchChannelCommand(
 			if !c.accountScoped && !allowUserScoped {
 				continue
 			}
+			selector := c.credentialName + "^" + c.model
 			modelOpts = append(modelOpts, ModelOption{
-				Model:      c.model,
-				IsSelected: strings.EqualFold(strings.TrimSpace(c.model), strings.TrimSpace(preferredModel)),
+				Model:      selector,
+				IsSelected: strings.EqualFold(selector, strings.TrimSpace(preferredModel)) || strings.EqualFold(c.model, strings.TrimSpace(preferredModel)),
 			})
 		}
 		if len(modelOpts) == 0 {
