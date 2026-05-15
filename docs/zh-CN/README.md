@@ -33,46 +33,14 @@ ark web
 Homebrew 只安装 Arkloop CLI：
 
 ```bash
-brew install qqqqqf-q/arkloop/arkloop
-ark web
+brew install qqqqqf-q/arkloop/arkloop && ark web
 ```
 
-在 Headless 机器上，可以从 GitHub Releases 下载独立的 `ark-linux-*.tar.gz` 压缩包，解压后运行：
+在 Headless Linux 机器上，直接复制这一行：
 
 ```bash
-tar -xzf ark-linux-amd64.tar.gz
-cd ark-linux-amd64
-./ark web --host 0.0.0.0 --no-open
+sh -c 'set -e; arch="$(uname -m)"; case "$arch" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported architecture: $arch" >&2; exit 1 ;; esac; name="ark-linux-${arch}"; rm -rf "$name"; curl -fsSL "https://github.com/qqqqqf-q/Arkloop/releases/latest/download/${name}.tar.gz" | tar -xz; cd "$name"; exec ./ark web --host 0.0.0.0 --no-open'
 ```
-
-如果要在 VPS 上从源码安装完整自托管服务：
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
-```
-
-<details>
-<summary>macOS：打不开 / 提示无法验证（不要点「移到废纸篓」）</summary>
-
-若出现 **Apple 无法验证 Arkloop**，不要选择 **移到废纸篓**（对应英文 **Move to Trash**）。
-
-1. 点 **完成** 或关闭该对话框。
-
-   ![系统拦截提示](../readme/macos-gatekeeper-01-not-opened.png)
-
-2. 打开 **系统设置 → 隐私与安全性**，在 **安全性** 区域找到与 Arkloop 相关的提示，点击 **仍要打开**（**Open Anyway**）。
-
-   ![隐私与安全性中仍要打开](../readme/macos-gatekeeper-02-privacy-security.png)
-
-3. 再次出现确认对话框时，再次选择 **仍要打开**。
-
-   ![确认对话框](../readme/macos-gatekeeper-03-confirm-open.png)
-
-</details>
 
 ## 功能概览
 

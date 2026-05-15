@@ -6,16 +6,6 @@ Arkloop 提供两种自部署入口：
 - 推荐：`./setup.sh install`，自动完成参数归并、pre-flight、`.env` 补全与默认模块启动
 - 底层：`compose.yaml`，适合手动调试或细粒度控制
 
-在一台新的 VPS 上，从克隆仓库开始安装标准自托管栈：
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
-```
-
 ## 服务总览
 
 | 服务 | 说明 | 默认端口 |

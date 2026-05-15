@@ -3,16 +3,6 @@ title: "Deployment Guide"
 ---
 Arkloop orchestrates all services via `compose.yaml`, enabling a full deployment with a single command.
 
-For a fresh VPS, clone the repository and let the installer configure the standard self-hosted stack:
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
-```
-
 ## Service Overview
 
 | Service | Description | Default Port |

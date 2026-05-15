@@ -19,8 +19,6 @@ Grab the latest release for your platform from the [download page](https://arklo
 
 Open the DMG → drag Arkloop to Applications.
 
-> [!WARNING] Gatekeeper may block the app on first launch. Right-click the app → Open → Open to bypass. This is only needed once.
-
 ### Windows
 
 Run the `.exe` installer and follow the prompts.
@@ -61,22 +59,10 @@ Desktop can install the `ark` command-line tool on first launch or from Settings
 ark web
 ```
 
-For a headless host, download the standalone `ark-linux-*.tar.gz` archive from GitHub Releases, extract it, then run:
+For a headless Linux host, use one command:
 
 ```bash
-tar -xzf ark-linux-amd64.tar.gz
-cd ark-linux-amd64
-./ark web --host 0.0.0.0 --no-open
-```
-
-For the Docker self-hosted stack on a VPS, clone the repository and run the installer:
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
+sh -c 'set -e; arch="$(uname -m)"; case "$arch" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported architecture: $arch" >&2; exit 1 ;; esac; name="ark-linux-${arch}"; rm -rf "$name"; curl -fsSL "https://github.com/qqqqqf-q/Arkloop/releases/latest/download/${name}.tar.gz" | tar -xz; cd "$name"; exec ./ark web --host 0.0.0.0 --no-open'
 ```
 
 ## Window Management

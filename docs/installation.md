@@ -21,29 +21,6 @@ Or read the [installation guide](./installation.md), but seriously, let an agent
 
 You are helping a user install Arkloop, a self-hosted conversational AI agent platform. Follow these steps in order.
 
-### Fresh VPS: Clone and Install
-
-If the machine does not have Arkloop checked out yet, clone the repository first:
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod \
-  --profile standard \
-  --mode self-hosted \
-  --memory none \
-  --sandbox none \
-  --console lite \
-  --browser off \
-  --web-tools builtin \
-  --gateway on \
-  --non-interactive
-```
-
-Use this path for a server deployment. Use `ark web --host 0.0.0.0 --no-open` only when the user wants the Desktop/headless local runtime, not the Docker self-hosted stack.
-
 ### Step 0: Detect Host Environment
 
 Run the doctor command first. Parse the output to inform later decisions.

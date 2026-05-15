@@ -19,12 +19,6 @@ description: 在你的平台上下载和安装 Arkloop。
 
 打开 DMG → 将 Arkloop 拖入 Applications 文件夹。
 
-首次启动时 macOS 会阻止未签名应用：
-
-右键点击应用 → 打开 → 打开
-
-> [!TIP] 如果"打开"按钮没有出现，在系统设置 → 隐私与安全性中点击"仍要打开"。
-
 ### Windows
 
 运行 `.exe` 安装程序，按提示完成安装。
@@ -61,22 +55,10 @@ Windows SmartScreen 可能弹出"未识别的应用"提示：
 ark web
 ```
 
-在 Headless 主机上，可以从 GitHub Releases 下载独立的 `ark-linux-*.tar.gz` 压缩包，解压后运行：
+在 Headless Linux 主机上，直接复制这一行：
 
 ```bash
-tar -xzf ark-linux-amd64.tar.gz
-cd ark-linux-amd64
-./ark web --host 0.0.0.0 --no-open
-```
-
-如果要在 VPS 上部署 Docker 自托管服务，克隆仓库并运行安装器：
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
+sh -c 'set -e; arch="$(uname -m)"; case "$arch" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported architecture: $arch" >&2; exit 1 ;; esac; name="ark-linux-${arch}"; rm -rf "$name"; curl -fsSL "https://github.com/qqqqqf-q/Arkloop/releases/latest/download/${name}.tar.gz" | tar -xz; cd "$name"; exec ./ark web --host 0.0.0.0 --no-open'
 ```
 
 ## 全局快捷键

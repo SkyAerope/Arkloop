@@ -33,46 +33,14 @@ ark web
 Homebrew installs the Arkloop CLI only:
 
 ```bash
-brew install qqqqqf-q/arkloop/arkloop
-ark web
+brew install qqqqqf-q/arkloop/arkloop && ark web
 ```
 
-For a headless machine, download the standalone `ark-linux-*.tar.gz` archive from GitHub Releases, extract it, and run:
+For a headless Linux machine, use one command:
 
 ```bash
-tar -xzf ark-linux-amd64.tar.gz
-cd ark-linux-amd64
-./ark web --host 0.0.0.0 --no-open
+sh -c 'set -e; arch="$(uname -m)"; case "$arch" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported architecture: $arch" >&2; exit 1 ;; esac; name="ark-linux-${arch}"; rm -rf "$name"; curl -fsSL "https://github.com/qqqqqf-q/Arkloop/releases/latest/download/${name}.tar.gz" | tar -xz; cd "$name"; exec ./ark web --host 0.0.0.0 --no-open'
 ```
-
-For a full self-hosted server install from source:
-
-```bash
-git clone https://github.com/qqqqqf-q/Arkloop.git
-cd Arkloop
-chmod +x ./setup.sh
-./setup.sh doctor
-./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
-```
-
-<details>
-<summary>macOS: app blocked (Move to Trash)</summary>
-
-Do **not** click **Move to Trash** when macOS warns that **Arkloop** cannot be verified.
-
-1. Choose **Done** or close the dialog.
-
-   ![Gatekeeper blocked Arkloop](./docs/readme/macos-gatekeeper-01-not-opened.png)
-
-2. Open **System Settings → Privacy & Security**. Under **Security**, find **Open Anyway** next to the **Arkloop** message and click it.
-
-   ![Privacy & Security, Open Anyway](./docs/readme/macos-gatekeeper-02-privacy-security.png)
-
-3. When the confirmation dialog appears, choose **Open Anyway** again.
-
-   ![Confirmation dialog](./docs/readme/macos-gatekeeper-03-confirm-open.png)
-
-</details>
 
 ## Features
 
