@@ -14,7 +14,7 @@ import (
 
 const (
 	maxPromptImageDimension = 2048
-	maxPromptImageBytes     = 3 * 1024 * 1024
+	maxPromptImageBytes     = 1024 * 1024
 )
 
 var promptImageJPEGSteps = []struct {

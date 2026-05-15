@@ -2982,6 +2982,8 @@ func pressureAnchorFromCompleted(data map[string]any) *pipeline.ContextCompactPr
 // Oldest tool results are compacted first when the cap is exceeded.
 var maxToolResultHistoryChars = 80_000
 
+var maxPendingImageBatchBytes = 3 * 1024 * 1024
+
 // compactToolResults returns a copy of messages where the oldest tool result
 // messages are replaced by minimal placeholders if the total tool result
 // character count exceeds maxToolResultHistoryChars.
@@ -3036,18 +3038,32 @@ func pendingToolResultBinaryIndices(messages []llm.Message) map[int]struct{} {
 			break
 		}
 	}
-	for i := lastAssistant + 1; i < len(messages); i++ {
+	used := 0
+	for i := len(messages) - 1; i > lastAssistant; i-- {
 		if messages[i].Role != "tool" {
 			continue
 		}
-		for _, p := range messages[i].Content {
-			if len(p.Data) > 0 {
-				protected[i] = struct{}{}
-				break
-			}
+		size := toolResultBinarySize(messages[i])
+		if size == 0 {
+			continue
 		}
+		if used+size > maxPendingImageBatchBytes {
+			continue
+		}
+		protected[i] = struct{}{}
+		used += size
 	}
 	return protected
+}
+
+func toolResultBinarySize(m llm.Message) int {
+	total := 0
+	for _, p := range m.Content {
+		if len(p.Data) > 0 {
+			total += ((len(p.Data) + 2) / 3) * 4
+		}
+	}
+	return total
 }
 
 func toolResultHistorySize(m llm.Message) int {

@@ -53,6 +53,16 @@ func (f *fakePipelineRunContext) ReadToolMessages() []llm.Message {
 	return out
 }
 
+type fakeReadCapabilities struct {
+	NativeImageInput   bool
+	ImageBridgeEnabled bool
+}
+
+type fakePipelineRunContextWithCaps struct {
+	fakePipelineRunContext
+	ReadCapabilities fakeReadCapabilities
+}
+
 type legacyPipelineShape struct {
 	Messages []llm.Message
 }
@@ -156,6 +166,67 @@ func TestReadFilePathImageSourceReturnsImagePart(t *testing.T) {
 	}
 	if !tracker.HasBeenReadForRun(runID.String(), fileops.TrackingKey(workDir, "./sample.png")) {
 		t.Fatal("expected file tracker to record image read for the current run")
+	}
+}
+
+func TestReadFilePathImageSourceRejectsWithoutImageCapability(t *testing.T) {
+	executor := NewToolExecutor()
+
+	workDir := t.TempDir()
+	path := filepath.Join(workDir, "sample.png")
+	if err := os.WriteFile(path, testPNGBytes(t), 0o644); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+	rc := &fakePipelineRunContextWithCaps{
+		ReadCapabilities: fakeReadCapabilities{NativeImageInput: false, ImageBridgeEnabled: false},
+	}
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":      "file_path",
+			"file_path": "sample.png",
+		},
+	}, tools.ExecutionContext{RunID: uuid.New(), WorkDir: workDir, PipelineRC: rc}, "")
+
+	if result.Error == nil {
+		t.Fatal("expected file image read to be rejected without image capability")
+	}
+	if result.Error.ErrorClass != errorUnsupportedMedia {
+		t.Fatalf("unexpected error class: %s", result.Error.ErrorClass)
+	}
+}
+
+func TestReadFilePathImageSourceBridgeReturnsTextOnly(t *testing.T) {
+	provider := &fakeProvider{
+		resp: DescribeImageResponse{Text: "image text", Provider: "minimax", Model: "vl"},
+	}
+	executor := NewToolExecutorWithProvider(provider)
+
+	workDir := t.TempDir()
+	path := filepath.Join(workDir, "sample.png")
+	if err := os.WriteFile(path, testPNGBytes(t), 0o644); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+	rc := &fakePipelineRunContextWithCaps{
+		ReadCapabilities: fakeReadCapabilities{NativeImageInput: false, ImageBridgeEnabled: true},
+	}
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":      "file_path",
+			"file_path": "sample.png",
+		},
+		"prompt": "describe",
+	}, tools.ExecutionContext{RunID: uuid.New(), WorkDir: workDir, PipelineRC: rc}, "")
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %+v", result.Error)
+	}
+	if got := result.ResultJSON["text"]; got != "image text" {
+		t.Fatalf("unexpected description: %#v", got)
+	}
+	if len(result.ContentParts) != 0 {
+		t.Fatalf("bridge-only file image must not attach image parts, got %d", len(result.ContentParts))
 	}
 }
 
@@ -325,6 +396,58 @@ func TestReadMessageAttachmentSource(t *testing.T) {
 	}
 	if len(result.ContentParts[0].Data) == 0 {
 		t.Fatal("expected image bytes in content part")
+	}
+}
+
+func TestReadMessageAttachmentSourceBridgeReturnsTextOnly(t *testing.T) {
+	provider := &fakeProvider{
+		resp: DescribeImageResponse{
+			Text:     "attachment image text",
+			Provider: "minimax",
+			Model:    "MiniMax-VL-01",
+		},
+	}
+	executor := NewToolExecutorWithProvider(provider)
+	key := "threads/thread-a/attachments/1/cat.png"
+
+	rc := &fakePipelineRunContextWithCaps{
+		fakePipelineRunContext: fakePipelineRunContext{
+			messages: []llm.Message{
+				{
+					Role: "user",
+					Content: []llm.ContentPart{
+						{
+							Type: "image",
+							Attachment: &messagecontent.AttachmentRef{
+								Key:      key,
+								Filename: "cat.png",
+								MimeType: "image/png",
+							},
+							Data: testPNGBytes(t),
+						},
+					},
+				},
+			},
+		},
+		ReadCapabilities: fakeReadCapabilities{NativeImageInput: false, ImageBridgeEnabled: true},
+	}
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":           "message_attachment",
+			"attachment_key": key,
+		},
+		"prompt": "what is in this attachment",
+	}, tools.ExecutionContext{PipelineRC: rc}, "")
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %+v", result.Error)
+	}
+	if got := result.ResultJSON["text"]; got != "attachment image text" {
+		t.Fatalf("unexpected description: %#v", got)
+	}
+	if len(result.ContentParts) != 0 {
+		t.Fatalf("bridge-only attachment must not attach image parts, got %d", len(result.ContentParts))
 	}
 }
 

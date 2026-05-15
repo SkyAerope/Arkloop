@@ -2171,6 +2171,42 @@ func TestCompactToolResultsCompactsImagesBeforeLatestAssistant(t *testing.T) {
 	}
 }
 
+func TestCompactToolResultsBoundsPendingImageBatch(t *testing.T) {
+	oldLimit := maxToolResultHistoryChars
+	oldImageLimit := maxPendingImageBatchBytes
+	maxToolResultHistoryChars = 40
+	maxPendingImageBatchBytes = 120
+	defer func() {
+		maxToolResultHistoryChars = oldLimit
+		maxPendingImageBatchBytes = oldImageLimit
+	}()
+
+	messages := []llm.Message{
+		{
+			Role: "tool",
+			Content: []llm.ContentPart{
+				{Text: `{"tool_call_id":"call_old","tool_name":"read","result":{"image_attached":true}}`},
+				{Type: messagecontent.PartTypeImage, Data: bytes.Repeat([]byte{1}, 80)},
+			},
+		},
+		{
+			Role: "tool",
+			Content: []llm.ContentPart{
+				{Text: `{"tool_call_id":"call_new","tool_name":"read","result":{"image_attached":true}}`},
+				{Type: messagecontent.PartTypeImage, Data: bytes.Repeat([]byte{2}, 80)},
+			},
+		},
+	}
+
+	got := compactToolResults(messages)
+	if len(got[0].Content) != 1 {
+		t.Fatalf("expected pending batch overflow to compact older image, got %d parts", len(got[0].Content))
+	}
+	if len(got[1].Content) != 2 {
+		t.Fatalf("expected newest pending image to stay visible, got %d parts", len(got[1].Content))
+	}
+}
+
 func TestRetryBackoffMsUsesFullJitterWithinCap(t *testing.T) {
 	got := retryBackoffMsWithRand(1000, 3, func(n int) int {
 		if n != 4001 {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -76,6 +77,11 @@ type Executor struct {
 
 type readToolMessageProvider interface {
 	ReadToolMessages() []llm.Message
+}
+
+type readRuntimeCapabilities struct {
+	NativeImageInput   bool
+	ImageBridgeEnabled bool
 }
 
 func NewToolExecutor() *Executor {
@@ -309,11 +315,39 @@ func (e *Executor) executeFilePathImage(
 	mimeType = decodedMime
 
 	processed, processedMime := imageutil.ProcessImage(data, mimeType)
+	caps := resolveReadRuntimeCapabilities(execCtx)
+	if !caps.NativeImageInput && !caps.ImageBridgeEnabled {
+		return imageUnavailableResult(filePath, processedMime, started)
+	}
 	normPath := backend.NormalizePath(filePath)
 	runID := execCtx.RunID.String()
 	if e.Tracker != nil {
 		e.Tracker.RecordReadForRun(runID, normPath)
 		e.Tracker.RecordReadState(runID, normPath, info.ModTime.UnixNano(), 1, 1)
+	}
+
+	if !caps.NativeImageInput {
+		if strings.TrimSpace(parsed.Prompt) == "" {
+			return tools.ExecutionResult{
+				Error: &tools.ExecutionError{
+					ErrorClass: errorArgsInvalid,
+					Message:    "prompt is required when reading image files through the read image bridge",
+					Details:    map[string]any{"file_path": filePath},
+				},
+				DurationMs: durationMs(started),
+			}
+		}
+		return e.describeImage(ctx, execCtx, DescribeImageRequest{
+			Prompt:   parsed.Prompt,
+			MimeType: processedMime,
+			Bytes:    processed,
+		}, map[string]any{
+			"source_kind":    string(parsed.Source.Kind),
+			"file_path":      filePath,
+			"mime_type":      processedMime,
+			"bytes":          len(processed),
+			"original_bytes": len(data),
+		}, started)
 	}
 
 	return tools.ExecutionResult{
@@ -366,7 +400,12 @@ func (e *Executor) executeMessageAttachment(
 	image.MimeType = decodedMime
 	image.Bytes, image.MimeType = imageutil.ProcessImage(image.Bytes, image.MimeType)
 
-	if strings.TrimSpace(parsed.Prompt) == "" {
+	caps := resolveReadRuntimeCapabilities(execCtx)
+	if !caps.NativeImageInput && !caps.ImageBridgeEnabled {
+		return imageUnavailableResult(parsed.Source.AttachmentKey, image.MimeType, started)
+	}
+
+	if caps.NativeImageInput && strings.TrimSpace(parsed.Prompt) == "" {
 		return tools.ExecutionResult{
 			ResultJSON: map[string]any{
 				"source_kind":    string(parsed.Source.Kind),
@@ -381,8 +420,22 @@ func (e *Executor) executeMessageAttachment(
 		}
 	}
 
+	if !caps.NativeImageInput && strings.TrimSpace(parsed.Prompt) == "" {
+		return tools.ExecutionResult{
+			Error: &tools.ExecutionError{
+				ErrorClass: errorArgsInvalid,
+				Message:    "prompt is required when reading attachments through the read image bridge",
+				Details:    map[string]any{"attachment_key": parsed.Source.AttachmentKey},
+			},
+			DurationMs: durationMs(started),
+		}
+	}
+
 	provider, providerErr := e.resolveProvider(execCtx)
 	if providerErr != nil {
+		if !caps.NativeImageInput {
+			return tools.ExecutionResult{Error: providerErr, DurationMs: durationMs(started)}
+		}
 		return tools.ExecutionResult{
 			ResultJSON: map[string]any{
 				"source_kind":    string(parsed.Source.Kind),
@@ -410,16 +463,23 @@ func (e *Executor) executeMessageAttachment(
 		}
 	}
 
+	baseResult := map[string]any{
+		"text":           description.Text,
+		"provider":       description.Provider,
+		"model":          description.Model,
+		"source_kind":    string(parsed.Source.Kind),
+		"attachment_key": parsed.Source.AttachmentKey,
+		"mime_type":      image.MimeType,
+		"bytes":          len(image.Bytes),
+	}
+	if !caps.NativeImageInput {
+		return tools.ExecutionResult{
+			ResultJSON: baseResult,
+			DurationMs: durationMs(started),
+		}
+	}
 	return tools.ExecutionResult{
-		ResultJSON: map[string]any{
-			"text":           description.Text,
-			"provider":       description.Provider,
-			"model":          description.Model,
-			"source_kind":    string(parsed.Source.Kind),
-			"attachment_key": parsed.Source.AttachmentKey,
-			"mime_type":      image.MimeType,
-			"bytes":          len(image.Bytes),
-		},
+		ResultJSON: baseResult,
 		ContentParts: []tools.ContentAttachment{
 			{MimeType: image.MimeType, Data: image.Bytes, AttachmentKey: parsed.Source.AttachmentKey},
 		},
@@ -473,6 +533,88 @@ func validateDecodedImage(data []byte, mimeType string, details map[string]any) 
 		ErrorClass: errorUnsupportedMedia,
 		Message:    "image data is empty or cannot be decoded",
 		Details:    out,
+	}
+}
+
+func resolveReadRuntimeCapabilities(execCtx tools.ExecutionContext) readRuntimeCapabilities {
+	caps := readRuntimeCapabilities{NativeImageInput: true}
+	if execCtx.PipelineRC == nil {
+		return caps
+	}
+	value := reflect.ValueOf(execCtx.PipelineRC)
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return caps
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return caps
+	}
+	if field := value.FieldByName("ReadCapabilities"); field.IsValid() {
+		return readCapabilitiesFromValue(field, caps)
+	}
+	return readCapabilitiesFromValue(value, caps)
+}
+
+func readCapabilitiesFromValue(value reflect.Value, fallback readRuntimeCapabilities) readRuntimeCapabilities {
+	caps := fallback
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return caps
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return caps
+	}
+	if field := value.FieldByName("NativeImageInput"); field.IsValid() && field.Kind() == reflect.Bool {
+		caps.NativeImageInput = field.Bool()
+	}
+	if field := value.FieldByName("ImageBridgeEnabled"); field.IsValid() && field.Kind() == reflect.Bool {
+		caps.ImageBridgeEnabled = field.Bool()
+	}
+	return caps
+}
+
+func imageUnavailableResult(identifier, mimeType string, started time.Time) tools.ExecutionResult {
+	return tools.ExecutionResult{
+		Error: &tools.ExecutionError{
+			ErrorClass: errorUnsupportedMedia,
+			Message:    "current model cannot receive image input and no read image bridge is configured",
+			Details:    map[string]any{"source": identifier, "mime_type": mimeType},
+		},
+		DurationMs: durationMs(started),
+	}
+}
+
+func (e *Executor) describeImage(
+	ctx context.Context,
+	execCtx tools.ExecutionContext,
+	req DescribeImageRequest,
+	result map[string]any,
+	started time.Time,
+) tools.ExecutionResult {
+	provider, providerErr := e.resolveProvider(execCtx)
+	if providerErr != nil {
+		return tools.ExecutionResult{Error: providerErr, DurationMs: durationMs(started)}
+	}
+	timeout := resolveTimeout(e.timeout, execCtx.TimeoutMs, nil)
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	description, err := provider.DescribeImage(runCtx, req)
+	if err != nil {
+		return tools.ExecutionResult{
+			Error:      executionErrorFromProviderError(err),
+			DurationMs: durationMs(started),
+		}
+	}
+	result["text"] = description.Text
+	result["provider"] = description.Provider
+	result["model"] = description.Model
+	return tools.ExecutionResult{
+		ResultJSON: result,
+		DurationMs: durationMs(started),
 	}
 }
 
