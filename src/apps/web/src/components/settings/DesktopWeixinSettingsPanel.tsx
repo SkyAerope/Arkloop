@@ -614,15 +614,6 @@ export function DesktopWeixinSettingsPanel({
         onOwnerUnbindAttempt={() => setError(ct.ownerUnbindBlocked)}
       />
 
-      <div
-        className="rounded-xl px-5 py-4"
-        style={{ border: '0.5px solid var(--c-border-subtle)', background: 'var(--c-bg-menu)' }}
-      >
-        <div className="text-sm font-medium text-[var(--c-text-heading)]">{ct.heartbeatCardTitle}</div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[var(--c-text-muted)]">{ct.heartbeatCardDesc}</p>
-        <p className="mt-1.5 text-xs text-[var(--c-text-muted)]">{ct.heartbeatCardHint}</p>
-      </div>
-
       <SaveActions
         saving={saving}
         saved={saved}
