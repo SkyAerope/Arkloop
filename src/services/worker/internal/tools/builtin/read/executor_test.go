@@ -581,6 +581,51 @@ func TestReadMessageAttachmentSourceWithoutPromptReturnsImagePart(t *testing.T) 
 	}
 }
 
+func TestReadMessageAttachmentSourceBridgeWithoutPromptErrors(t *testing.T) {
+	provider := &fakeProvider{}
+	executor := NewToolExecutorWithProvider(provider)
+	key := "threads/thread-a/attachments/1/cat.png"
+
+	rc := &fakePipelineRunContextWithCaps{
+		fakePipelineRunContext: fakePipelineRunContext{
+			messages: []llm.Message{
+				{
+					Role: "user",
+					Content: []llm.ContentPart{
+						{
+							Type: "image",
+							Attachment: &messagecontent.AttachmentRef{
+								Key:      key,
+								Filename: "cat.png",
+								MimeType: "image/png",
+							},
+							Data: testPNGBytes(t),
+						},
+					},
+				},
+			},
+		},
+		ReadCapabilities: fakeReadCapabilities{NativeImageInput: false, ImageBridgeEnabled: true},
+	}
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":           "message_attachment",
+			"attachment_key": key,
+		},
+	}, tools.ExecutionContext{PipelineRC: rc}, "")
+
+	if result.Error == nil {
+		t.Fatal("expected bridge attachment read without prompt to fail")
+	}
+	if result.Error.ErrorClass != errorArgsInvalid {
+		t.Fatalf("unexpected error class: %s", result.Error.ErrorClass)
+	}
+	if len(provider.req.Bytes) != 0 {
+		t.Fatal("provider should not receive attachment without prompt")
+	}
+}
+
 func TestReadMessageAttachmentSourceRejectsLegacyPipelineShape(t *testing.T) {
 	provider := &fakeProvider{
 		resp: DescribeImageResponse{

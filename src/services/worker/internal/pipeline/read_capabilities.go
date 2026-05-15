@@ -36,24 +36,23 @@ func ResolveReadCapabilities(
 // 四种情况：
 //   - exposeImageSources=false, nativeImageInput=false：剥所有图片源（stripReadImageSources）
 //   - exposeImageSources=false, nativeImageInput=true：保留 message_attachment，剥 remote_url + prompt/max_bytes/timeout_ms
-//   - exposeImageSources=true,  nativeImageInput=false：全暴露，直接返回
-//   - exposeImageSources=true,  nativeImageInput=true：保留所有 source kinds，仅剥 prompt/max_bytes/timeout_ms
+//   - exposeImageSources=true,  nativeImageInput=false：全暴露，并标明 bridge 图片读取需要 prompt
+//   - exposeImageSources=true,  nativeImageInput=true：全暴露；remote_url 仍走 provider，因此保留 prompt/max_bytes/timeout_ms
 func ApplyReadImageSourceVisibility(specs []llm.ToolSpec, exposeImageSources bool, nativeImageInput bool) []llm.ToolSpec {
 	if len(specs) == 0 {
-		return specs
-	}
-	if exposeImageSources && !nativeImageInput {
 		return specs
 	}
 
 	var patchFn func(map[string]any) map[string]any
 	switch {
+	case exposeImageSources && !nativeImageInput:
+		patchFn = markReadPromptForBridge
+	case exposeImageSources && nativeImageInput:
+		patchFn = keepReadImageSourceSchema
 	case !exposeImageSources && !nativeImageInput:
 		patchFn = stripReadImageSources
 	case !exposeImageSources && nativeImageInput:
 		patchFn = stripReadForNativeModel
-	default: // exposeImageSources && nativeImageInput
-		patchFn = stripReadPromptParams
 	}
 
 	out := make([]llm.ToolSpec, 0, len(specs))
@@ -129,9 +128,18 @@ func stripReadImageSources(schema map[string]any) map[string]any {
 	return cloned
 }
 
-// stripReadPromptParams 仅剥 prompt/max_bytes/timeout_ms，保留所有 source kinds。
-// exposeImageSources=true, nativeImageInput=true 时使用。
-func stripReadPromptParams(schema map[string]any) map[string]any {
+func keepReadImageSourceSchema(schema map[string]any) map[string]any {
+	if len(schema) == 0 {
+		return schema
+	}
+	cloned, ok := cloneJSONValue(schema).(map[string]any)
+	if !ok {
+		return schema
+	}
+	return cloned
+}
+
+func markReadPromptForBridge(schema map[string]any) map[string]any {
 	if len(schema) == 0 {
 		return schema
 	}
@@ -143,9 +151,10 @@ func stripReadPromptParams(schema map[string]any) map[string]any {
 	if len(properties) == 0 {
 		return cloned
 	}
-	delete(properties, "prompt")
-	delete(properties, "max_bytes")
-	delete(properties, "timeout_ms")
+	prompt := nestedObject(properties, "prompt")
+	if len(prompt) > 0 {
+		prompt["description"] = "required for image file_path, message_attachment, and remote_url reads when the current model cannot receive images directly"
+	}
 	return cloned
 }
 

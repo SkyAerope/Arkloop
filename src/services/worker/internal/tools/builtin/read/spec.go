@@ -56,7 +56,7 @@ var LlmSpec = llm.ToolSpec{
 			},
 			"prompt": map[string]any{
 				"type":        "string",
-				"description": "required for remote_url provider reads; optional for model-visible image attachments",
+				"description": "required for remote_url and image bridge reads; optional only when the current model can receive the image directly",
 			},
 			"offset": map[string]any{
 				"type":        "integer",

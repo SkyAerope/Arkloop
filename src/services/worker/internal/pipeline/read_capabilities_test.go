@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"strings"
 	"testing"
 
 	"arkloop/services/worker/internal/llm"
@@ -251,8 +252,23 @@ func TestApplyReadImageSourceVisibility_NativeImageInput_WithBridge(t *testing.T
 
 	props := nestedObject(readSpec.JSONSchema, "properties")
 	for _, field := range []string{"prompt", "max_bytes", "timeout_ms"} {
-		if _, ok := props[field]; ok {
-			t.Fatalf("did not expect %s when nativeImageInput=true", field)
+		if _, ok := props[field]; !ok {
+			t.Fatalf("expected %s to remain when remote_url is exposed", field)
 		}
+	}
+}
+
+func TestApplyReadImageSourceVisibility_BridgeOnlyMarksPromptRequired(t *testing.T) {
+	patched := ApplyReadImageSourceVisibility(makeImageSourceSpec(), true, false)
+	readSpec, ok := findToolSpec(patched, "read")
+	if !ok {
+		t.Fatal("expected read spec")
+	}
+
+	props := nestedObject(readSpec.JSONSchema, "properties")
+	prompt := nestedObject(props, "prompt")
+	desc, _ := prompt["description"].(string)
+	if desc == "" || !strings.Contains(desc, "required for image file_path") {
+		t.Fatalf("expected bridge prompt requirement in description, got %q", desc)
 	}
 }
