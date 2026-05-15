@@ -134,6 +134,18 @@ func TestResolveWebRootUsesInjectedHint(t *testing.T) {
 	}
 }
 
+func TestWebRootCandidatesIncludeDesktopBundledRenderer(t *testing.T) {
+	exe := filepath.Join("Arkloop.app", "Contents", "Resources", "cli", "ark")
+	candidates := webRootCandidates("", "", "", "", exe)
+	want := filepath.Join("Arkloop.app", "Contents", "Resources", "renderer")
+	for _, candidate := range candidates {
+		if candidate == want {
+			return
+		}
+	}
+	t.Fatalf("webRootCandidates missing bundled renderer path %q: %#v", want, candidates)
+}
+
 func TestLocalTrustConfigForHost(t *testing.T) {
 	tests := []struct {
 		host string

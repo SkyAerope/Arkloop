@@ -16,6 +16,7 @@ import {
 } from './sidecar'
 import { checkForUpdates, applyUpdate, getCachedUpdateStatus } from './updater'
 import { getAppUpdaterState, checkForAppUpdates, downloadAppUpdate, installAppUpdate } from './app-updater'
+import { getCommandLineToolStatus, installCommandLineTool } from './cli-tool'
 import { DEFAULT_CONFIG } from './types'
 import { getDesktopLogDir, getDesktopLogPaths } from './logging'
 import { applyOnboardingImport, detectOnboardingImportSources, type OnboardingImportApplyRequest } from './onboarding-import'
@@ -236,6 +237,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle('arkloop:app-updater:download', async () => {
     return downloadAppUpdate()
+  })
+
+  ipcMain.handle('arkloop:cli-tool:status', () => {
+    return getCommandLineToolStatus()
+  })
+
+  ipcMain.handle('arkloop:cli-tool:install', async () => {
+    return installCommandLineTool()
   })
 
   ipcMain.handle('arkloop:app-updater:install', () => {

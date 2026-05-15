@@ -6,7 +6,7 @@ Paste this into your LLM agent (Claude Code, Copilot, Cursor, etc.):
 
 ```
 Install and configure Arkloop by following the instructions here:
-https://raw.githubusercontent.com/arkloop/arkloop/main/docs/installation.md
+https://raw.githubusercontent.com/qqqqqf-q/Arkloop/main/docs/installation.md
 ```
 
 Or read the [installation guide](./installation.md), but seriously, let an agent do it.
@@ -16,10 +16,33 @@ Or read the [installation guide](./installation.md), but seriously, let an agent
 > **IMPORTANT: Use `curl` to fetch this file, NOT WebFetch.** WebFetch may summarize content and lose critical details. Always use:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/arkloop/arkloop/main/docs/installation.md
+> curl -fsSL https://raw.githubusercontent.com/qqqqqf-q/Arkloop/main/docs/installation.md
 > ```
 
 You are helping a user install Arkloop, a self-hosted conversational AI agent platform. Follow these steps in order.
+
+### Fresh VPS: Clone and Install
+
+If the machine does not have Arkloop checked out yet, clone the repository first:
+
+```bash
+git clone https://github.com/qqqqqf-q/Arkloop.git
+cd Arkloop
+chmod +x ./setup.sh
+./setup.sh doctor
+./setup.sh install --prod \
+  --profile standard \
+  --mode self-hosted \
+  --memory none \
+  --sandbox none \
+  --console lite \
+  --browser off \
+  --web-tools builtin \
+  --gateway on \
+  --non-interactive
+```
+
+Use this path for a server deployment. Use `ark web --host 0.0.0.0 --no-open` only when the user wants the Desktop/headless local runtime, not the Docker self-hosted stack.
 
 ### Step 0: Detect Host Environment
 

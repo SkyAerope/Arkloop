@@ -25,6 +25,7 @@ import { setupAppUpdater } from './app-updater'
 import { setupMainProcessLogging, getDesktopLogDir } from './logging'
 import { syncLocalVersions } from './updater'
 import { ensureBrowserSearchServer, closeBrowserSearchServer } from './browser-search'
+import { maybePromptInstallCommandLineTool } from './cli-tool'
 import type { AppConfig, ApplyConfigUpdateOptions } from './types'
 
 app.setName('Arkloop')
@@ -556,6 +557,9 @@ if (!hasSingleInstanceLock) {
     createTray(getWindow, showMainWindow)
     registerGlobalShortcut(getWindow, showMainWindow)
     setupAppUpdater(getWindow, { autoCheck: config.desktop.productUpdateNotifications })
+    void maybePromptInstallCommandLineTool(getWindow()).catch((error) => {
+      console.error('[desktop] cli_tool_prompt_failed', { error })
+    })
   })
 
   app.on('window-all-closed', () => {

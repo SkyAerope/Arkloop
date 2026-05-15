@@ -22,6 +22,12 @@ Download the latest version from [GitHub Releases](https://github.com/qqqqqf-q/A
 
 The desktop app bundles the full runtime — no Docker, no configuration. Just open and use. Automatic updates via GitHub Releases.
 
+On first launch, Desktop can install the `ark` command-line tool. After that, you can start the same local runtime without the Desktop window:
+
+```bash
+ark web
+```
+
 ### CLI via Homebrew
 
 Homebrew installs the Arkloop CLI only:
@@ -29,6 +35,24 @@ Homebrew installs the Arkloop CLI only:
 ```bash
 brew install qqqqqf-q/arkloop/arkloop
 ark web
+```
+
+For a headless machine, download the standalone `ark-linux-*.tar.gz` archive from GitHub Releases, extract it, and run:
+
+```bash
+tar -xzf ark-linux-amd64.tar.gz
+cd ark-linux-amd64
+./ark web --host 0.0.0.0 --no-open
+```
+
+For a full self-hosted server install from source:
+
+```bash
+git clone https://github.com/qqqqqf-q/Arkloop.git
+cd Arkloop
+chmod +x ./setup.sh
+./setup.sh doctor
+./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
 ```
 
 <details>

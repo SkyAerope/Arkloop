@@ -16,6 +16,8 @@ const checkAppUpdater = vi.fn()
 const downloadAppUpdate = vi.fn()
 const installAppUpdate = vi.fn()
 const onAppUpdaterState = vi.fn(() => () => {})
+const getCliToolStatus = vi.fn()
+const installCliTool = vi.fn()
 
 async function flushEffects() {
   await act(async () => {
@@ -52,6 +54,10 @@ async function loadSubject() {
           install: installAppUpdate,
           onState: onAppUpdaterState,
         },
+        cliTool: {
+          getStatus: getCliToolStatus,
+          install: installCliTool,
+        },
       }),
     }
   })
@@ -76,6 +82,8 @@ beforeEach(() => {
   downloadAppUpdate.mockReset()
   installAppUpdate.mockReset()
   onAppUpdaterState.mockReset()
+  getCliToolStatus.mockReset()
+  installCliTool.mockReset()
 
   onUpdaterProgress.mockReturnValue(() => {})
   onAppUpdaterState.mockReturnValue(() => {})
@@ -126,6 +134,18 @@ beforeEach(() => {
     error: null,
   })
   installAppUpdate.mockResolvedValue({ ok: true })
+  getCliToolStatus.mockResolvedValue({
+    available: true,
+    installed: false,
+    sourcePath: '/bundle/ark',
+    targetPath: '/usr/local/bin/ark',
+  })
+  installCliTool.mockResolvedValue({
+    available: true,
+    installed: true,
+    sourcePath: '/bundle/ark',
+    targetPath: '/usr/local/bin/ark',
+  })
 })
 
 afterEach(() => {
@@ -211,6 +231,34 @@ describe('UpdateSettingsContent', () => {
     await flushEffects()
 
     expect(container.textContent).toContain('ZIP file not provided')
+  })
+
+  it('展示并安装 ark 命令行工具', async () => {
+    const { UpdateSettingsContent, LocaleProvider } = await loadSubject()
+
+    await act(async () => {
+      root!.render(
+        <LocaleProvider>
+          <UpdateSettingsContent />
+        </LocaleProvider>,
+      )
+    })
+    await flushEffects()
+
+    expect(container.textContent).toContain('命令行')
+    expect(container.textContent).toContain('ark')
+    expect(container.textContent).toContain('未安装')
+
+    const installButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === '安装')
+    expect(installButton).toBeTruthy()
+
+    await act(async () => {
+      installButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushEffects()
+
+    expect(installCliTool).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('已安装')
   })
 
   it('检查更新失败时显示原始报错', async () => {

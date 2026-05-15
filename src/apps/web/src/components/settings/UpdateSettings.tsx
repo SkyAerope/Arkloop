@@ -4,7 +4,13 @@ import { Button } from '@arkloop/shared'
 import { SpinnerIcon } from '@arkloop/shared/components/auth-ui'
 import { useLocale } from '../../contexts/LocaleContext'
 import { formatDesktopAppVersion } from '../../desktopVersion'
-import { getDesktopApi, getDesktopAppVersion, type UpdaterComponent, type AppUpdaterState } from '@arkloop/shared/desktop'
+import {
+  getDesktopApi,
+  getDesktopAppVersion,
+  type UpdaterComponent,
+  type AppUpdaterState,
+  type CommandLineToolStatus,
+} from '@arkloop/shared/desktop'
 
 type ComponentStatus = {
   current: string | null
@@ -26,6 +32,10 @@ type UpdateStatus = {
 
 function getUpdaterApi() {
   return getDesktopApi()?.updater ?? null
+}
+
+function getCliToolApi() {
+  return getDesktopApi()?.cliTool ?? null
 }
 
 function getAppUpdaterApi() {
@@ -188,6 +198,9 @@ export function UpdateSettingsContent() {
 
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [appUpdateState, setAppUpdateState] = useState<AppUpdaterState | null>(null)
+  const [cliStatus, setCliStatus] = useState<CommandLineToolStatus | null>(null)
+  const [cliInstalling, setCliInstalling] = useState(false)
+  const [cliError, setCliError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
   // 每个组件独立的更新状态
@@ -264,6 +277,22 @@ export function UpdateSettingsContent() {
   }, [])
 
   useEffect(() => {
+    const api = getCliToolApi()
+    if (!api) return
+    let active = true
+    void api.getStatus()
+      .then((status) => {
+        if (active) setCliStatus(status)
+      })
+      .catch((error) => {
+        if (active) setCliError(error instanceof Error ? error.message : String(error))
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
     void checkUpdates()
   }, [checkUpdates])
 
@@ -333,6 +362,21 @@ export function UpdateSettingsContent() {
     }
   }, [])
 
+  const handleInstallCli = useCallback(async () => {
+    const api = getCliToolApi()
+    if (!api) return
+    try {
+      setCliInstalling(true)
+      setCliError(null)
+      const status = await api.install()
+      setCliStatus(status)
+    } catch (e) {
+      setCliError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCliInstalling(false)
+    }
+  }, [])
+
   const rows: ComponentRow[] = updateStatus
     ? [
         { key: 'openviking',       label: 'OpenViking',      status: updateStatus.openviking },
@@ -340,7 +384,7 @@ export function UpdateSettingsContent() {
         { key: 'sandbox_rootfs',   label: 'Sandbox Rootfs',  status: updateStatus.sandbox.rootfs },
         ...(updateStatus.bins ? [
           { key: 'rtk' as UpdaterComponent,     label: 'RTK',      status: updateStatus.bins.rtk },
-          { key: 'opencli' as UpdaterComponent,  label: 'OpenCLI',  status: updateStatus.bins.opencli },
+          { key: 'opencli' as UpdaterComponent,  label: 'AutoCLI',  status: updateStatus.bins.opencli },
         ] : []),
       ]
     : []
@@ -367,6 +411,7 @@ export function UpdateSettingsContent() {
         return null
     }
   })()
+  const cliDescription = cliError ?? (!cliStatus?.available ? t.desktopSettings.commandLineToolUnavailable : null)
 
   return (
     <div className="flex flex-col gap-6">
@@ -424,6 +469,39 @@ export function UpdateSettingsContent() {
           />
         </UpdateCard>
       </UpdateSection>
+
+      {cliStatus && (
+        <UpdateSection title={t.desktopSettings.commandLineToolTitle}>
+          <UpdateCard>
+            <UpdateRow
+              title={t.desktopSettings.commandLineToolName}
+              description={cliDescription ? (
+                <span className={cliError ? 'text-[var(--c-status-error)]' : undefined}>
+                  {cliDescription}
+                </span>
+              ) : undefined}
+              value={(
+                <span className="text-sm text-[var(--c-text-secondary)]">
+                  {cliStatus.installed
+                    ? t.desktopSettings.commandLineToolInstalled
+                    : t.desktopSettings.commandLineToolNotInstalled}
+                </span>
+              )}
+              control={cliStatus.available && !cliStatus.installed ? (
+                <Button
+                  onClick={handleInstallCli}
+                  variant="primary"
+                  size="sm"
+                  loading={cliInstalling}
+                  disabled={cliInstalling}
+                >
+                  {t.desktopSettings.commandLineToolInstall}
+                </Button>
+              ) : undefined}
+            />
+          </UpdateCard>
+        </UpdateSection>
+      )}
 
       {updateStatus && (
         <UpdateSection title={t.desktopSettings.componentUpdateTitle}>

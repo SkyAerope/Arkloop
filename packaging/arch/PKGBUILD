@@ -70,6 +70,7 @@ build() {
   _pnpm --filter @arkloop/desktop run build:web
   _pnpm --filter @arkloop/desktop run build:electron
   node src/apps/desktop/scripts/build-sidecar.mjs --platform linux --arch "${electron_arch}"
+  node src/apps/desktop/scripts/build-cli.mjs --platform linux --arch "${electron_arch}"
 
   rm -rf "${_app_dir}/release/linux-unpacked"
   _pnpm --filter @arkloop/desktop exec electron-builder \

@@ -84,6 +84,7 @@ export type DesktopPreferencesConfig = {
   desktopNotifications: boolean
   productUpdateNotifications: boolean
   keepScreenAwake: boolean
+  commandLineToolPromptDisabled: boolean
 }
 
 export type LocalConfig = {
@@ -137,5 +138,6 @@ export const DEFAULT_CONFIG: AppConfig = {
     desktopNotifications: true,
     productUpdateNotifications: true,
     keepScreenAwake: false,
+    commandLineToolPromptDisabled: false,
   },
 }

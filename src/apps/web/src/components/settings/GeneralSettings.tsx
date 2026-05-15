@@ -46,6 +46,7 @@ const defaultDesktopPreferences: DesktopPreferencesConfig = {
   desktopNotifications: true,
   productUpdateNotifications: true,
   keepScreenAwake: false,
+  commandLineToolPromptDisabled: false,
 }
 
 function desktopPreferencesFromConfig(config: DesktopConfig | null): DesktopPreferencesConfig {

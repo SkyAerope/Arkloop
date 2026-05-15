@@ -222,6 +222,7 @@ function normalizeDesktopPreferences(raw: unknown): DesktopPreferencesConfig {
     desktopNotifications: r.desktopNotifications === false ? false : true,
     productUpdateNotifications: r.productUpdateNotifications === false ? false : true,
     keepScreenAwake: r.keepScreenAwake === true,
+    commandLineToolPromptDisabled: r.commandLineToolPromptDisabled === true,
   }
 }
 

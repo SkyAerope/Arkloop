@@ -1448,6 +1448,13 @@ export interface LocaleStrings {
     appUpdateError: string;
     appUpdateDownload: string;
     appUpdateInstall: string;
+    commandLineToolTitle: string;
+    commandLineToolName: string;
+    commandLineToolInstalled: string;
+    commandLineToolNotInstalled: string;
+    commandLineToolUnavailable: string;
+    commandLineToolInstall: string;
+    commandLineToolInstallFailed: string;
     componentUpdateTitle: string;
     componentNotInstalled: string;
   };

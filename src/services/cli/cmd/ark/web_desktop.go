@@ -696,30 +696,21 @@ func requestHostName(hostport string) string {
 }
 
 func resolveWebRoot(explicit string) (string, error) {
-	candidates := []string{}
-	if strings.TrimSpace(explicit) != "" {
-		candidates = append(candidates, strings.TrimSpace(explicit))
+	cwd := ""
+	if value, err := os.Getwd(); err == nil {
+		cwd = value
 	}
-	if strings.TrimSpace(webRootHint) != "" {
-		candidates = append(candidates, strings.TrimSpace(webRootHint))
+	exe := ""
+	resolvedExe := ""
+	if value, err := os.Executable(); err == nil {
+		exe = value
+		if resolved, err := filepath.EvalSymlinks(value); err == nil && resolved != value {
+			resolvedExe = resolved
+		}
 	}
-	if env := strings.TrimSpace(os.Getenv("ARKLOOP_WEB_ROOT")); env != "" {
-		candidates = append(candidates, env)
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates,
-			filepath.Join(cwd, "src", "apps", "web", "dist"),
-			filepath.Join(cwd, "web", "dist"),
-		)
-	}
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		candidates = append(candidates,
-			filepath.Join(dir, "web"),
-			filepath.Join(dir, "web", "dist"),
-			filepath.Join(dir, "..", "web"),
-			filepath.Join(dir, "..", "src", "apps", "web", "dist"),
-		)
+	candidates := webRootCandidates(explicit, webRootHint, os.Getenv("ARKLOOP_WEB_ROOT"), cwd, exe)
+	if resolvedExe != "" {
+		candidates = append(candidates, webRootCandidates("", "", "", "", resolvedExe)...)
 	}
 	for _, candidate := range candidates {
 		if okWebRoot(candidate) {
@@ -733,8 +724,41 @@ func resolveWebRoot(explicit string) (string, error) {
 	return "", fmt.Errorf("web assets not found")
 }
 
-func okWebRoot(path string) bool {
-	info, err := os.Stat(filepath.Join(path, "index.html"))
+func webRootCandidates(explicit string, hint string, env string, cwd string, exe string) []string {
+	candidates := []string{}
+	if strings.TrimSpace(explicit) != "" {
+		candidates = append(candidates, strings.TrimSpace(explicit))
+	}
+	if strings.TrimSpace(hint) != "" {
+		candidates = append(candidates, strings.TrimSpace(hint))
+	}
+	if env := strings.TrimSpace(env); env != "" {
+		candidates = append(candidates, env)
+	}
+	if strings.TrimSpace(cwd) != "" {
+		candidates = append(candidates,
+			filepath.Join(cwd, "src", "apps", "web", "dist"),
+			filepath.Join(cwd, "web", "dist"),
+		)
+	}
+	if strings.TrimSpace(exe) != "" {
+		dir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(dir, "..", "renderer"),
+			filepath.Join(dir, "..", "renderer", "dist"),
+			filepath.Join(dir, "web"),
+			filepath.Join(dir, "web", "dist"),
+			filepath.Join(dir, "..", "web"),
+			filepath.Join(dir, "..", "..", "renderer"),
+			filepath.Join(dir, "..", "..", "renderer", "dist"),
+			filepath.Join(dir, "..", "src", "apps", "web", "dist"),
+		)
+	}
+	return candidates
+}
+
+func okWebRoot(root string) bool {
+	info, err := os.Stat(filepath.Join(root, "index.html"))
 	return err == nil && !info.IsDir()
 }
 

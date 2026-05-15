@@ -53,6 +53,32 @@ Windows SmartScreen 可能弹出"未识别的应用"提示：
 
 无需手动操作，等待进度条走完即可进入设置向导。
 
+## 命令行
+
+桌面端首次启动时可以安装 `ark` 命令行工具，也可以在设置 -> 更新里手动安装。安装后可以不打开桌面窗口，直接启动同一套本地运行时：
+
+```bash
+ark web
+```
+
+在 Headless 主机上，可以从 GitHub Releases 下载独立的 `ark-linux-*.tar.gz` 压缩包，解压后运行：
+
+```bash
+tar -xzf ark-linux-amd64.tar.gz
+cd ark-linux-amd64
+./ark web --host 0.0.0.0 --no-open
+```
+
+如果要在 VPS 上部署 Docker 自托管服务，克隆仓库并运行安装器：
+
+```bash
+git clone https://github.com/qqqqqf-q/Arkloop.git
+cd Arkloop
+chmod +x ./setup.sh
+./setup.sh doctor
+./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
+```
+
 ## 全局快捷键
 
 `Cmd+Shift+A`（macOS）/ `Ctrl+Shift+A`（Windows/Linux）可随时唤起或隐藏窗口，即使窗口已最小化。

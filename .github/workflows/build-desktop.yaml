@@ -94,7 +94,97 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Job 2 – Build Electron installers per platform
+  # Job 2 – Build standalone CLI binaries
+  # ---------------------------------------------------------------------------
+  build-cli:
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            cgo_enabled: 1
+            goos: darwin
+            goarch: arm64
+          - os: macos-15-intel
+            cgo_enabled: 1
+            goos: darwin
+            goarch: amd64
+          - os: ubuntu-latest
+            cgo_enabled: 0
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            cgo_enabled: 0
+            goos: linux
+            goarch: arm64
+          - os: windows-latest
+            cgo_enabled: 0
+            goos: windows
+            goarch: amd64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release metadata
+        id: release_meta
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="dev"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build CLI
+        run: |
+          PACKAGE_NAME="ark-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BIN_NAME="ark"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BIN_NAME="${BIN_NAME}.exe"
+          fi
+          mkdir -p "package/${PACKAGE_NAME}" dist
+          pnpm --filter web build
+          CGO_ENABLED=${{ matrix.cgo_enabled }} GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -tags desktop -trimpath -ldflags "-s -w -X main.version=${{ steps.release_meta.outputs.version }}" \
+            -o "package/${PACKAGE_NAME}/${BIN_NAME}" \
+            ./src/services/cli/cmd/ark
+          cp -R src/apps/web/dist "package/${PACKAGE_NAME}/web"
+          tar -czf "dist/${PACKAGE_NAME}.tar.gz" -C package "${PACKAGE_NAME}"
+          echo "Built dist/${PACKAGE_NAME}.tar.gz"
+          ls -lh dist/
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Job 3 – Build Electron installers per platform
   # ---------------------------------------------------------------------------
   build-desktop:
     defaults:
@@ -137,6 +227,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+
       - name: Resolve release metadata
         id: release_meta
         run: |
@@ -174,6 +269,9 @@ jobs:
 
       - name: Build web app
         run: pnpm --filter @arkloop/desktop build:web
+
+      - name: Build bundled CLI
+        run: ARKLOOP_RELEASE_VERSION="${{ steps.release_meta.outputs.version }}" node src/apps/desktop/scripts/build-cli.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.electron_arch }}
 
       - name: Clear release meta
         run: rm -f src/apps/desktop/dist/release-meta.json
@@ -218,7 +316,7 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Job 3 – Build Arch Linux package
+  # Job 4 – Build Arch Linux package
   # ---------------------------------------------------------------------------
   build-archlinux-package:
     name: Build Arch Linux pkg.tar.zst
@@ -287,11 +385,11 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Job 4 – Create GitHub Release with all assets
+  # Job 5 – Create GitHub Release with all assets
   # ---------------------------------------------------------------------------
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-sidecar, build-desktop, build-archlinux-package]
+    needs: [build-sidecar, build-cli, build-desktop, build-archlinux-package]
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -330,13 +428,19 @@ jobs:
           pattern: desktop-installer-*
           path: release-assets/installers/
 
+      - name: Download all CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: release-assets/cli/
+
       - name: List release assets
         run: find release-assets -type f | sort
 
       - name: Collect release files
         run: |
           mkdir -p release-files
-          find release-assets/installers -type f \( \
+          find release-assets -type f \( \
             -name '*.dmg' -o \
             -name '*.zip' -o \
             -name '*.AppImage' -o \
@@ -344,6 +448,7 @@ jobs:
             -name '*.rpm' -o \
             -name '*.pkg.tar.zst' -o \
             -name '*.exe' -o \
+            -name 'ark-*.tar.gz' -o \
             -name '*.blockmap' -o \
             -name 'latest*.yml' \
           \) -exec cp {} release-files/ \;

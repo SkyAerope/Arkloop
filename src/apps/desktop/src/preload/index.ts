@@ -106,6 +106,7 @@ export type DesktopPreferencesConfig = {
   desktopNotifications: boolean
   productUpdateNotifications: boolean
   keepScreenAwake: boolean
+  commandLineToolPromptDisabled: boolean
 }
 
 export type MemoryEntry = {
@@ -290,6 +291,13 @@ export type UpdaterStatus = {
 
 export type UpdaterComponent = 'openviking' | 'sandbox_kernel' | 'sandbox_rootfs' | 'rtk' | 'opencli'
 
+export type CommandLineToolStatus = {
+  available: boolean
+  installed: boolean
+  sourcePath: string | null
+  targetPath: string
+}
+
 export type ArkloopDesktopApi = {
   isDesktop: true
   config: {
@@ -321,6 +329,10 @@ export type ArkloopDesktopApi = {
   }
   dialog: {
     openFolder: () => Promise<string | null>
+  }
+  cliTool: {
+    getStatus: () => Promise<CommandLineToolStatus>
+    install: () => Promise<CommandLineToolStatus>
   }
   sidecar: {
     getStatus: () => Promise<SidecarStatus>
@@ -588,6 +600,11 @@ const api: ArkloopDesktopApi = {
 
   dialog: {
     openFolder: () => ipcRenderer.invoke('arkloop:dialog:open-folder'),
+  },
+
+  cliTool: {
+    getStatus: () => ipcRenderer.invoke('arkloop:cli-tool:status'),
+    install: () => ipcRenderer.invoke('arkloop:cli-tool:install'),
   },
 
   fs: {

@@ -108,6 +108,7 @@ export type DesktopPreferencesConfig = {
   desktopNotifications: boolean
   productUpdateNotifications: boolean
   keepScreenAwake: boolean
+  commandLineToolPromptDisabled: boolean
 }
 
 export type MemoryEntry = {
@@ -197,6 +198,13 @@ export type UpdaterStatus = {
 
 export type UpdaterComponent = 'openviking' | 'sandbox_kernel' | 'sandbox_rootfs' | 'rtk' | 'opencli'
 
+export type CommandLineToolStatus = {
+  available: boolean
+  installed: boolean
+  sourcePath: string | null
+  targetPath: string
+}
+
 export type ArkloopDesktopApi = {
   isDesktop: true
   config: {
@@ -225,6 +233,10 @@ export type ArkloopDesktopApi = {
     download: () => Promise<AppUpdaterState>
     install: () => Promise<{ ok: boolean }>
     onState: (callback: (state: AppUpdaterState) => void) => () => void
+  }
+  cliTool?: {
+    getStatus: () => Promise<CommandLineToolStatus>
+    install: () => Promise<CommandLineToolStatus>
   }
   connectors?: {
     get: () => Promise<ConnectorsConfig>

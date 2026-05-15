@@ -53,6 +53,32 @@ When you start Arkloop for the first time, several things happen automatically:
 
 No manual configuration is needed at this stage — the setup wizard handles the rest.
 
+## Command Line
+
+Desktop can install the `ark` command-line tool on first launch or from Settings -> Updates. The command starts the same local runtime without opening the Desktop window:
+
+```bash
+ark web
+```
+
+For a headless host, download the standalone `ark-linux-*.tar.gz` archive from GitHub Releases, extract it, then run:
+
+```bash
+tar -xzf ark-linux-amd64.tar.gz
+cd ark-linux-amd64
+./ark web --host 0.0.0.0 --no-open
+```
+
+For the Docker self-hosted stack on a VPS, clone the repository and run the installer:
+
+```bash
+git clone https://github.com/qqqqqf-q/Arkloop.git
+cd Arkloop
+chmod +x ./setup.sh
+./setup.sh doctor
+./setup.sh install --prod --profile standard --mode self-hosted --memory none --sandbox none --console lite --browser off --web-tools builtin --gateway on --non-interactive
+```
+
 ## Window Management
 
 | Action | Shortcut |
