@@ -395,7 +395,7 @@ func (e *Executor) executeMessageAttachment(
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	image, err := fetchMessageAttachmentImage(execCtx.PipelineRC, parsed.Source.AttachmentKey, parsed.MaxBytes, e.AttachmentStore)
+	image, err := fetchMessageAttachmentImage(runCtx, execCtx.PipelineRC, parsed.Source.AttachmentKey, parsed.MaxBytes, e.AttachmentStore)
 	if err != nil {
 		return tools.ExecutionResult{
 			Error:      executionErrorFromFetchError(err),
@@ -790,7 +790,7 @@ func (e *Executor) providerFromConfig(cfg toolruntime.ProviderConfig) (Provider,
 	}
 }
 
-func fetchMessageAttachmentImage(pipelineRC any, attachmentKey string, maxBytes int, store AttachmentFetcher) (fetchedImage, error) {
+func fetchMessageAttachmentImage(ctx context.Context, pipelineRC any, attachmentKey string, maxBytes int, store AttachmentFetcher) (fetchedImage, error) {
 	key := strings.TrimSpace(attachmentKey)
 	if key == "" {
 		return fetchedImage{}, fmt.Errorf("attachment key is required")
@@ -830,7 +830,7 @@ func fetchMessageAttachmentImage(pipelineRC any, attachmentKey string, maxBytes 
 
 	// fallback: load from object store by key
 	if store != nil {
-		data, contentType, err := store.GetWithContentType(context.Background(), key)
+		data, contentType, err := store.GetWithContentType(ctx, key)
 		if err == nil && len(data) > 0 {
 			if len(data) > maxBytes {
 				return fetchedImage{}, imageTooLargeError{MaxBytes: maxBytes}

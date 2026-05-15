@@ -55,6 +55,7 @@ func NewToolBuildMiddleware() RunMiddleware {
 		if err != nil {
 			return err
 		}
+		readImageBridgeEnabled := executableReadBridgeAvailable(ctx, rc, resolvedAllowlist)
 		// 主模型原生支持图片时，不需要走 bridge：通过 ContentParts 直返图片给主模型
 		if supportsImageInput(rc.SelectedRoute) {
 			if _, has := resolvedAllowlist[read.ProviderNameMiniMax]; has {
@@ -116,7 +117,6 @@ func NewToolBuildMiddleware() RunMiddleware {
 
 		allSpecs := FilterToolSpecs(rc.ToolSpecs, filteredAllowlist, rc.ToolRegistry)
 		allSpecs = applyProviderOwnedToolSpecs(allSpecs, rc.ActiveToolProviderByGroup)
-		readImageBridgeEnabled := hasExecutableImageBridgeProvider(filteredAllowlist, rc.ActiveToolProviderByGroup)
 		nativeImageInput := supportsImageInput(rc.SelectedRoute)
 		allSpecs = ApplyReadImageSourceVisibility(allSpecs, readImageBridgeEnabled, nativeImageInput)
 
@@ -201,6 +201,15 @@ func NewToolBuildMiddleware() RunMiddleware {
 
 		return next(ctx, rc)
 	}
+}
+
+func executableReadBridgeAvailable(ctx context.Context, rc *RunContext, resolvedAllowlist map[string]struct{}) bool {
+	bridgeAllowlist := CopyStringSet(resolvedAllowlist)
+	bridgeAllowlist = filterAllowlistByRuntime(bridgeAllowlist, rc.Runtime, rc.ToolRegistry, rc.ActiveToolProviderByGroup)
+	filtered, _ := FilterAllowlistToBoundExecutors(bridgeAllowlist, rc.ToolExecutors)
+	filtered = filterNotConfiguredExecutors(filtered, rc.ToolExecutors)
+	filtered = filterAccountScopedAvailability(ctx, filtered, rc.Run.AccountID, rc.ToolExecutors)
+	return hasExecutableImageBridgeProvider(filtered, rc.ActiveToolProviderByGroup)
 }
 
 func hasExecutableImageBridgeProvider(allowlist map[string]struct{}, activeByGroup map[string]string) bool {
