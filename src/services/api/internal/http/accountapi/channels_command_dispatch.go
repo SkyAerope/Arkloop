@@ -181,9 +181,6 @@ func DispatchChannelCommand(
 		if ch.PersonaID == nil || *ch.PersonaID == uuid.Nil {
 			return true, "当前会话未配置 persona。", nil, nil, uuid.Nil, nil
 		}
-		if !isPrivate && resolver.IsGroupAdmin != nil && !resolver.IsGroupAdmin(ctx) {
-			return true, "无权限。", nil, nil, uuid.Nil, nil
-		}
 		if isPrivate {
 			if deps.ChannelDMThreadsRepo != nil {
 				if err := deps.ChannelDMThreadsRepo.WithTx(tx).DeleteByBinding(ctx, ch.ID, identity.ID, *ch.PersonaID, ""); err != nil {
@@ -204,9 +201,6 @@ func DispatchChannelCommand(
 	case cmd == "/stop":
 		if ch.PersonaID == nil || *ch.PersonaID == uuid.Nil {
 			return true, "当前没有运行中的任务。", nil, nil, uuid.Nil, nil
-		}
-		if !isPrivate && resolver.IsGroupAdmin != nil && !resolver.IsGroupAdmin(ctx) {
-			return true, "无权限。", nil, nil, uuid.Nil, nil
 		}
 		threadID, err := resolveThreadID()
 		if err != nil {
@@ -249,9 +243,6 @@ func DispatchChannelCommand(
 	case cmd == "/reset":
 		if ch.PersonaID == nil || *ch.PersonaID == uuid.Nil {
 			return true, "当前会话未配置 persona。", nil, nil, uuid.Nil, nil
-		}
-		if !isPrivate && resolver.IsGroupAdmin != nil && !resolver.IsGroupAdmin(ctx) {
-			return true, "无权限。", nil, nil, uuid.Nil, nil
 		}
 		if isPrivate {
 			if deps.ChannelDMThreadsRepo != nil {
@@ -339,13 +330,8 @@ func DispatchChannelCommand(
 		if ch.PersonaID == nil || *ch.PersonaID == uuid.Nil {
 			return true, "当前会话未配置 persona。", nil, nil, uuid.Nil, nil
 		}
-		if !isPrivate {
-			if identity.UserID == nil {
-				return true, "无权限。", nil, nil, uuid.Nil, nil
-			}
-			if resolver.IsGroupAdmin != nil && !resolver.IsGroupAdmin(ctx) {
-				return true, "无权限。", nil, nil, uuid.Nil, nil
-			}
+		if !isPrivate && identity.UserID == nil {
+			return true, "无权限。", nil, nil, uuid.Nil, nil
 		}
 		currentPersona, err := deps.PersonasRepo.GetByIDForAccount(ctx, ch.AccountID, *ch.PersonaID)
 		if err != nil {
@@ -409,9 +395,45 @@ func resolveChannelCommandAdmin(ctx context.Context, resolver ChannelCommandReso
 	return true
 }
 
+var channelCommandHelpEntries = []struct {
+	cmd       string
+	args      string
+	desc      string
+	groupOnly bool
+}{
+	{"/start", "", "查看连接状态", false},
+	{"/bind", "<code>", "绑定你的账号", false},
+	{"/new", "", "开启新会话", false},
+	{"/reset", "", "重置会话", false},
+	{"/stop", "", "停止当前任务", false},
+	{"/status", "", "查看当前状态", false},
+	{"/model", "[name]", "View or switch model", false},
+	{"/think", "[level]", "View or set thinking intensity", false},
+	{"/models", "", "列出所有可用模型", false},
+	{"/persona", "", "切换当前 persona", false},
+	{"/heartbeat", "on/off", "设置心跳", true},
+	{"/help", "", "显示此帮助", false},
+}
+
 func channelCommandHelpText(isPrivate bool) string {
-	if !isPrivate {
-		return "/start@bot — 查看连接状态\n/bind@bot <code> — 绑定你的账号\n/new@bot — 开启新会话\n/reset@bot — 重置会话\n/stop@bot — 停止当前任务\n/status@bot — 查看当前状态\n/model@bot [name] — View or switch model\n/think@bot [level] — View or set thinking intensity\n/models@bot — 列出所有可用模型\n/persona@bot — 切换当前 persona\n/heartbeat@bot on/off — 设置心跳\n/help@bot — 显示此帮助"
+	var sb strings.Builder
+	for i, e := range channelCommandHelpEntries {
+		if isPrivate && e.groupOnly {
+			continue
+		}
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(e.cmd)
+		if !isPrivate {
+			sb.WriteString("@bot")
+		}
+		if e.args != "" {
+			sb.WriteByte(' ')
+			sb.WriteString(e.args)
+		}
+		sb.WriteString(" — ")
+		sb.WriteString(e.desc)
 	}
-	return "/start — 查看连接状态\n/bind <code> — 绑定你的账号\n/new — 开启新会话\n/reset — 重置会话\n/stop — 停止当前任务\n/status — 查看当前状态\n/model [name] — View or switch model\n/think [level] — View or set thinking intensity\n/models — 列出所有可用模型\n/persona — 切换当前 persona\n/help — 显示此帮助"
+	return sb.String()
 }

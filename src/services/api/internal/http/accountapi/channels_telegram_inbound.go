@@ -84,8 +84,8 @@ func telegramMessageMentionsBot(msg *telegramMessage, botUsername string) bool {
 		return false
 	}
 	text := strings.ToLower(resolveTelegramMessageBody(msg))
-	cleanBotUsername := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(botUsername, "@")))
-	if cleanBotUsername != "" && strings.Contains(text, "@"+cleanBotUsername) {
+	cleanBot := cleanBotUsername(botUsername)
+	if cleanBot != "" && strings.Contains(text, "@"+cleanBot) {
 		return true
 	}
 	for _, entity := range append(append([]telegramMessageEntity{}, msg.Entities...), msg.CaptionEntities...) {
@@ -95,11 +95,11 @@ func telegramMessageMentionsBot(msg *telegramMessage, botUsername string) bool {
 				return true
 			}
 		case "mention":
-			if cleanBotUsername == "" {
+			if cleanBot == "" {
 				continue
 			}
 			entityText := sliceTelegramEntityText(resolveTelegramMessageBody(msg), entity.Offset, entity.Length)
-			if strings.EqualFold(strings.TrimSpace(entityText), "@"+cleanBotUsername) {
+			if strings.EqualFold(strings.TrimSpace(entityText), "@"+cleanBot) {
 				return true
 			}
 		}

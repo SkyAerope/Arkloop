@@ -342,12 +342,8 @@ func shouldSendTelegramImmediateTyping(incoming *telegramIncomingMessage) bool {
 	if incoming == nil || !incoming.HasContent() {
 		return false
 	}
-	rawCommand := strings.TrimSpace(incoming.CommandText)
-	cmd, ok := slashCommandBase(rawCommand, "")
-	if ok && strings.HasPrefix(cmd, "/heartbeat") {
-		return false
-	}
-	if strings.HasPrefix(strings.ToLower(rawCommand), "/heartbeat@") {
+	raw := strings.ReplaceAll(strings.TrimSpace(incoming.CommandText), "／", "/")
+	if strings.HasPrefix(strings.ToLower(raw), "/heartbeat") {
 		return false
 	}
 	return incoming.ShouldCreateRun()
@@ -992,6 +988,10 @@ func isTelegramGroupLikeChatType(chatType string) bool {
 
 // slashCommandBase 返回命令名（不含 @bot），如 "/new"。
 // 若命令带有 @target 且与 botUsername 不匹配，返回 ok=false（命令非发给本 bot）。
+func cleanBotUsername(botUsername string) string {
+	return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(botUsername, "@")))
+}
+
 func slashCommandBase(text, botUsername string) (cmd string, ok bool) {
 	text = strings.ReplaceAll(text, "／", "/")
 	text = strings.TrimSpace(text)
@@ -1004,9 +1004,7 @@ func slashCommandBase(text, botUsername string) (cmd string, ok bool) {
 	}
 	parts := strings.SplitN(fields[0], "@", 2)
 	if len(parts) == 2 && parts[1] != "" {
-		cleanTarget := strings.ToLower(strings.TrimSpace(parts[1]))
-		cleanBot := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(botUsername, "@")))
-		if cleanBot == "" || cleanTarget != cleanBot {
+		if cleanBot := cleanBotUsername(botUsername); cleanBot == "" || !strings.EqualFold(parts[1], cleanBot) {
 			return "", false
 		}
 	}
@@ -1023,31 +1021,29 @@ func adaptTelegramGroupCommandText(text, botUsername string) (cmd string, comman
 	if len(fields) == 0 {
 		return "", "", false
 	}
-	cleanBot := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(botUsername, "@")))
+	cleanBot := cleanBotUsername(botUsername)
 	if cleanBot == "" {
 		return "", "", false
 	}
 	parts := strings.SplitN(fields[0], "@", 2)
 	if len(parts) == 2 {
-		cleanTarget := strings.ToLower(strings.TrimSpace(parts[1]))
-		if cleanTarget != cleanBot {
+		if !strings.EqualFold(parts[1], cleanBot) {
 			return "", "", false
 		}
-		fields[0] = strings.TrimSpace(parts[0])
+		fields[0] = parts[0]
 		return fields[0], strings.Join(fields, " "), true
 	}
 	if len(fields) < 2 || !telegramStandaloneMentionMatches(fields[1], cleanBot) {
 		return "", "", false
 	}
-	fields[0] = strings.TrimSpace(parts[0])
+	fields[0] = parts[0]
 	fields = append(fields[:1], fields[2:]...)
 	return fields[0], strings.Join(fields, " "), true
 }
 
 func telegramStandaloneMentionMatches(value, cleanBot string) bool {
-	value = strings.ToLower(strings.TrimSpace(value))
-	value = strings.TrimPrefix(value, "@")
-	return cleanBot != "" && value == cleanBot
+	v := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), "@")
+	return cleanBot != "" && v == cleanBot
 }
 
 func (c telegramConnector) handleTelegramEditedMessage(
@@ -1933,7 +1929,13 @@ func telegramChannelIdentityIsBound(ctx context.Context, tx pgx.Tx, channelID uu
 	if repo == nil || channelID == uuid.Nil || identity.ID == uuid.Nil {
 		return false
 	}
-	linked, err := repo.WithTx(tx).HasLink(ctx, channelID, identity.ID)
+	var linked bool
+	var err error
+	if tx != nil {
+		linked, err = repo.WithTx(tx).HasLink(ctx, channelID, identity.ID)
+	} else {
+		linked, err = repo.HasLink(ctx, channelID, identity.ID)
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "telegram_bound_admin_check_failed", "error", err, "channel_id", channelID, "identity_id", identity.ID)
 		return false
@@ -2296,18 +2298,8 @@ func (c telegramConnector) handleTelegramCallbackQuery(
 	if identity == nil {
 		return nil
 	}
-	if isTelegramGroupLikeChatType(cb.Message.Chat.Type) {
-		if c.channelIdentityLinksRepo == nil {
-			return nil
-		}
-		linked, err := c.channelIdentityLinksRepo.HasLink(ctx, ch.ID, identity.ID)
-		if err != nil {
-			slog.WarnContext(ctx, "telegram_callback_bound_admin_check_failed", "error", err, "channel_id", ch.ID, "identity_id", identity.ID)
-			return nil
-		}
-		if !linked {
-			return nil
-		}
+	if isTelegramGroupLikeChatType(cb.Message.Chat.Type) && !telegramChannelIdentityIsBound(ctx, nil, ch.ID, *identity, c.channelIdentityLinksRepo) {
+		return nil
 	}
 
 	// dismiss: 移除按钮，保留原消息文本。
