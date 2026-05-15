@@ -57,6 +57,7 @@ type HeadersEditorProps = {
   removeLabel?: string
   keyPlaceholder: string
   valuePlaceholder: string
+  inputVariant?: 'sm' | 'md'
 }
 
 export function HeadersEditor({
@@ -66,6 +67,7 @@ export function HeadersEditor({
   removeLabel,
   keyPlaceholder,
   valuePlaceholder,
+  inputVariant = 'sm',
 }: HeadersEditorProps) {
   const update = (idx: number, patch: Partial<HeaderEntry>) => {
     onChange(headers.map((header, index) => (index === idx ? { ...header, ...patch } : header)))
@@ -74,18 +76,20 @@ export function HeadersEditor({
     onChange(headers.filter((_, index) => index !== idx))
   }
 
+  const buttonSize = inputVariant === 'md' ? 'modal' : 'default'
+
   return (
     <div className="space-y-2">
       {headers.map((header, idx) => (
         <div key={idx} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
           <SettingsInput
-            variant="md"
+            variant={inputVariant}
             value={header.key}
             onChange={(e) => update(idx, { key: e.target.value })}
             placeholder={keyPlaceholder}
           />
           <SettingsInput
-            variant="md"
+            variant={inputVariant}
             value={header.value}
             onChange={(e) => update(idx, { value: e.target.value })}
             placeholder={valuePlaceholder}
@@ -98,7 +102,7 @@ export function HeadersEditor({
       <SettingsButton
         type="button"
         onClick={() => onChange([...headers, { key: '', value: '' }])}
-        size="modal"
+        size={buttonSize}
         icon={<Plus size={13} />}
       >
         {addLabel}

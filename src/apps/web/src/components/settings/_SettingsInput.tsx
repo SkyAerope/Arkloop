@@ -48,7 +48,7 @@ export function SettingsSearchInput({
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--c-text-muted)]"
       />
       <SettingsInput
-        className={`pl-8${className ? ` ${className}` : ''}`}
+        className={`pl-9${className ? ` ${className}` : ''}`}
         placeholder={placeholder}
         {...rest}
       />

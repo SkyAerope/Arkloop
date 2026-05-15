@@ -39,7 +39,7 @@ import { SettingsModalFrame } from './_SettingsModalFrame'
 import { SettingsSelect } from './_SettingsSelect'
 import { SettingsSegmentedControl } from './_SettingsSegmentedControl'
 import { SettingsSwitch } from './_SettingsSwitch'
-import { SettingsSummaryCard, SettingsSummaryCardBadge, SettingsSummaryCardLine } from './_SettingsSummaryCard'
+import { SettingsSummaryCard, SettingsSummaryCardBadge } from './_SettingsSummaryCard'
 import { SETTINGS_TWO_COLUMN_GRID_CLASS } from './_SettingsLayout'
 import {
   AdvancedOptionsDisclosure,
@@ -430,32 +430,24 @@ function ProviderSummaryCard({
   deleting: boolean
 }) {
   const local = isManagedLocalProvider(provider)
-  const enabledModels = provider.models.filter((model) => model.show_in_picker).length
-  const apiMode = provider.openai_api_mode === 'chat_completions'
-    ? p.vendorOpenaiChat
-    : vendorLabel(toVendorKey(provider.provider, provider.openai_api_mode), p)
   const baseUrl = provider.base_url?.trim() || '—'
 
   return (
-    <SettingsSummaryCard onClick={onOpen}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <SettingsSummaryCard onClick={onOpen} minHeightClass="min-h-[72px]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h3 className="truncate text-[14px] font-semibold leading-tight text-[var(--c-text-primary)]">{provider.name}</h3>
-          <p className="mt-1 truncate text-[11px] leading-tight text-[var(--c-text-muted)]">{apiMode}</p>
+          <p className="mt-1 truncate text-[11px] leading-tight text-[var(--c-text-muted)]">{baseUrl}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 transition-opacity duration-150 group-hover:opacity-0 group-focus-within:opacity-0">
           <SettingsSummaryCardBadge>{local ? p.localProvider : (p.filterCloud ?? 'Cloud')}</SettingsSummaryCardBadge>
           {provider.read_only && (
             <SettingsSummaryCardBadge>{p.readOnlyProvider}</SettingsSummaryCardBadge>
           )}
         </div>
       </div>
-      <div className="mt-4 min-w-0 space-y-2 pr-[152px]">
-        <SettingsSummaryCardLine label={p.baseUrl} value={baseUrl} />
-        <SettingsSummaryCardLine label={p.modelsSection} value={`${provider.models.length} / ${enabledModels}`} />
-      </div>
       <div
-        className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
         onClick={(event) => event.stopPropagation()}
       >
         <SettingsIconButton
@@ -614,6 +606,7 @@ function AddProviderModal({ accessToken, p, onClose, onCreated }: {
                 addLabel={p.addHeader ?? 'Add header'}
                 keyPlaceholder={p.headerKeyPlaceholder ?? 'Header name'}
                 valuePlaceholder={p.headerValuePlaceholder ?? 'Header value'}
+                inputVariant="md"
               />
             </div>
           </AdvancedOptionsDisclosure>
