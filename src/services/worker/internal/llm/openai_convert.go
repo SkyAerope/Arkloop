@@ -25,16 +25,10 @@ func toOpenAIChatMessages(messages []Message) ([]map[string]any, error) {
 		if message.Role == "tool" {
 			base := toOpenAIToolMessage(text)
 			imageParts := collectImageBlocks(message.Content)
-			if len(imageParts) == 0 {
-				out = append(out, base)
-				continue
-			}
-			contentArr := []map[string]any{
-				{"type": "text", "text": base["content"]},
-			}
-			contentArr = append(contentArr, imageParts...)
-			base["content"] = contentArr
 			out = append(out, base)
+			if len(imageParts) > 0 {
+				out = append(out, map[string]any{"role": "user", "content": imageParts})
+			}
 			continue
 		}
 

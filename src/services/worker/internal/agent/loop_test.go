@@ -2061,7 +2061,7 @@ func TestCompactToolResultsWithStateKeepsReplacementStableAcrossTurns(t *testing
 	}
 }
 
-func TestCompactToolResultsDropsImageParts(t *testing.T) {
+func TestCompactToolResultsKeepsLatestImageToolResult(t *testing.T) {
 	oldLimit := maxToolResultHistoryChars
 	maxToolResultHistoryChars = 40
 	defer func() { maxToolResultHistoryChars = oldLimit }()
@@ -2075,8 +2075,64 @@ func TestCompactToolResultsDropsImageParts(t *testing.T) {
 	}
 
 	got := compactToolResults([]llm.Message{original})
+	if len(got[0].Content) != 2 {
+		t.Fatalf("expected latest image tool result to stay visible, got %d parts", len(got[0].Content))
+	}
+}
+
+func TestCompactToolResultsDropsOlderImageParts(t *testing.T) {
+	oldLimit := maxToolResultHistoryChars
+	maxToolResultHistoryChars = 40
+	defer func() { maxToolResultHistoryChars = oldLimit }()
+
+	messages := []llm.Message{
+		{
+			Role: "tool",
+			Content: []llm.ContentPart{
+				{Text: `{"tool_call_id":"call_old","tool_name":"read","result":{"image_attached":true}}`},
+				{Type: messagecontent.PartTypeImage, Data: bytes.Repeat([]byte{1}, 80)},
+			},
+		},
+		{
+			Role: "tool",
+			Content: []llm.ContentPart{
+				{Text: `{"tool_call_id":"call_new","tool_name":"read","result":{"image_attached":true}}`},
+				{Type: messagecontent.PartTypeImage, Data: bytes.Repeat([]byte{2}, 80)},
+			},
+		},
+	}
+
+	got := compactToolResults(messages)
 	if len(got[0].Content) != 1 {
-		t.Fatalf("expected compacted tool result to drop image parts, got %d parts", len(got[0].Content))
+		t.Fatalf("expected old image tool result to drop image parts, got %d parts", len(got[0].Content))
+	}
+	if !strings.Contains(got[0].Content[0].Text, `"compacted":true`) {
+		t.Fatalf("expected old compacted stub, got %q", got[0].Content[0].Text)
+	}
+	if len(got[1].Content) != 2 {
+		t.Fatalf("expected latest image tool result to stay visible, got %d parts", len(got[1].Content))
+	}
+}
+
+func TestCompactToolResultsCompactsImageAfterAssistantReply(t *testing.T) {
+	oldLimit := maxToolResultHistoryChars
+	maxToolResultHistoryChars = 40
+	defer func() { maxToolResultHistoryChars = oldLimit }()
+
+	messages := []llm.Message{
+		{
+			Role: "tool",
+			Content: []llm.ContentPart{
+				{Text: `{"tool_call_id":"call_1","tool_name":"read","result":{"image_attached":true}}`},
+				{Type: messagecontent.PartTypeImage, Data: bytes.Repeat([]byte{1}, 80)},
+			},
+		},
+		{Role: "assistant", Content: []llm.ContentPart{{Text: "seen"}}},
+	}
+
+	got := compactToolResults(messages)
+	if len(got[0].Content) != 1 {
+		t.Fatalf("expected seen image tool result to drop image parts, got %d parts", len(got[0].Content))
 	}
 	if !strings.Contains(got[0].Content[0].Text, `"compacted":true`) {
 		t.Fatalf("expected compacted stub, got %q", got[0].Content[0].Text)

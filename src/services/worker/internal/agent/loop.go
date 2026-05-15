@@ -2993,6 +2993,7 @@ func compactToolResults(messages []llm.Message) []llm.Message {
 func compactToolResultsWithState(messages []llm.Message, state *toolResultReplacementState) []llm.Message {
 	total := 0
 	prepared := applyStoredToolResultReplacements(messages, state)
+	protectedImageToolIndex := latestPendingToolResultWithBinaryPart(prepared)
 	for _, m := range prepared {
 		if m.Role == "tool" {
 			total += toolResultHistorySize(m)
@@ -3013,6 +3014,9 @@ func compactToolResultsWithState(messages []llm.Message, state *toolResultReplac
 		if out[i].Role != "tool" {
 			continue
 		}
+		if i == protectedImageToolIndex {
+			continue
+		}
 		msgSize := toolResultHistorySize(out[i])
 		if msgSize == 0 {
 			continue
@@ -3021,6 +3025,25 @@ func compactToolResultsWithState(messages []llm.Message, state *toolResultReplac
 		excess -= msgSize
 	}
 	return out
+}
+
+func latestPendingToolResultWithBinaryPart(messages []llm.Message) int {
+	seenNonToolAfter := false
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != "tool" {
+			seenNonToolAfter = true
+			continue
+		}
+		if seenNonToolAfter {
+			continue
+		}
+		for _, p := range messages[i].Content {
+			if len(p.Data) > 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func toolResultHistorySize(m llm.Message) int {

@@ -328,6 +328,52 @@ func TestToAnthropicMessagesAnnotatesToolResultImage(t *testing.T) {
 	}
 }
 
+func TestToOpenAIChatMessagesMovesToolResultImageToUserMessage(t *testing.T) {
+	messages, err := toOpenAIChatMessages([]Message{
+		{
+			Role: "assistant",
+			ToolCalls: []ToolCall{{
+				ToolCallID:    "call_1",
+				ToolName:      "read",
+				ArgumentsJSON: map[string]any{"source": map[string]any{"kind": "file_path"}},
+			}},
+		},
+		{
+			Role: "tool",
+			Content: []ContentPart{
+				{Type: "text", Text: `{"tool_call_id":"call_1","tool_name":"read","result":{"image_attached":true}}`},
+				{
+					Type: "image",
+					Attachment: &messagecontent.AttachmentRef{
+						Filename: "image.png",
+						MimeType: "image/png",
+					},
+					Data: makeVisionTestPNG(t, 64, 64),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("toOpenAIChatMessages failed: %v", err)
+	}
+	if len(messages) != 3 {
+		t.Fatalf("expected assistant, tool, user image messages, got %#v", messages)
+	}
+	if messages[1]["role"] != "tool" {
+		t.Fatalf("expected second message to stay tool result, got %#v", messages[1])
+	}
+	if _, structured := messages[1]["content"].([]map[string]any); structured {
+		t.Fatalf("tool message must not carry structured image content: %#v", messages[1])
+	}
+	if messages[2]["role"] != "user" {
+		t.Fatalf("expected tool image to move into user message, got %#v", messages[2])
+	}
+	content := messages[2]["content"].([]map[string]any)
+	if content[0]["type"] != "image_url" {
+		t.Fatalf("expected user image content, got %#v", content)
+	}
+}
+
 func TestGeminiUserPartsAnnotatesAttachmentKeyImage(t *testing.T) {
 	parts, err := geminiUserParts([]ContentPart{{
 		Type: "image",
