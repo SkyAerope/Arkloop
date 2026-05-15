@@ -434,7 +434,7 @@ function ProviderSummaryCard({
 
   return (
     <SettingsSummaryCard onClick={onOpen} minHeightClass="min-h-[72px]">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-1 items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[14px] font-semibold leading-tight text-[var(--c-text-primary)]">{provider.name}</h3>
           <p className="mt-1 truncate text-[11px] leading-tight text-[var(--c-text-muted)]">{baseUrl}</p>
