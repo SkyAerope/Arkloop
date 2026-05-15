@@ -7,7 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish without leading v"
+        description: "Package version to publish without leading v"
+        required: true
+        type: string
+      tag:
+        description: "GitHub release tag"
         required: true
         type: string
       asset_url:
@@ -39,18 +43,31 @@ jobs:
     steps:
       - name: Install tools
         run: |
-          pacman -Syu --noconfirm --needed base-devel curl git jq openssh
+          pacman -Syu --noconfirm --needed base-devel curl git jq nodejs openssh
           useradd -m builder
+
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Resolve release asset
         id: release
         run: |
           if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
+            META="$(
+              INPUT_VERSION="${{ inputs.version }}" \
+              RELEASE_TAG="${{ inputs.tag }}" \
+              PRINT_JSON=1 \
+                node .github/scripts/resolve-release-version.mjs
+            )"
+            VERSION="$(node -e 'console.log(JSON.parse(process.argv[1]).version)' "$META")"
             ASSET_URL="${{ inputs.asset_url }}"
           else
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
+            META="$(
+              RELEASE_TAG="${{ github.event.release.tag_name }}" \
+              PRINT_JSON=1 \
+                node .github/scripts/resolve-release-version.mjs
+            )"
+            VERSION="$(node -e 'console.log(JSON.parse(process.argv[1]).version)' "$META")"
             curl -fsSL \
               -H "Authorization: Bearer ${GITHUB_TOKEN}" \
               -H "Accept: application/vnd.github+json" \

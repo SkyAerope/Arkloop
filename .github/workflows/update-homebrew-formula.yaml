@@ -7,7 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish without leading v"
+        description: "Package version to publish without leading v"
+        required: true
+        type: string
+      tag:
+        description: "GitHub release tag"
         required: true
         type: string
 
@@ -36,13 +40,17 @@ jobs:
       - name: Resolve version
         id: release
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          META="$(
+            INPUT_VERSION="${{ inputs.version }}" \
+            RELEASE_TAG="${{ inputs.tag || github.event.release.tag_name }}" \
+            PRINT_JSON=1 \
+              node .github/scripts/resolve-release-version.mjs
+          )"
+          node -e '
+            const fs = require("node:fs")
+            const meta = JSON.parse(process.argv[1])
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${meta.version}\ntag=${meta.tag}\n`)
+          ' "$META"
 
       - name: Update formula
         run: |
@@ -52,14 +60,16 @@ jobs:
           from pathlib import Path
 
           version = os.environ["VERSION"]
+          tag = os.environ["TAG"]
           path = Path("packaging/homebrew/arkloop.rb")
           text = path.read_text()
-          text = re.sub(r'tag: "v[^"]+"', f'tag: "v{version}"', text)
+          text = re.sub(r'RELEASE_TAG = "v[^"]+"', f'RELEASE_TAG = "{tag}"', text)
           text = re.sub(r'version "[^"]+"', f'version "{version}"', text)
           path.write_text(text)
           PY
         env:
           VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
 
       - name: Commit formula update
         run: |

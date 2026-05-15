@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version override (e.g. 0.2.0)"
+        description: "Version override (e.g. v26.5.15.1)"
         required: false
         type: string
 
@@ -149,14 +149,9 @@ jobs:
       - name: Resolve release metadata
         id: release_meta
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          INPUT_VERSION="${{ inputs.version }}" \
+          FALLBACK_VERSION="dev" \
+            node .github/scripts/resolve-release-version.mjs
 
       - name: Build CLI
         run: |
@@ -168,7 +163,7 @@ jobs:
           mkdir -p "package/${PACKAGE_NAME}" dist
           pnpm --filter web build
           CGO_ENABLED=${{ matrix.cgo_enabled }} GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -tags desktop -trimpath -ldflags "-s -w -X main.version=${{ steps.release_meta.outputs.version }}" \
+            go build -tags desktop -trimpath -ldflags "-s -w -X main.version=${{ steps.release_meta.outputs.tag }}" \
             -o "package/${PACKAGE_NAME}/${BIN_NAME}" \
             ./src/services/cli/cmd/ark
           cp -R src/apps/web/dist "package/${PACKAGE_NAME}/web"
@@ -238,15 +233,9 @@ jobs:
       - name: Resolve release metadata
         id: release_meta
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="$(node -p "require('./src/apps/desktop/package.json').version")"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "name=v${VERSION}" >> "$GITHUB_OUTPUT"
+          INPUT_VERSION="${{ inputs.version }}" \
+          FALLBACK_VERSION="$(node -p "require('./src/apps/desktop/package.json').version")" \
+            node .github/scripts/resolve-release-version.mjs
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -274,7 +263,7 @@ jobs:
         run: pnpm --filter @arkloop/desktop build:web
 
       - name: Build bundled CLI
-        run: ARKLOOP_RELEASE_VERSION="${{ steps.release_meta.outputs.version }}" node src/apps/desktop/scripts/build-cli.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.electron_arch }}
+        run: ARKLOOP_RELEASE_VERSION="${{ steps.release_meta.outputs.tag }}" node src/apps/desktop/scripts/build-cli.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.electron_arch }}
 
       - name: Clear release meta
         run: rm -f src/apps/desktop/dist/release-meta.json
@@ -361,20 +350,15 @@ jobs:
       - name: Resolve release metadata
         id: release_meta
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="$(node -p "require('./src/apps/desktop/package.json').version")"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          INPUT_VERSION="${{ inputs.version }}" \
+          FALLBACK_VERSION="$(node -p "require('./src/apps/desktop/package.json').version")" \
+            node .github/scripts/resolve-release-version.mjs
 
       - name: Build Arch package
         run: |
           useradd -m builder
           chown -R builder:builder "${GITHUB_WORKSPACE}"
-          su builder -c "cd '${GITHUB_WORKSPACE}/packaging/arch' && ARKLOOP_DESKTOP_VERSION='${{ steps.release_meta.outputs.version }}' makepkg -s --noconfirm"
+          su builder -c "cd '${GITHUB_WORKSPACE}/packaging/arch' && ARKLOOP_DESKTOP_VERSION='${{ steps.release_meta.outputs.version }}' ARKLOOP_RELEASE_VERSION='${{ steps.release_meta.outputs.tag }}' makepkg -s --noconfirm"
 
       - name: List package
         run: ls -lh packaging/arch/*.pkg.tar.zst
@@ -415,15 +399,9 @@ jobs:
       - name: Resolve release metadata
         id: release_meta
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="$(node -p "require('./src/apps/desktop/package.json').version")"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "name=v${VERSION}" >> "$GITHUB_OUTPUT"
+          INPUT_VERSION="${{ inputs.version }}" \
+          FALLBACK_VERSION="$(node -p "require('./src/apps/desktop/package.json').version")" \
+            node .github/scripts/resolve-release-version.mjs
 
       - name: Download all installer artifacts
         uses: actions/download-artifact@v4
@@ -631,13 +609,13 @@ jobs:
       - name: Write release notes
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.release_version }}
           CURSOR_MODEL: composer-2
         run: node .github/scripts/write-release-notes.mjs
 
       - name: Generate desktop manifest
         env:
-          ARKLOOP_RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          ARKLOOP_RELEASE_VERSION: ${{ steps.release_meta.outputs.release_version }}
           ARKLOOP_DESKTOP_MANIFEST_OUTPUT: release-files/desktop-manifest.json
           ARKLOOP_RELEASE_DIR: release-files
           ARKLOOP_OPENVIKING_IMAGE: ghcr.io/volcengine/openviking:v0.3.3
@@ -646,7 +624,7 @@ jobs:
 
       - name: Validate desktop manifest
         env:
-          ARKLOOP_EXPECTED_VERSION: ${{ steps.release_meta.outputs.version }}
+          ARKLOOP_EXPECTED_VERSION: ${{ steps.release_meta.outputs.release_version }}
         run: |
           python3 - <<'PY'
           import json
@@ -687,6 +665,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
           name: ${{ steps.release_meta.outputs.name }}
           body_path: release-notes.md
           files: release-files/*
@@ -695,6 +674,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
           WORKFLOW_REF: ${{ github.event.repository.default_branch }}
         run: |
           mapfile -t arch_assets < <(find release-files -maxdepth 1 -type f -name 'arkloop-bin-*.pkg.tar.zst' -printf '%f\n' | sort)
@@ -703,13 +683,15 @@ jobs:
             exit 1
           fi
           arch_asset="${arch_assets[0]}"
-          arch_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${arch_asset}"
+          arch_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${arch_asset}"
 
           gh workflow run update-aur-bin.yaml \
             --ref "${WORKFLOW_REF}" \
             -f version="${VERSION}" \
+            -f tag="${RELEASE_TAG}" \
             -f asset_url="${arch_url}"
 
           gh workflow run update-homebrew-formula.yaml \
             --ref "${WORKFLOW_REF}" \
-            -f version="${VERSION}"
+            -f version="${VERSION}" \
+            -f tag="${RELEASE_TAG}"

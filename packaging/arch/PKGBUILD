@@ -40,9 +40,24 @@ _pnpm_install() {
   pnpm --config.manage-package-manager-versions=false --store-dir "${srcdir}/pnpm-store" "$@"
 }
 
+_release_pkgver() {
+  local value="${1#v}"
+  if [[ "${value}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local day="${BASH_REMATCH[3]}"
+    local daily="${BASH_REMATCH[4]}"
+    if ((10#${minor} >= 1 && 10#${minor} <= 12 && 10#${day} >= 1 && 10#${day} <= 31 && 10#${daily} <= 99)); then
+      printf '%s.%s.%s\n' "${major}" "${minor}" "$((10#${day} * 100 + 10#${daily}))"
+      return
+    fi
+  fi
+  printf '%s\n' "${value//-/_}"
+}
+
 pkgver() {
   if [[ -n "${ARKLOOP_DESKTOP_VERSION:-}" ]]; then
-    printf '%s\n' "${ARKLOOP_DESKTOP_VERSION#v}"
+    _release_pkgver "${ARKLOOP_DESKTOP_VERSION}"
     return
   fi
   cd "${_repo_root}"

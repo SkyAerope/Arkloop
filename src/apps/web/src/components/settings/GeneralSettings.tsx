@@ -23,6 +23,7 @@ import { SettingsSelect } from './_SettingsSelect'
 import { SettingsSwitch } from './_SettingsSwitch'
 import { ToolModelSettingControl } from './ToolModelSettingControl'
 import { ChatModelSettingControl } from './ChatModelSettingControl'
+import { formatDesktopAppVersion } from '../../desktopVersion'
 
 type Props = {
   me: MeResponse | null
@@ -332,7 +333,7 @@ export function GeneralSettings({ me, accessToken, onLogout, onMeUpdated }: Prop
     }
   }, [t.requestFailed])
 
-  const appVersion = appUpdateState?.currentVersion ?? localVersion
+  const appVersion = formatDesktopAppVersion(appUpdateState?.currentVersion ?? localVersion)
   const appBusy = checkingUpdate || isAppUpdaterBusy(appUpdateState)
   const updateStateText = (() => {
     if (!appUpdateState) return ''
@@ -340,7 +341,7 @@ export function GeneralSettings({ me, accessToken, onLogout, onMeUpdated }: Prop
       case 'checking':
         return ds.appUpdateChecking
       case 'available':
-        return appUpdateState.latestVersion ? `${ds.appUpdateAvailable} · ${appUpdateState.latestVersion}` : ds.appUpdateAvailable
+        return appUpdateState.latestVersion ? `${ds.appUpdateAvailable} · ${formatDesktopAppVersion(appUpdateState.latestVersion)}` : ds.appUpdateAvailable
       case 'not-available':
         return ds.appUpdateLatest
       case 'downloading':

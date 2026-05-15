@@ -10,6 +10,7 @@ import { RunsSettings } from './RunsSettings'
 import type { DesktopSettingsKey } from '../DesktopSettings'
 import { SettingsSwitch } from './_SettingsSwitch'
 import { SettingsButton } from './_SettingsButton'
+import { formatDesktopAppVersion } from '../../desktopVersion'
 
 type Props = {
   accessToken?: string
@@ -330,7 +331,7 @@ export function DeveloperSettings({ accessToken, onNavigate }: Props) {
               {ds.appVersion}
             </div>
             <span className="text-sm text-[var(--c-text-muted)]">
-              {appVersion}
+              {formatDesktopAppVersion(appVersion)}
             </span>
           </div>
         )}

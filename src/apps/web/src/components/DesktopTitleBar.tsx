@@ -27,6 +27,7 @@ import { beginPerfTrace, endPerfTrace } from '../perfDebug'
 import { secondaryButtonSmCls, secondaryButtonBorderStyle } from './buttonStyles'
 import { ActionIconButton } from './ActionIconButton'
 import { SHORTCUTS } from '../shortcuts'
+import { formatDesktopAppVersion } from '../desktopVersion'
 
 export const DESKTOP_TITLEBAR_HEIGHT = 44
 const WINDOWS_TITLEBAR_HEIGHT = 44
@@ -453,7 +454,7 @@ const UpdatePopover = forwardRef<HTMLDivElement, UpdatePopoverProps>(function Up
             <div>
               <p className="text-sm text-[var(--c-text-secondary)]">{ds?.appUpdateLatest ?? 'Up to date'}</p>
               <p className="mt-0.5 text-xs text-[var(--c-text-muted)]">
-                {ds?.appUpdateTitle ?? 'Desktop App'} v{state?.currentVersion ?? ''}
+                {ds?.appUpdateTitle ?? 'Desktop App'} v{formatDesktopAppVersion(state?.currentVersion)}
               </p>
             </div>
             <Button variant="primary" size="md" onClick={handleOpenDetails}>
@@ -486,12 +487,12 @@ const UpdatePopover = forwardRef<HTMLDivElement, UpdatePopoverProps>(function Up
                 {ds?.appUpdateAvailable ?? 'Update available'}
                 {state?.latestVersion && (
                   <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-medium" style={{ background: 'color-mix(in srgb, var(--c-accent) 15%, transparent)', color: 'var(--c-accent)' }}>
-                    v{state.latestVersion}
+                    v{formatDesktopAppVersion(state.latestVersion)}
                   </span>
                 )}
               </p>
               <p className="mt-0.5 text-xs text-[var(--c-text-muted)]">
-                {ds?.appUpdateTitle ?? 'Desktop App'} v{state?.currentVersion ?? ''}
+                {ds?.appUpdateTitle ?? 'Desktop App'} v{formatDesktopAppVersion(state?.currentVersion)}
               </p>
             </div>
             {isMac ? (

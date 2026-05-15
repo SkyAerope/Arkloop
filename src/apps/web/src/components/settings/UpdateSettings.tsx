@@ -151,6 +151,7 @@ function VersionValue({
   latest?: string | null
   missingText?: string
 }) {
+  const formattedLatest = formatDesktopAppVersion(latest)
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-[var(--c-text-secondary)]">
       {current ? (
@@ -158,7 +159,7 @@ function VersionValue({
       ) : missingText ? (
         <span className="text-[var(--c-text-muted)]">{missingText}</span>
       ) : null}
-      {current && latest && latest !== current && (
+      {current && formattedLatest && formattedLatest !== current && (
         <>
           <span className="text-[var(--c-text-muted)]">→</span>
           <span
@@ -168,7 +169,7 @@ function VersionValue({
               color: 'var(--c-accent)',
             }}
           >
-            {latest}
+            {formattedLatest}
           </span>
         </>
       )}

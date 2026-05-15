@@ -37,6 +37,21 @@ _pnpm_install() {
   pnpm --config.manage-package-manager-versions=false --store-dir "${srcdir}/pnpm-store" "$@"
 }
 
+_release_pkgver() {
+  local value="${1#v}"
+  if [[ "${value}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local day="${BASH_REMATCH[3]}"
+    local daily="${BASH_REMATCH[4]}"
+    if ((10#${minor} >= 1 && 10#${minor} <= 12 && 10#${day} >= 1 && 10#${day} <= 31 && 10#${daily} <= 99)); then
+      printf '%s.%s.%s\n' "${major}" "${minor}" "$((10#${day} * 100 + 10#${daily}))"
+      return
+    fi
+  fi
+  printf '%s\n' "${value//-/_}"
+}
+
 pkgver() {
   cd "${srcdir}/Arkloop"
   local base_version commit_count commit_hash
@@ -45,6 +60,7 @@ pkgver() {
   if [[ -z "${base_version}" ]]; then
     base_version="$(node -p "require('./src/apps/desktop/package.json').version")"
   fi
+  base_version="$(_release_pkgver "${base_version}")"
   commit_count="$(git rev-list --count HEAD)"
   commit_hash="$(git rev-parse --short=7 HEAD)"
   printf '%s.r%s.g%s\n' "${base_version}" "${commit_count}" "${commit_hash}"
