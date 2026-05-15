@@ -1485,6 +1485,9 @@ func BuildMessagePartsWithOptions(ctx context.Context, store MessageAttachmentSt
 				attachment.MimeType = strings.TrimSpace(contentType)
 			}
 			dataBytes, attachment.MimeType = imageutil.ProcessImage(dataBytes, attachment.MimeType)
+			if len(dataBytes) == 0 || strings.TrimSpace(attachment.MimeType) == "" {
+				return nil, fmt.Errorf("message attachment image cannot be decoded")
+			}
 			parts = append(parts, llm.ContentPart{
 				Type:       messagecontent.PartTypeImage,
 				Attachment: &attachment,

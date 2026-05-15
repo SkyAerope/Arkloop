@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bytes"
 	"testing"
 
 	"arkloop/services/shared/messagecontent"
@@ -108,6 +109,7 @@ func TestComputeRequestStats_PromptPlanBucketsAndHashes(t *testing.T) {
 }
 
 func TestPrepareRequestModelInputImagesCachesPreparedData(t *testing.T) {
+	raw := makeVisionTestPNG(t, 19, 19)
 	req := Request{Messages: []Message{{
 		Role: "user",
 		Content: []ContentPart{{
@@ -116,7 +118,7 @@ func TestPrepareRequestModelInputImagesCachesPreparedData(t *testing.T) {
 				Key:      "attachments/image.png",
 				MimeType: "image/png",
 			},
-			Data: []byte("raw-image"),
+			Data: raw,
 		}},
 	}}}
 
@@ -134,14 +136,14 @@ func TestPrepareRequestModelInputImagesCachesPreparedData(t *testing.T) {
 	if mimeType != "image/png" {
 		t.Fatalf("expected image/png, got %q", mimeType)
 	}
-	if string(data) != "raw-image" {
-		t.Fatalf("expected prepared data to be reused, got %q", string(data))
+	if !bytes.Equal(data, raw) {
+		t.Fatalf("expected prepared data to be reused, got %d bytes want %d", len(data), len(raw))
 	}
 	size, err := modelInputImageBase64Size(part)
 	if err != nil {
 		t.Fatalf("modelInputImageBase64Size failed: %v", err)
 	}
-	if size != base64EncodedLen(len("raw-image")) {
+	if size != base64EncodedLen(len(raw)) {
 		t.Fatalf("expected cached base64 size, got %d", size)
 	}
 }

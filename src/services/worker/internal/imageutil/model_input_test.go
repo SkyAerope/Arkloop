@@ -57,10 +57,10 @@ func TestPrepareModelInputImageDecodeFailureFallsBack(t *testing.T) {
 	source := []byte("not-an-image")
 
 	out, mime := PrepareModelInputImage(source, "image/jpeg", "attachments/a/b/c.jpg")
-	if !bytes.Equal(out, source) {
-		t.Fatal("expected original bytes on decode failure")
+	if len(out) != 0 {
+		t.Fatal("expected empty bytes on decode failure")
 	}
-	if mime != "image/jpeg" {
+	if mime != "" {
 		t.Fatalf("unexpected mime: %q", mime)
 	}
 }

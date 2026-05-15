@@ -2,6 +2,7 @@ package imageutil
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	_ "image/gif"
 	"image/jpeg"
@@ -27,6 +28,9 @@ var promptImageJPEGSteps = []struct {
 	{1536, 80},
 	{1280, 78},
 	{1024, 75},
+	{768, 72},
+	{512, 70},
+	{384, 68},
 }
 
 // ProcessImage keeps prompt images readable: preserve supported images when
@@ -61,12 +65,12 @@ func processImageForPrompt(data []byte, mimeType string) ([]byte, string) {
 
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || !imageConfigWithinBudget(cfg) {
-		return data, mimeType
+		return nil, ""
 	}
 
 	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return data, mimeType
+		return nil, ""
 	}
 
 	if format == "gif" && len(data) <= maxPromptImageBytes {
@@ -80,7 +84,7 @@ func processImageForPrompt(data []byte, mimeType string) ([]byte, string) {
 
 	out, outMime, err := encodePromptImage(img, format)
 	if err != nil {
-		return data, mimeType
+		return nil, ""
 	}
 	return out, outMime
 }
@@ -179,7 +183,7 @@ func encodePromptImage(img image.Image, sourceFormat string) ([]byte, string, er
 			return out, mime, nil
 		}
 	}
-	return last, "image/jpeg", nil
+	return nil, "", fmt.Errorf("image exceeds prompt byte budget after compression: %d", len(last))
 }
 
 func encodeJPEG(img image.Image, quality int) ([]byte, string, error) {

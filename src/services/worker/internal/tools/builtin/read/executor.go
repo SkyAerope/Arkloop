@@ -315,6 +315,9 @@ func (e *Executor) executeFilePathImage(
 	mimeType = decodedMime
 
 	processed, processedMime := imageutil.ProcessImage(data, mimeType)
+	if len(processed) == 0 || strings.TrimSpace(processedMime) == "" {
+		return imageDecodeFailedResult(filePath, mimeType, started)
+	}
 	caps := resolveReadRuntimeCapabilities(execCtx)
 	if !caps.NativeImageInput && !caps.ImageBridgeEnabled {
 		return imageUnavailableResult(filePath, processedMime, started)
@@ -408,6 +411,9 @@ func (e *Executor) executeMessageAttachment(
 	}
 	image.MimeType = decodedMime
 	image.Bytes, image.MimeType = imageutil.ProcessImage(image.Bytes, image.MimeType)
+	if len(image.Bytes) == 0 || strings.TrimSpace(image.MimeType) == "" {
+		return imageDecodeFailedResult(parsed.Source.AttachmentKey, decodedMime, started)
+	}
 
 	caps := resolveReadRuntimeCapabilities(execCtx)
 	if !caps.NativeImageInput && !caps.ImageBridgeEnabled {
@@ -597,6 +603,17 @@ func imageUnavailableResult(identifier, mimeType string, started time.Time) tool
 	}
 }
 
+func imageDecodeFailedResult(identifier, mimeType string, started time.Time) tools.ExecutionResult {
+	return tools.ExecutionResult{
+		Error: &tools.ExecutionError{
+			ErrorClass: errorUnsupportedMedia,
+			Message:    "image data is empty, cannot be decoded, or exceeds image limits",
+			Details:    map[string]any{"source": identifier, "mime_type": mimeType},
+		},
+		DurationMs: durationMs(started),
+	}
+}
+
 func (e *Executor) describeImage(
 	ctx context.Context,
 	execCtx tools.ExecutionContext,
@@ -673,6 +690,9 @@ func (e *Executor) executeRemoteURL(
 	}
 	image.MimeType = decodedMime
 	image.Bytes, image.MimeType = imageutil.ProcessImage(image.Bytes, image.MimeType)
+	if len(image.Bytes) == 0 || strings.TrimSpace(image.MimeType) == "" {
+		return imageDecodeFailedResult(image.FinalURL, decodedMime, started)
+	}
 
 	description, err := provider.DescribeImage(runCtx, DescribeImageRequest{
 		Prompt:    parsed.Prompt,

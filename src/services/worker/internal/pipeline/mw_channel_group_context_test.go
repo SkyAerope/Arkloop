@@ -1,8 +1,12 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 
 	"arkloop/services/shared/messagecontent"
@@ -97,11 +101,12 @@ func TestNewChannelGroupContextTrimMiddleware_preservesReplacementPrefix(t *test
 
 func TestNewChannelGroupContextTrimMiddleware_materializesOnlyKeptLazyImages(t *testing.T) {
 	t.Setenv("ARKLOOP_CHANNEL_GROUP_KEEP_IMAGE_TAIL", "1")
+	pngData := groupTrimPNG(t)
 	store := &groupTrimAttachmentStore{
 		data: map[string][]byte{
-			"attachments/old.png":    []byte("old"),
-			"attachments/mid.png":    []byte("mid"),
-			"attachments/latest.png": []byte("latest"),
+			"attachments/old.png":    pngData,
+			"attachments/mid.png":    pngData,
+			"attachments/latest.png": pngData,
 		},
 		mimeType: "image/png",
 	}
@@ -125,7 +130,7 @@ func TestNewChannelGroupContextTrimMiddleware_materializesOnlyKeptLazyImages(t *
 		t.Fatalf("expected old image to be stripped, got %q", got)
 	}
 	latest := rc.Messages[2].Content[0]
-	if latest.Kind() != messagecontent.PartTypeImage || string(latest.Data) != "latest" {
+	if latest.Kind() != messagecontent.PartTypeImage || len(latest.Data) == 0 {
 		t.Fatalf("expected latest image data materialized, got %#v", latest)
 	}
 }
@@ -138,6 +143,17 @@ func lazyImagePart(key string) llm.ContentPart {
 			MimeType: "image/png",
 		},
 	}
+}
+
+func groupTrimPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	return buf.Bytes()
 }
 
 type groupTrimAttachmentStore struct {

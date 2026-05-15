@@ -146,6 +146,9 @@ func TestPrepareRequestModelInputImagesReusesPreparedImage(t *testing.T) {
 }
 
 func TestPrepareRequestModelInputImagesPreparesAllImageParts(t *testing.T) {
+	imageA := makeVisionTestPNG(t, 10, 10)
+	imageB := makeVisionTestPNG(t, 11, 11)
+	imageC := makeVisionTestPNG(t, 12, 12)
 	req := Request{
 		Model: "gpt",
 		Messages: []Message{
@@ -159,7 +162,7 @@ func TestPrepareRequestModelInputImagesPreparesAllImageParts(t *testing.T) {
 							Key:      "attachments/image-a.png",
 							MimeType: "image/png",
 						},
-						Data: []byte("image-a"),
+						Data: imageA,
 					},
 				},
 			},
@@ -172,7 +175,7 @@ func TestPrepareRequestModelInputImagesPreparesAllImageParts(t *testing.T) {
 							Key:      "attachments/image-b.png",
 							MimeType: "image/png",
 						},
-						Data: []byte("image-b"),
+						Data: imageB,
 					},
 					{
 						Type: messagecontent.PartTypeImage,
@@ -180,7 +183,7 @@ func TestPrepareRequestModelInputImagesPreparesAllImageParts(t *testing.T) {
 							Key:      "attachments/image-c.png",
 							MimeType: "image/png",
 						},
-						Data: []byte("image-c"),
+						Data: imageC,
 					},
 				},
 			},
@@ -197,17 +200,17 @@ func TestPrepareRequestModelInputImagesPreparesAllImageParts(t *testing.T) {
 
 	for _, item := range []struct {
 		part ContentPart
-		want string
+		want []byte
 	}{
-		{part: req.Messages[0].Content[1], want: "image-a"},
-		{part: req.Messages[1].Content[0], want: "image-b"},
-		{part: req.Messages[1].Content[1], want: "image-c"},
+		{part: req.Messages[0].Content[1], want: imageA},
+		{part: req.Messages[1].Content[0], want: imageB},
+		{part: req.Messages[1].Content[1], want: imageC},
 	} {
 		if item.part.modelInputImage == nil {
 			t.Fatal("expected image part to be prepared")
 		}
-		if got := string(item.part.modelInputImage.Data); got != item.want {
-			t.Fatalf("unexpected prepared data: got=%q want=%q", got, item.want)
+		if !bytes.Equal(item.part.modelInputImage.Data, item.want) {
+			t.Fatalf("unexpected prepared data length: got=%d want=%d", len(item.part.modelInputImage.Data), len(item.want))
 		}
 	}
 }
@@ -224,7 +227,7 @@ func TestPrepareRequestModelInputImagesReusesProcessCache(t *testing.T) {
 			Key:      "attachments/cache-image.png",
 			MimeType: "image/png",
 		},
-		Data: []byte("cache-image"),
+		Data: makeVisionTestPNG(t, 13, 13),
 	}
 	req := Request{Model: "gpt", Messages: []Message{{Role: "user", Content: []ContentPart{part}}}}
 	PrepareRequestModelInputImages(&req)

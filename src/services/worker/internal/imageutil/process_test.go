@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"image"
+	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"testing"
@@ -33,6 +35,13 @@ func makePNG(w, h int) []byte {
 	}
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
+func makeGIF() []byte {
+	img := image.NewPaletted(image.Rect(0, 0, 1, 1), []color.Color{color.Black})
+	var buf bytes.Buffer
+	_ = gif.Encode(&buf, img, nil)
 	return buf.Bytes()
 }
 
@@ -70,8 +79,7 @@ func TestProcessImage_SmallImagePassthrough(t *testing.T) {
 }
 
 func TestProcessImage_GIFPassthrough(t *testing.T) {
-	data := make([]byte, 1024)
-	copy(data, []byte("GIF89a"))
+	data := makeGIF()
 	out, mime := ProcessImage(data, "image/gif")
 	if !bytes.Equal(out, data) {
 		t.Error("GIF should be returned unchanged")
@@ -85,11 +93,11 @@ func TestProcessImage_DecodeFallback(t *testing.T) {
 	data := make([]byte, 1024)
 	data[0] = 0xFF // 非法图片数据
 	out, mime := ProcessImage(data, "image/jpeg")
-	if !bytes.Equal(out, data) {
-		t.Error("decode failure should return original data")
+	if len(out) != 0 {
+		t.Error("decode failure should return empty data")
 	}
-	if mime != "image/jpeg" {
-		t.Errorf("mime should be unchanged on decode failure, got %s", mime)
+	if mime != "" {
+		t.Errorf("mime should be empty on decode failure, got %s", mime)
 	}
 }
 

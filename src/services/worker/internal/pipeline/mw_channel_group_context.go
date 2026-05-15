@@ -107,6 +107,9 @@ func materializeMessageImages(ctx context.Context, store MessageAttachmentStore,
 				attachment.MimeType = strings.TrimSpace(contentType)
 			}
 			dataBytes, attachment.MimeType = imageutil.ProcessImage(dataBytes, attachment.MimeType)
+			if len(dataBytes) == 0 || strings.TrimSpace(attachment.MimeType) == "" {
+				return nil, fmt.Errorf("message attachment image cannot be decoded")
+			}
 			parts[j].Attachment = &attachment
 			parts[j].Data = dataBytes
 		}
