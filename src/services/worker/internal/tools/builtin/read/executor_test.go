@@ -68,6 +68,17 @@ type fakePipelineRunContextWithCaps struct {
 	ReadCapabilities fakeReadCapabilities
 }
 
+type fakeAttachmentStore struct {
+	data        []byte
+	contentType string
+	called      bool
+}
+
+func (s *fakeAttachmentStore) GetWithContentType(_ context.Context, _ string) ([]byte, string, error) {
+	s.called = true
+	return s.data, s.contentType, nil
+}
+
 type legacyPipelineShape struct {
 	Messages []llm.Message
 }
@@ -602,6 +613,26 @@ func TestReadMessageAttachmentSourceWithoutProviderStillReturnsImagePart(t *test
 	}
 	if len(result.ContentParts[0].Data) == 0 {
 		t.Fatal("expected image bytes in content part")
+	}
+}
+
+func TestReadMessageAttachmentSourceRejectsStoreOnlyKey(t *testing.T) {
+	store := &fakeAttachmentStore{data: testPNGBytes(t), contentType: "image/png"}
+	executor := NewToolExecutor()
+	executor.AttachmentStore = store
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":           "message_attachment",
+			"attachment_key": "threads/thread-a/attachments/1/cat.png",
+		},
+	}, tools.ExecutionContext{PipelineRC: &fakePipelineRunContext{}}, "")
+
+	if result.Error == nil {
+		t.Fatal("expected store-only attachment key to be rejected")
+	}
+	if store.called {
+		t.Fatal("attachment store must not be consulted without visible message attachment")
 	}
 }
 

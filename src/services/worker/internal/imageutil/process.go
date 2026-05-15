@@ -14,7 +14,7 @@ import (
 
 const (
 	maxPromptImageDimension = 2048
-	maxPromptImageBytes     = 1024 * 1024
+	maxPromptImageBytes     = 512 * 1024
 	maxPromptSourcePixels   = 25_000_000
 )
 

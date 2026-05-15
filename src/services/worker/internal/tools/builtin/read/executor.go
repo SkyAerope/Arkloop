@@ -828,26 +828,6 @@ func fetchMessageAttachmentImage(ctx context.Context, pipelineRC any, attachment
 		}
 	}
 
-	// fallback: load from object store by key
-	if store != nil {
-		data, contentType, err := store.GetWithContentType(ctx, key)
-		if err == nil && len(data) > 0 {
-			if len(data) > maxBytes {
-				return fetchedImage{}, imageTooLargeError{MaxBytes: maxBytes}
-			}
-			mimeType := detectImageMimeType(contentType, data)
-			if mimeType == "" {
-				return fetchedImage{}, unsupportedMediaTypeError{DetectedMimeType: detectedMimeType(contentType, data)}
-			}
-			return fetchedImage{
-				SourceURL: "attachment:" + key,
-				FinalURL:  "attachment:" + key,
-				MimeType:  mimeType,
-				Bytes:     data,
-			}, nil
-		}
-	}
-
 	return fetchedImage{}, fmt.Errorf("message attachment not found")
 }
 
