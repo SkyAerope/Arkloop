@@ -29,6 +29,7 @@ export function SettingsModelDropdown({
       disabled={disabled}
       onChange={onChange}
       triggerClassName="h-9"
+      fitContent
     />
   )
 }

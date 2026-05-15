@@ -65,6 +65,7 @@ export function ModelDropdown({
       disabled={disabled}
       onChange={onChange}
       triggerClassName="h-9"
+      fitContent
     />
   )
 }
