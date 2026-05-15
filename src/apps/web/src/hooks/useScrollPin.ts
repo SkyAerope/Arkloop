@@ -6,6 +6,8 @@ export const SCROLL_BOTTOM_PAD = 160
 
 // top offset when pinning user prompt — clears the top gradient overlay (h-10 = 40px)
 const SCROLL_TOP_OFFSET = 48
+// pin 时 user prompt 顶部距视口顶部的距离。比 SCROLL_TOP_OFFSET 大，露出上一条 assistant 消息尾部。
+const PROMPT_PIN_TOP_OFFSET = 160
 const ANCHOR_SCROLL_MAX_MONITOR_FRAMES = 180
 const ANCHOR_SCROLL_SETTLE_FRAMES = 10
 const ANCHOR_SCROLL_TARGET_EPSILON = 0.5
@@ -87,11 +89,9 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
 
   // anchor state (imperative, not React state — avoid re-renders on every scroll)
   const isAnchoredRef = useRef(false)
-  const userScrolledUpRef = useRef(false)
-  const spacerRatchetRef = useRef(0)
   const programmaticScrollDepthRef = useRef(0)
-  const lastUserScrollTopRef = useRef(0)
   const lastObservedScrollTopRef = useRef(0)
+  const lastObservedScrollHeightRef = useRef(0)
   const lastContainerInlineSizeRef = useRef(0)
   // tracks whether streaming is active — only follow scroll during streaming
   const liveStreamActiveRef = useRef(false)
@@ -138,13 +138,20 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     }
   }, [])
 
+  const anchorScrollTopRef = useRef<() => number | null>(() => null)
+
   const syncBottomState = useCallback((el: HTMLDivElement) => {
     const physicallyAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 80
     isPhysicallyAtBottomRef.current = physicallyAtBottom
-    const anchoredViewLocked =
-      isAnchoredRef.current &&
-      !userScrolledUpRef.current &&
-      !followLiveOutputRef.current
+    // anchored 模式下：scrollTop 仍贴着 anchor 目标位置（容差内）即视为「锁定到 prompt」=「at bottom」。
+    // 用户手动滚开后 anchored 仍然 true，但 anchoredViewLocked 因距离过大变成 false，下箭头按钮会出现。
+    let anchoredViewLocked = false
+    if (isAnchoredRef.current && !followLiveOutputRef.current) {
+      const target = anchorScrollTopRef.current()
+      if (target != null && Math.abs(el.scrollTop - target) <= 16) {
+        anchoredViewLocked = true
+      }
+    }
     const atBottom = physicallyAtBottom || anchoredViewLocked
     setAtBottomState(atBottom)
   }, [setAtBottomState])
@@ -164,6 +171,25 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     const previousWidth = lastContainerInlineSizeRef.current
     lastContainerInlineSizeRef.current = width
     return previousWidth > 0 && Math.abs(width - previousWidth) > LAYOUT_SCROLL_WIDTH_EPSILON
+  }, [])
+
+  // 识别由 scrollHeight 变化引起的被动 scrollTop 修正。
+  // 虚拟化场景下，Virtuoso 在以下情况会主动调 scrollTop 来保持视口内容稳定：
+  //   1) item 测量后真实高度 > 估算：上方 item 高度增加 → scrollHeight 增加，scrollTop 也增加
+  //   2) item 测量后真实高度 < 估算：上方 item 高度减少 → scrollHeight 减少，scrollTop 也减少
+  //   3) item 滚出 overscan 卸载、placeholder 替代：高度短暂抖动，scrollTop 跟随补偿
+  // 必须双向识别（同号 + 同幅度），否则向上滚遇到反向修正时会被当成「用户额外向上滚」，
+  // 错误触发 userScrolledUp 切换 / collapseSpacer / anchor 重置。
+  const isHeightCorrectionScroll = useCallback((container: HTMLDivElement, prevScrollTop: number): boolean => {
+    const currentHeight = container.scrollHeight
+    const previousHeight = lastObservedScrollHeightRef.current
+    lastObservedScrollHeightRef.current = currentHeight
+    if (previousHeight <= 0) return false
+    const scrollTopDelta = container.scrollTop - prevScrollTop
+    const heightDelta = currentHeight - previousHeight
+    if (Math.abs(heightDelta) < 1) return false
+    if (Math.sign(scrollTopDelta) !== Math.sign(heightDelta)) return false
+    return Math.abs(Math.abs(scrollTopDelta) - Math.abs(heightDelta)) < 2
   }, [])
 
   const isLocalExpansionActive = useCallback(() => performance.now() < localExpansionActiveUntilRef.current, [])
@@ -358,13 +384,18 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
   const shouldPreserveViewport = useCallback(() => {
     if (anchorActivationPendingRef.current) return false
     if (followLiveOutputRef.current || isAtBottomRef.current) return false
-    if (!isAnchoredRef.current) return true
-    return userScrolledUpRef.current
+    // anchored 但用户已经滑开 anchor 区时，仍然要做 viewport anchor 保护——
+    // 否则 lastTurn 自身高度增长（如流式 + 上方展开）会把用户阅读位置推走。
+    return true
   }, [])
 
   const findViewportAnchor = useCallback((): ViewportAnchor | null => {
     const container = scrollContainerRef.current
-    const root = contentRoot()
+    // 把搜索根从 contentRoot 收窄到 lastUserMsgRef（lastTurn 容器）。
+    // 历史区已经虚拟化，里面的 DOM 元素会随 Virtuoso 卸载，pathFromRoot 记录的 children index 无法稳定恢复。
+    // viewport anchor 的核心场景是「流式增长时用户视口不漂移」，目标元素必然在 lastTurn 子树内，收窄不会丢失保护。
+    // fallback 到 contentRoot 是 lastTurn 还没 mount 的过渡帧兜底。
+    const root = lastUserMsgRef.current ?? contentRoot()
     if (!container || !root) return null
 
     const containerRect = container.getBoundingClientRect()
@@ -494,14 +525,34 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     const anchor = viewportAnchorRef.current ?? findViewportAnchor()
     if (!anchor) return
 
-    const root = contentRoot()
+    // 必须与 findViewportAnchor 使用同一个 root，否则 anchor.path（children index 序列）无法解析。
+    const root = lastUserMsgRef.current ?? contentRoot()
+    const containerRect = container.getBoundingClientRect()
+    // anchor 元素必须仍在视口附近才能用作 layout shift 补偿。
+    // 用户已经滚出 lastTurn 视口（如向上翻到历史区）时，缓存的 anchor 元素留在视口下方很远，
+    // 不能再用它做 scrollTop 修正——否则 delta 是用户的整体滚动距离，把用户硬拉回去。
+    const ANCHOR_VIEWPORT_BUFFER = 200
+    const isAnchorNearViewport = (el: HTMLElement): boolean => {
+      const rect = el.getBoundingClientRect()
+      return rect.bottom > containerRect.top - ANCHOR_VIEWPORT_BUFFER && rect.top < containerRect.bottom + ANCHOR_VIEWPORT_BUFFER
+    }
     const currentAnchor = (() => {
-      if (anchor.element && anchor.element.isConnected && container.contains(anchor.element)) {
+      if (
+        anchor.element &&
+        anchor.element.isConnected &&
+        container.contains(anchor.element) &&
+        isAnchorNearViewport(anchor.element)
+      ) {
         return anchor
       }
       if (root) {
         const resolved = resolvePathFromRoot(root, anchor.path)
-        if (resolved && resolved.isConnected && container.contains(resolved)) {
+        if (
+          resolved &&
+          resolved.isConnected &&
+          container.contains(resolved) &&
+          isAnchorNearViewport(resolved)
+        ) {
           return {
             element: resolved,
             top: anchor.top,
@@ -514,7 +565,7 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     })()
 
     if (currentAnchor?.element && container.contains(currentAnchor.element)) {
-      const nextTop = currentAnchor.element.getBoundingClientRect().top - container.getBoundingClientRect().top
+      const nextTop = currentAnchor.element.getBoundingClientRect().top - containerRect.top
       const delta = nextTop - anchor.top
       if (Math.abs(delta) <= 0.5) {
         viewportAnchorRef.current = {
@@ -549,40 +600,13 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
       return
     }
 
-    const turn = lastUserMsgRef.current
-    if (!turn || anchor.turnOffset == null) {
-      viewportAnchorRef.current = findViewportAnchor()
-      return
-    }
+    // 缓存的 anchor 完全失效（元素已离开视口很远），不要 fallback 到 lastTurn turnOffset——
+    // 那会把用户从历史区强行滚回 lastTurn 顶部。直接重置缓存让下次 capture 重新建立。
+    viewportAnchorRef.current = null
+  }, [captureViewportAnchor, contentRoot, findViewportAnchor, rememberScrollTop, resolvePathFromRoot, shouldPreserveViewport, syncBottomState])
 
-    const markerTop = Math.min(
-      Math.max(container.clientHeight - 1, 0),
-      Math.max(16, SCROLL_TOP_OFFSET + 8),
-    )
-    const targetScrollTop = Math.max(0, offsetInContainer(turn) + anchor.turnOffset - markerTop)
-    viewportAnchorRef.current = {
-      element: null,
-      top: markerTop,
-      turnOffset: anchor.turnOffset,
-      path: anchor.path,
-    }
-    programmaticScrollDepthRef.current++
-    container.scrollTop = targetScrollTop
-    rememberScrollTop(container)
-    syncBottomState(container)
-    if (shouldPreserveViewport()) {
-      captureViewportAnchor()
-    }
-    requestAnimationFrame(() => {
-      programmaticScrollDepthRef.current--
-      const freshContainer = scrollContainerRef.current
-      if (!freshContainer) return
-      rememberScrollTop(freshContainer)
-      syncBottomState(freshContainer)
-    })
-  }, [captureViewportAnchor, contentRoot, findViewportAnchor, offsetInContainer, rememberScrollTop, resolvePathFromRoot, shouldPreserveViewport, syncBottomState])
-
-  // spacer height = max(0, viewport - turn height), clamped by ratchet when scrolled up
+  // spacer 常驻：填补 viewport 与 (turn + input) 的差，留 PROMPT_PIN_TOP_OFFSET 给上一条尾部。
+  // 没有棘轮、没有用户滚动消耗，turn/viewport/input 任一变化都重新计算。
   const recalcSpacer = useCallback(() => {
     const spacer = spacerRef.current
     const container = scrollContainerRef.current
@@ -591,27 +615,17 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
 
     if (!isAnchoredRef.current || !turn) {
       spacer.style.height = '0px'
-      spacerRatchetRef.current = 0
       return
     }
 
     const viewportH = container.clientHeight
     const turnH = turn.getBoundingClientRect().height
-    let needed = Math.max(0, viewportH - turnH - inputAreaHeight() - SCROLL_TOP_OFFSET)
-
-    if (userScrolledUpRef.current) {
-      // ratchet: only allow decrease
-      needed = Math.min(needed, spacerRatchetRef.current)
-    } else {
-      spacerRatchetRef.current = needed
-    }
-
+    const needed = Math.max(0, viewportH - turnH - inputAreaHeight() - PROMPT_PIN_TOP_OFFSET)
     spacer.style.height = needed + 'px'
-    spacerRatchetRef.current = needed
   }, [inputAreaHeight])
 
-  // scroll so that the anchor turn top aligns below the top gradient overlay
-  // during streaming, follow the bottom of tall turns to show latest output
+  // scroll so that the user prompt top sits at PROMPT_PIN_TOP_OFFSET below the viewport top.
+  // 流式期间长 turn 跟随到底部展示最新输出。
   const anchorScrollTop = useCallback((): number | null => {
     const container = scrollContainerRef.current
     const turn = lastUserMsgRef.current
@@ -626,8 +640,13 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     if (followLiveOutputRef.current && liveStreamActiveRef.current && turnH > viewportH) {
       return turnTop + turnH - viewportH
     }
-    return Math.max(0, promptTop - SCROLL_TOP_OFFSET)
+    return Math.max(0, promptTop - PROMPT_PIN_TOP_OFFSET)
   }, [offsetInContainer])
+
+  // 同步 anchorScrollTop 到 ref，让 syncBottomState 能读取最新值而不形成循环依赖。
+  useEffect(() => {
+    anchorScrollTopRef.current = anchorScrollTop
+  }, [anchorScrollTop])
 
   const scrollToAnchor = useCallback(() => {
     const container = scrollContainerRef.current
@@ -729,8 +748,6 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     clearAnchorScrollMonitor()
     clearAnchorScrollSettleGuard()
     isAnchoredRef.current = false
-    userScrolledUpRef.current = false
-    spacerRatchetRef.current = 0
     anchorActivationPendingRef.current = false
     viewportAnchorRef.current = null
     if (spacerRef.current) spacerRef.current.style.height = '0px'
@@ -767,8 +784,6 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     clearBottomSmoothScrollMonitor()
     anchorActivationPendingRef.current = true
     isAnchoredRef.current = true
-    userScrolledUpRef.current = false
-    spacerRatchetRef.current = 0
     followLiveOutputRef.current = false
     viewportAnchorRef.current = null
     setAtBottomState(true)
@@ -782,8 +797,6 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
         }
         anchorActivationPendingRef.current = false
         isAnchoredRef.current = false
-        userScrolledUpRef.current = false
-        spacerRatchetRef.current = 0
         followLiveOutputRef.current = false
         viewportAnchorRef.current = null
         syncBottomStateFromContainer()
@@ -792,8 +805,6 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
 
       anchorActivationPendingRef.current = false
       isAnchoredRef.current = true
-      userScrolledUpRef.current = false
-      spacerRatchetRef.current = 0
       followLiveOutputRef.current = false
       viewportAnchorRef.current = null
       setAtBottomState(true)
@@ -821,13 +832,21 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     })
   }, [maxScrollTop, rememberScrollTop, setAtBottomState, syncBottomState])
 
-  // scroll handler: ratchet logic
+  // scroll handler
+  // anchored 模式下 spacer 常驻、不再有模式切换；用户向上/向下滚动都不改动 spacer 也不重定 anchor 状态。
+  // 唯一仍需识别的：脱离 follow-live-output、刷新 isAtBottom、捕获 non-anchored 的 viewport anchor。
   const handleScrollContainerScroll = useCallback(() => {
     const el = scrollContainerRef.current
     if (!el) return
     const previousScrollTop = lastObservedScrollTopRef.current
+    const previousScrollHeight = lastObservedScrollHeightRef.current
     const currentScrollTop = el.scrollTop
     const layoutWidthScroll = isLayoutWidthScroll(el)
+    // 必须在 isLayoutWidthScroll 之后调用，前者更新 inline size 缓存；这里更新 scrollHeight 缓存。
+    const heightCorrectionScroll = isHeightCorrectionScroll(el, previousScrollTop)
+    // 「用户净滚动量」：扣除 scrollHeight 变化（Virtuoso 同帧修正）后用户的真实滚动意图。
+    const heightDelta = previousScrollHeight > 0 ? el.scrollHeight - previousScrollHeight : 0
+    const netUserScrollDelta = (currentScrollTop - previousScrollTop) - heightDelta
 
     // ignore programmatic scrolls
     if (programmaticScrollDepthRef.current > 0) {
@@ -835,14 +854,17 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
       return
     }
 
+    // Virtuoso / 内容根高度增长导致的被动 scrollTop 修正，跳过所有「用户滚动」状态变化。
+    if (heightCorrectionScroll) {
+      rememberScrollTop(el)
+      syncBottomState(el)
+      return
+    }
+
     if (layoutWidthScroll) {
       if (isAnchoredRef.current) {
         recalcSpacer()
-        if (userScrolledUpRef.current) {
-          preserveViewportAnchor()
-        } else {
-          scrollToAnchor()
-        }
+        scrollToAnchor()
         syncBottomState(el)
         return
       }
@@ -862,7 +884,8 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     rememberScrollTop(el)
 
     if (anchorActivationPendingRef.current) return
-    const userScrolledUp = currentScrollTop < previousScrollTop - 0.5
+
+    const userScrolledUp = netUserScrollDelta < -0.5
     if (followLiveOutputRef.current && userScrolledUp) {
       followLiveOutputRef.current = false
       setAtBottomState(false)
@@ -875,58 +898,8 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     } else {
       viewportAnchorRef.current = null
     }
-    if (!isAnchoredRef.current) return
-
-    const st = currentScrollTop
-    const anchorTarget = anchorScrollTop() ?? 0
-
-    if (userScrolledUpRef.current) {
-      // check if user scrolled back to anchor zone — clear the scrolled-up flag
-      if (st >= anchorTarget - 10) {
-        userScrolledUpRef.current = false
-        syncBottomState(el)
-        return
-      }
-
-      const currentSpacer = parseFloat(spacerRef.current?.style.height ?? '0')
-
-      if (st < lastUserScrollTopRef.current) {
-        // scrolling UP: consume spacer by the delta
-        const delta = lastUserScrollTopRef.current - st
-        const newH = Math.max(0, currentSpacer - delta)
-        if (spacerRef.current) spacerRef.current.style.height = newH + 'px'
-        spacerRatchetRef.current = newH
-
-        if (newH <= 0) {
-          collapseSpacer()
-        }
-      }
-      // scrolling DOWN: spacer does NOT grow back (ratchet)
-      lastUserScrollTopRef.current = st
-      captureViewportAnchor()
-    } else {
-      if (currentScrollTop > previousScrollTop + 0.5) {
-        if (anchorScrollSettleFramesRef.current > 0) {
-          scrollToAnchor()
-          syncBottomState(el)
-          return
-        }
-        followLiveOutputRef.current = false
-        setAtBottomState(false)
-        collapseSpacer()
-        captureViewportAnchor()
-        return
-      }
-
-      // detect: user scrolled above the pinned prompt position
-      if (st < anchorTarget - 10) {
-        userScrolledUpRef.current = true
-        lastUserScrollTopRef.current = st
-        captureViewportAnchor()
-        syncBottomState(el)
-      }
-    }
-  }, [syncBottomState, rememberScrollTop, isLayoutWidthScroll, recalcSpacer, preserveViewportAnchor, scrollToAnchor, shouldStickToBottom, stickToBottomAfterLayoutScroll, shouldPreserveViewport, captureViewportAnchor, setAtBottomState, collapseSpacer, anchorScrollTop])
+    // anchored 模式下不再有任何 scrollTop 操作或模式切换，到此结束。
+  }, [syncBottomState, rememberScrollTop, isLayoutWidthScroll, isHeightCorrectionScroll, recalcSpacer, scrollToAnchor, shouldStickToBottom, stickToBottomAfterLayoutScroll, shouldPreserveViewport, captureViewportAnchor, setAtBottomState])
 
   const stabilizeDocumentPanelScroll = useCallback((trigger?: HTMLElement | null) => {
     const container = scrollContainerRef.current
@@ -997,13 +970,11 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     if (!promptPinningDisabled && turnH > viewportH * 0.5) {
       // long turn: pin user prompt to top with spacer
       isAnchoredRef.current = true
-      userScrolledUpRef.current = false
-      spacerRatchetRef.current = 0
       followLiveOutputRef.current = false
       recalcSpacer()
 
       programmaticScrollDepthRef.current++
-      container.scrollTop = Math.max(0, offsetInContainer(turn) - SCROLL_TOP_OFFSET)
+      container.scrollTop = Math.max(0, offsetInContainer(turn) - PROMPT_PIN_TOP_OFFSET)
       rememberScrollTop(container)
       requestAnimationFrame(() => {
         programmaticScrollDepthRef.current--
@@ -1034,6 +1005,7 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     const container = scrollContainerRef.current
     if (!container) return
     lastContainerInlineSizeRef.current = container.clientWidth
+    lastObservedScrollHeightRef.current = container.scrollHeight
     const previous = container.style.overflowAnchor
     container.style.overflowAnchor = 'none'
     return () => {
@@ -1047,9 +1019,9 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     if (anchorActivationPendingRef.current || isAnchorAnimating()) return
     if (isAnchoredRef.current) {
       recalcSpacer()
-      if (userScrolledUpRef.current) {
-        preserveViewportAnchor()
-      } else {
+      // 仅在仍贴着 anchor 目标（isAtBottomRef true）或处于 follow-live 时重新对齐。
+      // 用户已经手动滑开时不要把视角拉回——这是 spacer-常驻语义的核心。
+      if (isAtBottomRef.current || followLiveOutputRef.current) {
         scrollToAnchor()
       }
       if (container) syncBottomState(container)
@@ -1095,10 +1067,13 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
       if (anchorActivationPendingRef.current || isAnchorAnimating()) return
       if (isAnchoredRef.current) {
         recalcSpacer()
-        if (userScrolledUpRef.current) {
-          preserveViewportAnchor()
-        } else {
+        // 流式期间长 turn 增高时跟随到底部展示最新输出。
+        if (followLiveOutputRef.current) {
           scrollToAnchor()
+        } else if (shouldPreserveViewport()) {
+          // 用户已经手动滑过 anchor 区，lastTurn 内部还在增长（如 assistant 流式输出推走了阅读位置）：
+          // 通过 viewport anchor 保护当前阅读位置不被推走。
+          preserveViewportAnchor()
         }
         const container = scrollContainerRef.current
         if (container) syncBottomState(container)
@@ -1126,12 +1101,10 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
       if (!entries.some(hasResizeObserverBlockChange)) return
       if (anchorActivationPendingRef.current || isAnchorAnimating()) return
       if (isAnchoredRef.current) {
+        // anchored 模式下 spacer 常驻、不再主动调 scrollTop。
+        // contentRoot 高度变化主要来自虚拟化历史区的 item 测量，由 Virtuoso 的 scrollHeight 修正机制
+        // 自身保持视角稳定（参见 isHeightCorrectionScroll）。这里只更新 spacer 与 bottom state。
         recalcSpacer()
-        if (userScrolledUpRef.current) {
-          preserveViewportAnchor()
-        } else {
-          scrollToAnchor()
-        }
         const container = scrollContainerRef.current
         if (container) syncBottomState(container)
         return
@@ -1149,7 +1122,7 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
     })
     ro.observe(root)
     return () => ro.disconnect()
-  }, [contentRoot, preserveViewportAnchor, recalcSpacer, scrollToAnchor, scrollViewportToBottom, shouldPreserveViewport, syncBottomState, isLocalExpansionActive, shouldStickToBottom, isAnchorAnimating, isBottomSmoothScrolling])
+  }, [contentRoot, preserveViewportAnchor, recalcSpacer, scrollViewportToBottom, shouldPreserveViewport, syncBottomState, isLocalExpansionActive, shouldStickToBottom, isAnchorAnimating, isBottomSmoothScrolling])
 
   useEffect(() => {
     const el = copCodeExecScrollRef.current
@@ -1173,9 +1146,7 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
       if (anchorActivationPendingRef.current || isAnchorAnimating()) return
       if (isAnchoredRef.current) {
         recalcSpacer()
-        if (userScrolledUpRef.current) {
-          preserveViewportAnchor()
-        } else {
+        if (isAtBottomRef.current || followLiveOutputRef.current) {
           scrollToAnchor()
         }
         syncBottomStateFromContainer()
@@ -1201,9 +1172,7 @@ export function useScrollPin(options: UseScrollPinOptions = {}): ScrollPinResult
       if (anchorActivationPendingRef.current || isAnchorAnimating()) return
       if (isAnchoredRef.current) {
         recalcSpacer()
-        if (userScrolledUpRef.current) {
-          preserveViewportAnchor()
-        } else {
+        if (isAtBottomRef.current || followLiveOutputRef.current) {
           scrollToAnchor()
         }
         syncBottomStateFromContainer()

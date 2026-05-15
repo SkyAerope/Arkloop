@@ -362,9 +362,9 @@ describe('useScrollPin', () => {
     })
 
     expect(anchorScrollBehavior).toBe('smooth')
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
     expect(readyApi.isAtBottomRef.current).toBe(true)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
 
     await act(async () => {
       metrics.scrollHeight = 1900
@@ -382,9 +382,9 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
     expect(readyApi.isAtBottomRef.current).toBe(true)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
 
     act(() => {
       root.unmount()
@@ -445,14 +445,14 @@ describe('useScrollPin', () => {
     expect(readyApi.programmaticScrollDepthRef.current).toBeGreaterThan(0)
 
     act(() => {
-      scrollContainer.scrollTop = 552
+      scrollContainer.scrollTop = 440
     })
     await act(async () => {
       await flushAnimationFrames(2)
     })
 
     expect(readyApi.programmaticScrollDepthRef.current).toBe(0)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
 
     act(() => {
       root.unmount()
@@ -507,7 +507,7 @@ describe('useScrollPin', () => {
     expect(readyApi.programmaticScrollDepthRef.current).toBeGreaterThan(0)
 
     act(() => {
-      scrollContainer.scrollTop = 552
+      scrollContainer.scrollTop = 440
     })
     await act(async () => {
       await flushAnimationFrames(2)
@@ -573,12 +573,12 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollTargets).toContain(552)
-    expect(scrollTargets).toContain(556)
+    expect(scrollTargets).toContain(440)
+    expect(scrollTargets).toContain(444)
     expect(readyApi.programmaticScrollDepthRef.current).toBeGreaterThan(0)
 
     act(() => {
-      scrollContainer.scrollTop = 556
+      scrollContainer.scrollTop = 444
     })
     await act(async () => {
       await flushAnimationFrames(2)
@@ -631,13 +631,13 @@ describe('useScrollPin', () => {
     })
 
     act(() => {
-      scrollContainer.scrollTop = 552
+      scrollContainer.scrollTop = 440
     })
     await act(async () => {
       await flushAnimationFrames(2)
     })
 
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
     expect(readyApi.programmaticScrollDepthRef.current).toBe(0)
 
     act(() => {
@@ -648,8 +648,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    // 新语义：spacer 常驻、不做模式切换；用户即使向下滑也保持 anchored，不再被强行拉回。
+    expect(scrollContainer.scrollTop).toBe(620)
 
     await act(async () => {
       metrics.scrollHeight = 1900
@@ -667,8 +667,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    // 流式期间 followLiveOutput 仍然 false（用户已经手动滑过），保持当前位置。
+    expect(scrollContainer.scrollTop).toBe(620)
 
     act(() => {
       root.unmount()
@@ -719,9 +719,9 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(15)
     })
 
-    // scrollToBottom 通过 rAF 调度，锚定生效后最终位置在 552
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    // scrollToBottom 通过 rAF 调度，锚定生效后最终位置在 440
+    expect(scrollContainer.scrollTop).toBe(440)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
 
     act(() => {
       root.unmount()
@@ -764,8 +764,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(3)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(scrollContainer.scrollTop).toBe(440)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
     expect(readyApi.isAtBottomRef.current).toBe(true)
 
     await act(async () => {
@@ -788,8 +788,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(scrollContainer.scrollTop).toBe(440)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
     expect(readyApi.isAtBottomRef.current).toBe(true)
 
     act(() => {
@@ -1024,7 +1024,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(3)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
     expect(readyApi.isAtBottomRef.current).toBe(true)
 
     await act(async () => {
@@ -1042,7 +1042,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
     expect(readyApi.isAtBottomRef.current).toBe(true)
 
     act(() => {
@@ -1096,13 +1096,13 @@ describe('useScrollPin', () => {
     await act(async () => {
       await flushAnimationFrames(2)
     })
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
 
     await act(async () => {
       await flushAnimationFrames(15)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
     expect(readyApi.isAtBottomRef.current).toBe(true)
 
     act(() => {
@@ -1145,7 +1145,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(3)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
 
     await act(async () => {
       metrics.scrollHeight = 2200
@@ -1164,7 +1164,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
     expect(readyApi.isAtBottomRef.current).toBe(true)
 
     act(() => {
@@ -1209,8 +1209,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(3)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(prompt.getBoundingClientRect().top).toBe(48)
+    expect(scrollContainer.scrollTop).toBe(440)
+    expect(prompt.getBoundingClientRect().top).toBe(160)
 
     for (let i = 0; i < 16; i += 1) {
       await act(async () => {
@@ -1230,8 +1230,8 @@ describe('useScrollPin', () => {
         await flushAnimationFrames(2)
       })
 
-      expect(scrollContainer.scrollTop).toBe(552)
-      expect(prompt.getBoundingClientRect().top).toBe(48)
+      expect(scrollContainer.scrollTop).toBe(440)
+      expect(prompt.getBoundingClientRect().top).toBe(160)
       expect(readyApi.programmaticScrollDepthRef.current).toBe(0)
     }
 
@@ -1242,7 +1242,7 @@ describe('useScrollPin', () => {
     })
   })
 
-  it('发送后顶部锚定期间，即使滚动被往下带也应立刻回到用户消息', async () => {
+  it('发送后顶部锚定期间，用户手动滑动后应保持当前位置不被拉回', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -1277,7 +1277,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(3)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
 
     await act(async () => {
       metrics.scrollHeight = 2200
@@ -1296,6 +1296,7 @@ describe('useScrollPin', () => {
 
     act(() => {
       scrollContainer.scrollTop = 980
+      readyApi.handleScrollContainerScroll()
       triggerResize(observedTurn)
       triggerResize(contentRoot)
     })
@@ -1304,8 +1305,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(readyApi.isAtBottomRef.current).toBe(true)
+    // 新语义：用户手动下滑后，hooks 不再把视角强行拉回到 prompt；保持用户当前位置。
+    expect(scrollContainer.scrollTop).toBe(980)
 
     act(() => {
       root.unmount()
@@ -1596,7 +1597,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(3)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
 
     await act(async () => {
       metrics.scrollHeight = 1900
@@ -1619,7 +1620,7 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
 
     await act(async () => {
       metrics.scrollHeight = 1988
@@ -1641,8 +1642,8 @@ describe('useScrollPin', () => {
       await flushAnimationFrames(2)
     })
 
-    expect(scrollContainer.scrollTop).toBe(552)
-    expect(requireLastUserPrompt(requireApi(api)).getBoundingClientRect().top).toBe(48)
+    expect(scrollContainer.scrollTop).toBe(440)
+    expect(requireLastUserPrompt(requireApi(api)).getBoundingClientRect().top).toBe(160)
 
     act(() => {
       root.unmount()
@@ -1759,14 +1760,13 @@ describe('useScrollPin', () => {
 
     const readyApi = requireApi(api)
     const scrollContainer = requireContainer(readyApi)
-    const contentRoot = requireContentRoot(readyApi)
     act(() => {
       readyApi.activateAnchor()
     })
     await act(async () => {
       await flushAnimationFrames(15)
     })
-    expect(scrollContainer.scrollTop).toBe(552)
+    expect(scrollContainer.scrollTop).toBe(440)
 
     act(() => {
       scrollContainer.scrollTop = 880
@@ -1793,7 +1793,10 @@ describe('useScrollPin', () => {
           onReady={(value) => { api = value }}
         />,
       )
-      triggerResize(contentRoot)
+    })
+    await act(async () => {
+      const turn = requireLastTurn(requireApi(api))
+      triggerResize(turn)
       await flushAnimationFrames(2)
     })
 
