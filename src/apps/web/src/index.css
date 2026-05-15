@@ -1949,7 +1949,38 @@ button:not(:disabled) {
   animation-name: user-prompt-enter-light;
 }
 
-@keyframes tooltip-in {
-  from { opacity: 0; transform: translate(-50%, calc(-100% + 4px)); }
-  to   { opacity: 1; transform: translate(-50%, -100%); }
+.action-icon-tooltip[data-side="bottom"] {
+  animation: action-icon-tooltip-in-bottom 120ms ease-out both;
+}
+
+.action-icon-tooltip[data-side="top"] {
+  animation: action-icon-tooltip-in-top 120ms ease-out both;
+}
+
+@keyframes action-icon-tooltip-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes action-icon-tooltip-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-icon-tooltip {
+    animation: none;
+  }
 }

@@ -27,6 +27,7 @@ import {
   type PerfSample,
 } from '../perfDebug'
 import { useAuth } from './auth'
+import { SHORTCUTS, matchesShortcut } from '../shortcuts'
 
 export interface AppUIContextValue {
   sidebarCollapsed: boolean
@@ -544,20 +545,32 @@ export function AppUIProvider({ children }: { children: ReactNode }) {
   }, [desktop, location.pathname])
 
   useEffect(() => {
-    const isMac = navigator.platform.toLowerCase().includes('mac')
     const handler = (e: KeyboardEvent) => {
-      const modifier = isMac ? e.metaKey : e.ctrlKey
-      if (!modifier) return
-      if (e.key !== ',') return
-      if (e.shiftKey || e.altKey) return
-      if (e.repeat) return
-      e.preventDefault()
-      if (settingsOpen) closeSettings()
-      else openSettings()
+      if (e.defaultPrevented || e.repeat) return
+      if (matchesShortcut(e, SHORTCUTS.openSettings)) {
+        e.preventDefault()
+        if (settingsOpen) closeSettings()
+        else openSettings()
+        return
+      }
+      if (matchesShortcut(e, SHORTCUTS.openSearch)) {
+        e.preventDefault()
+        openSearchOverlay()
+        return
+      }
+      if (matchesShortcut(e, SHORTCUTS.toggleRightPanel)) {
+        e.preventDefault()
+        setRightPanelOpen((open) => !open)
+        return
+      }
+      if (matchesShortcut(e, SHORTCUTS.toggleSidebar)) {
+        e.preventDefault()
+        toggleSidebar('titlebar')
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [settingsOpen, openSettings, closeSettings])
+  }, [settingsOpen, openSettings, closeSettings, openSearchOverlay, toggleSidebar])
 
   useEffect(() => {
     if (!(desktop && settingsOpen)) return
