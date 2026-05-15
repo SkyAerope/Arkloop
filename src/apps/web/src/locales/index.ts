@@ -1340,6 +1340,10 @@ export interface LocaleStrings {
     memoryNotConfiguredHint: string;
     memoryRecentErrors: string;
     memoryErrorsModalTitle: string;
+    // chat model
+    chatModel: string;
+    chatModelDesc: string;
+    chatModelPlatformDefault: string;
     // tool model
     toolModel: string;
     toolModelDesc: string;

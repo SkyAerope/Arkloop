@@ -56,7 +56,6 @@ export function DesktopDiscordSettingsPanel({
   const [enabled, setEnabled] = useState(channel?.is_active ?? false)
   const [personaID, setPersonaID] = useState(resolvePersonaID(personas, channel?.persona_id))
   const [tokenDraft, setTokenDraft] = useState('')
-  const [defaultModel, setDefaultModel] = useState((channel?.config_json?.default_model as string | undefined) ?? '')
   const [allowedServerIDs, setAllowedServerIDs] = useState(readStringArrayConfig(channel, 'allowed_server_ids'))
   const [allowedServerInput, setAllowedServerInput] = useState('')
   const [allowedChannelIDs, setAllowedChannelIDs] = useState(readStringArrayConfig(channel, 'allowed_channel_ids'))
@@ -83,7 +82,6 @@ export function DesktopDiscordSettingsPanel({
     setEnabled(channel?.is_active ?? false)
     setPersonaID(resolvePersonaID(personas, channel?.persona_id))
     setTokenDraft('')
-    setDefaultModel((channel?.config_json?.default_model as string | undefined) ?? '')
     setAllowedServerIDs(readStringArrayConfig(channel, 'allowed_server_ids'))
     setAllowedServerInput('')
     setAllowedChannelIDs(readStringArrayConfig(channel, 'allowed_channel_ids'))
@@ -121,18 +119,15 @@ export function DesktopDiscordSettingsPanel({
     () => resolvePersonaID(personas, channel?.persona_id),
     [personas, channel?.persona_id],
   )
-  const persistedDefaultModel = (channel?.config_json?.default_model as string | undefined) ?? ''
   const tokenConfigured = channel?.has_credentials === true
   const dirty = useMemo(() => {
     if ((channel?.is_active ?? false) !== enabled) return true
     if (effectivePersonaID !== personaID) return true
     if (!sameItems(persistedAllowedServerIDs, effectiveAllowedServerIDs)) return true
     if (!sameItems(persistedAllowedChannelIDs, effectiveAllowedChannelIDs)) return true
-    if (defaultModel !== persistedDefaultModel) return true
     return tokenDraft.trim().length > 0
   }, [
     channel,
-    defaultModel,
     effectiveAllowedChannelIDs,
     effectiveAllowedServerIDs,
     effectivePersonaID,
@@ -140,7 +135,6 @@ export function DesktopDiscordSettingsPanel({
     personaID,
     persistedAllowedChannelIDs,
     persistedAllowedServerIDs,
-    persistedDefaultModel,
     tokenDraft,
   ])
   const canSave = dirty && (channel !== null || tokenDraft.trim().length > 0)
@@ -186,8 +180,7 @@ export function DesktopDiscordSettingsPanel({
         allowed_server_ids: nextAllowedServerIDs,
         allowed_channel_ids: nextAllowedChannelIDs,
       }
-      if (defaultModel.trim()) configJSON.default_model = defaultModel.trim()
-      else delete configJSON.default_model
+      delete configJSON.default_model
 
       if (channel == null) {
         const created = await createChannel(accessToken, {
@@ -366,19 +359,6 @@ export function DesktopDiscordSettingsPanel({
                 disabled={saving}
                 onChange={(value) => {
                   setPersonaID(value)
-                  setSaved(false)
-                }}
-              />
-            </ChannelDetailRow>
-
-            <ChannelDetailRow label={ds.connectorDefaultModel}>
-              <ModelDropdown
-                value={defaultModel}
-                options={modelOptions}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                disabled={saving}
-                onChange={(value) => {
-                  setDefaultModel(value)
                   setSaved(false)
                 }}
               />

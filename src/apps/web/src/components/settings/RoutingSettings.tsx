@@ -11,6 +11,7 @@ import { isLocalMode } from '@arkloop/shared/desktop'
 import { getAvailableCatalogFromAdvancedJson } from '@arkloop/shared/llm/available-catalog-advanced-json'
 import { SettingsModelDropdown } from './SettingsModelDropdown'
 import { ToolModelSettingControl } from './ToolModelSettingControl'
+import { ChatModelSettingControl } from './ChatModelSettingControl'
 
 type Props = {
   accessToken: string
@@ -152,8 +153,14 @@ export function RoutingSettings({ accessToken }: Props) {
         </RoutingCard>
       </RoutingSection>
 
-      <RoutingSection title={ds.toolModel}>
+      <RoutingSection title={ds.backgroundToolsSection}>
         <RoutingCard>
+          <RoutingRow
+            title={ds.chatModel}
+            control={(
+              <ChatModelSettingControl accessToken={accessToken} />
+            )}
+          />
           <RoutingRow
             title={ds.toolModel}
             description={ds.toolModelDesc}

@@ -87,11 +87,6 @@ function channelPersonaName(channel: ChannelResponse | null, personas: Persona[]
   return persona?.display_name || persona?.persona_key || defaultLabel
 }
 
-function channelModelName(channel: ChannelResponse | null, defaultLabel: string) {
-  const value = channel?.config_json?.default_model
-  return typeof value === 'string' && value.trim() ? value.trim() : defaultLabel
-}
-
 function ChannelSummaryCard({
   item,
   personas,
@@ -109,13 +104,11 @@ function ChannelSummaryCard({
   inactiveLabel: string
   labels: {
     persona: string
-    model: string
     default: string
   }
 }) {
   const enabled = item.channel?.is_active === true
   const persona = channelPersonaName(item.channel, personas, labels.default)
-  const model = channelModelName(item.channel, labels.default)
   const colors = PLATFORM_COLORS[item.key]
 
   return (
@@ -151,8 +144,6 @@ function ChannelSummaryCard({
           </div>
           <div className="mt-2 flex min-w-0 items-center gap-2 text-[12px] font-medium text-[var(--c-text-muted)]">
             <span className="truncate">{labels.persona}: {persona}</span>
-            <span className="shrink-0 text-[var(--c-text-muted)]">/</span>
-            <span className="truncate">{labels.model}: {model}</span>
           </div>
         </div>
       </div>
@@ -240,12 +231,10 @@ export function DesktopChannelsSettings({ accessToken }: Props) {
   const cardLabels = locale === 'zh'
     ? {
         persona: '智能体',
-        model: '模型',
         default: '默认',
       }
     : {
         persona: 'Persona',
-        model: 'Model',
         default: 'Default',
       }
   const selectedItem = tabItems.find((item) => item.key === activeTab) ?? null
@@ -272,7 +261,6 @@ export function DesktopChannelsSettings({ accessToken }: Props) {
         accessToken={accessToken}
         channel={feishuChannel}
         personas={personas}
-        providers={providers}
         reload={load}
       />
     ) : selectedItem.key === 'qqbot' ? (

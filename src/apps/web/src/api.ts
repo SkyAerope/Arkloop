@@ -2010,6 +2010,7 @@ export type ResolveOpenVikingConfigResponse = {
 export type AccountSettingsResponse = {
   pipeline_trace_enabled: boolean
   prompt_cache_debug_enabled: boolean
+  new_thread_chat_model?: string | null
 }
 
 export async function listSpawnProfiles(accessToken: string): Promise<SpawnProfile[]> {

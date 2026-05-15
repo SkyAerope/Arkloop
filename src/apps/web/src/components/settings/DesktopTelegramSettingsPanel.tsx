@@ -74,7 +74,6 @@ export function DesktopTelegramSettingsPanel({
   const [groupInput, setGroupInput] = useState('')
 
   const [tokenDraft, setTokenDraft] = useState('')
-  const [defaultModel, setDefaultModel] = useState((channel?.config_json?.default_model as string | undefined) ?? '')
   const [verifying, setVerifying] = useState(false)
   const [, setVerifyResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [bindCode, setBindCode] = useState<string | null>(null)
@@ -112,7 +111,6 @@ export function DesktopTelegramSettingsPanel({
     setGroupInput('')
 
     setTokenDraft('')
-    setDefaultModel((channel?.config_json?.default_model as string | undefined) ?? '')
     setVerifyResult(null)
   }, [channel, personas])
 
@@ -139,7 +137,6 @@ export function DesktopTelegramSettingsPanel({
     () => resolvePersonaID(personas, channel?.persona_id),
     [personas, channel?.persona_id],
   )
-  const persistedDefaultModel = (channel?.config_json?.default_model as string | undefined) ?? ''
   const tokenConfigured = channel?.has_credentials === true
 
   const dirty = useMemo(() => {
@@ -147,11 +144,9 @@ export function DesktopTelegramSettingsPanel({
     if (effectivePersonaID !== personaID) return true
     if (!sameItems(persistedPrivateIDs, privateRestrict ? effectivePrivateIDs : [])) return true
     if (!sameItems(persistedGroupIDs, groupRestrict ? effectiveGroupIDs : [])) return true
-    if (defaultModel !== persistedDefaultModel) return true
     return tokenDraft.trim().length > 0
   }, [
     channel,
-    defaultModel,
     effectiveGroupIDs,
     effectivePersonaID,
     effectivePrivateIDs,
@@ -160,7 +155,6 @@ export function DesktopTelegramSettingsPanel({
     persistedGroupIDs,
     persistedPrivateIDs,
     personaID,
-    persistedDefaultModel,
     privateRestrict,
     tokenDraft,
   ])
@@ -213,8 +207,7 @@ export function DesktopTelegramSettingsPanel({
       // Never send the legacy key
       delete configJSON.allowed_user_ids
 
-      if (defaultModel.trim()) configJSON.default_model = defaultModel.trim()
-      else delete configJSON.default_model
+      delete configJSON.default_model
 
       if (channel == null) {
         const created = await createChannel(accessToken, {
@@ -476,18 +469,6 @@ export function DesktopTelegramSettingsPanel({
               />
             </ChannelDetailRow>
 
-            <ChannelDetailRow label={ds.connectorDefaultModel}>
-              <ModelDropdown
-                value={defaultModel}
-                options={modelOptions}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                disabled={saving}
-                onChange={(value) => {
-                  setDefaultModel(value)
-                  setSaved(false)
-                }}
-              />
-            </ChannelDetailRow>
           </div>
         </div>
       </div>

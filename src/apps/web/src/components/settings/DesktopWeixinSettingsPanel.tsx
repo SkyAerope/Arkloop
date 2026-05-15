@@ -74,7 +74,6 @@ export function DesktopWeixinSettingsPanel({
   const [groupIDs, setGroupIDs] = useState(persistedGroupIDs)
   const [groupInput, setGroupInput] = useState('')
 
-  const [defaultModel, setDefaultModel] = useState((channel?.config_json?.default_model as string | undefined) ?? '')
   const [bindCode, setBindCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
   const [bindings, setBindings] = useState<ChannelBindingResponse[]>([])
@@ -117,7 +116,6 @@ export function DesktopWeixinSettingsPanel({
     setGroupIDs(nextGroup)
     setGroupInput('')
 
-    setDefaultModel((channel?.config_json?.default_model as string | undefined) ?? '')
     setBaseURL((channel?.config_json?.base_url as string | undefined) ?? '')
     setBotToken('')
     setQrCodeImg(null)
@@ -176,19 +174,16 @@ export function DesktopWeixinSettingsPanel({
     () => resolvePersonaID(personas, channel?.persona_id),
     [personas, channel?.persona_id],
   )
-  const persistedDefaultModel = (channel?.config_json?.default_model as string | undefined) ?? ''
   const persistedBaseURL = (channel?.config_json?.base_url as string | undefined) ?? ''
   const dirty = useMemo(() => {
     if ((channel?.is_active ?? false) !== enabled) return true
     if (effectivePersonaID !== personaID) return true
     if (!sameItems(persistedPrivateIDs, privateRestrict ? effectivePrivateIDs : [])) return true
     if (!sameItems(persistedGroupIDs, groupRestrict ? effectiveGroupIDs : [])) return true
-    if (defaultModel !== persistedDefaultModel) return true
     if (baseURL !== persistedBaseURL) return true
     return botToken.trim().length > 0
   }, [
     channel,
-    defaultModel,
     effectiveGroupIDs,
     effectivePersonaID,
     effectivePrivateIDs,
@@ -197,7 +192,6 @@ export function DesktopWeixinSettingsPanel({
     persistedGroupIDs,
     persistedPrivateIDs,
     personaID,
-    persistedDefaultModel,
     persistedBaseURL,
     privateRestrict,
     botToken,
@@ -291,8 +285,7 @@ export function DesktopWeixinSettingsPanel({
       if (baseURL.trim()) configJSON.base_url = baseURL.trim()
       else delete configJSON.base_url
 
-      if (defaultModel.trim()) configJSON.default_model = defaultModel.trim()
-      else delete configJSON.default_model
+      delete configJSON.default_model
 
       if (channel == null) {
         const created = await createChannel(accessToken, {
@@ -605,22 +598,6 @@ export function DesktopWeixinSettingsPanel({
               />
             </div>
 
-            {/* Default model */}
-            <div className="md:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[var(--c-text-secondary)]">
-                {ds.connectorDefaultModel}
-              </label>
-              <ModelDropdown
-                value={defaultModel}
-                options={modelOptions}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                disabled={saving}
-                onChange={(value) => {
-                  setDefaultModel(value)
-                  setSaved(false)
-                }}
-              />
-            </div>
           </div>
         </div>
       </div>

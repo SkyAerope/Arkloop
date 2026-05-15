@@ -65,7 +65,6 @@ export function DesktopQQBotSettingsPanel({
   const [allowedUserInput, setAllowedUserInput] = useState('')
   const [allowedGroupIDs, setAllowedGroupIDs] = useState(readStringArrayConfig(channel, 'allowed_group_ids'))
   const [allowedGroupInput, setAllowedGroupInput] = useState('')
-  const [defaultModel, setDefaultModel] = useState(readStringConfig(channel, 'default_model'))
   const [bindCode, setBindCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
   const [bindings, setBindings] = useState<ChannelBindingResponse[]>([])
@@ -91,7 +90,6 @@ export function DesktopQQBotSettingsPanel({
     setAllowedUserInput('')
     setAllowedGroupIDs(readStringArrayConfig(channel, 'allowed_group_ids'))
     setAllowedGroupInput('')
-    setDefaultModel(readStringConfig(channel, 'default_model'))
   }, [channel, personas])
 
   useEffect(() => {
@@ -123,7 +121,6 @@ export function DesktopQQBotSettingsPanel({
     [personas, channel?.persona_id],
   )
   const persistedAppID = readStringConfig(channel, 'app_id')
-  const persistedDefaultModel = readStringConfig(channel, 'default_model')
   const credentialConfigured = channel?.has_credentials === true
 
   const dirty = useMemo(() => {
@@ -132,13 +129,11 @@ export function DesktopQQBotSettingsPanel({
     if (appID !== persistedAppID) return true
     if (!sameItems(persistedAllowedUserIDs, effectiveAllowedUserIDs)) return true
     if (!sameItems(persistedAllowedGroupIDs, effectiveAllowedGroupIDs)) return true
-    if (defaultModel !== persistedDefaultModel) return true
     return clientSecretDraft.trim().length > 0
   }, [
     appID,
     channel,
     clientSecretDraft,
-    defaultModel,
     effectiveAllowedGroupIDs,
     effectiveAllowedUserIDs,
     effectivePersonaID,
@@ -147,7 +142,6 @@ export function DesktopQQBotSettingsPanel({
     persistedAllowedGroupIDs,
     persistedAllowedUserIDs,
     persistedAppID,
-    persistedDefaultModel,
   ])
   const canSave =
     dirty &&
@@ -206,7 +200,6 @@ export function DesktopQQBotSettingsPanel({
         app_id: nextAppID,
         allowed_user_ids: nextAllowedUserIDs,
         allowed_group_ids: nextAllowedGroupIDs,
-        default_model: defaultModel.trim(),
       }
 
       if (channel == null) {
@@ -368,22 +361,6 @@ export function DesktopQQBotSettingsPanel({
                 disabled={saving}
                 onChange={(value) => {
                   setPersonaID(value)
-                  setSaved(false)
-                }}
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[var(--c-text-secondary)]">
-                {ds.connectorDefaultModel}
-              </label>
-              <ModelDropdown
-                value={defaultModel}
-                options={modelOptions}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                disabled={saving}
-                onChange={(value) => {
-                  setDefaultModel(value)
                   setSaved(false)
                 }}
               />

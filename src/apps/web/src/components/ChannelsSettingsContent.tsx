@@ -60,7 +60,6 @@ export function ChannelsSettingsContent({ accessToken }: Props) {
   const [formPersonaId, setFormPersonaId] = useState('')
   const [formAllowedUsers, setFormAllowedUsers] = useState('')
   const [formAllowedGroups, setFormAllowedGroups] = useState('')
-  const [formDefaultModel, setFormDefaultModel] = useState('')
   const [formFeishuAppID, setFormFeishuAppID] = useState('')
   const [formFeishuDomain, setFormFeishuDomain] = useState<'feishu' | 'lark'>('feishu')
   const [formFeishuVerificationToken, setFormFeishuVerificationToken] = useState('')
@@ -110,7 +109,6 @@ export function ChannelsSettingsContent({ accessToken }: Props) {
     setFormPersonaId('')
     setFormAllowedUsers('')
     setFormAllowedGroups('')
-    setFormDefaultModel('')
     setFormFeishuAppID('')
     setFormFeishuDomain('feishu')
     setFormFeishuVerificationToken('')
@@ -158,7 +156,6 @@ export function ChannelsSettingsContent({ accessToken }: Props) {
             app_id: formAppID.trim(),
             allowed_user_ids: parseAllowedUserIds(formAllowedUsers),
             allowed_group_ids: parseAllowedUserIds(formAllowedGroups),
-            default_model: formDefaultModel.trim(),
           }
         }
         if (formType === 'feishu') {
@@ -397,20 +394,6 @@ export function ChannelsSettingsContent({ accessToken }: Props) {
               />
             )}
           </div>
-
-          {formType === 'qqbot' && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-[var(--c-text-secondary)]">{ds.connectorDefaultModel}</label>
-              <input
-                type="text"
-                value={formDefaultModel}
-                onChange={(e) => setFormDefaultModel(e.target.value)}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                className="h-9 rounded-lg bg-[var(--c-bg-input)] px-3 text-sm text-[var(--c-text-primary)] outline-none placeholder:text-[var(--c-text-muted)]"
-                style={{ border: '0.5px solid var(--c-border-subtle)' }}
-              />
-            </div>
-          )}
 
           {formType === 'telegram' && (
             <div className="flex flex-col gap-1">

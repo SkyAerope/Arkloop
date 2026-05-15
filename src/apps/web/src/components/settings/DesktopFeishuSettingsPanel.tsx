@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   type ChannelResponse,
-  type LlmProvider,
   type Persona,
   createChannel,
   isApiError,
@@ -12,7 +11,6 @@ import { useLocale } from '../../contexts/LocaleContext'
 import {
   channelRowsCls,
   ChannelDetailRow,
-  buildModelOptions,
   inputCls,
   ListField,
   mergeListValues,
@@ -30,7 +28,6 @@ type Props = {
   accessToken: string
   channel: ChannelResponse | null
   personas: Persona[]
-  providers: LlmProvider[]
   reload: () => Promise<void>
 }
 
@@ -43,7 +40,6 @@ export function DesktopFeishuSettingsPanel({
   accessToken,
   channel,
   personas,
-  providers,
   reload,
 }: Props) {
   const { t } = useLocale()
@@ -60,7 +56,6 @@ export function DesktopFeishuSettingsPanel({
   const [appSecretDraft, setAppSecretDraft] = useState('')
   const [verificationTokenDraft, setVerificationTokenDraft] = useState('')
   const [encryptKeyDraft, setEncryptKeyDraft] = useState('')
-  const [defaultModel, setDefaultModel] = useState(readStringConfig(channel, 'default_model'))
   const [allowedUserIDs, setAllowedUserIDs] = useState(readStringArrayConfig(channel, 'allowed_user_ids'))
   const [allowedUserInput, setAllowedUserInput] = useState('')
   const [allowedChatIDs, setAllowedChatIDs] = useState(readStringArrayConfig(channel, 'allowed_chat_ids'))
@@ -82,7 +77,6 @@ export function DesktopFeishuSettingsPanel({
     setAppSecretDraft('')
     setVerificationTokenDraft('')
     setEncryptKeyDraft('')
-    setDefaultModel(readStringConfig(channel, 'default_model'))
     setAllowedUserIDs(readStringArrayConfig(channel, 'allowed_user_ids'))
     setAllowedUserInput('')
     setAllowedChatIDs(readStringArrayConfig(channel, 'allowed_chat_ids'))
@@ -92,14 +86,12 @@ export function DesktopFeishuSettingsPanel({
     if (channelChanged) setVerifyResult(null)
   }, [channel, personas])
 
-  const modelOptions = useMemo(() => buildModelOptions(providers), [providers])
   const personaOptions = useMemo(
     () => personas.map((p) => ({ value: p.id, label: p.display_name || p.id })),
     [personas],
   )
   const persistedAppID = readStringConfig(channel, 'app_id')
   const persistedDomain = readStringConfig(channel, 'domain') || 'feishu'
-  const persistedDefaultModel = readStringConfig(channel, 'default_model')
   const persistedAllowedUserIDs = useMemo(() => readStringArrayConfig(channel, 'allowed_user_ids'), [channel])
   const persistedAllowedChatIDs = useMemo(() => readStringArrayConfig(channel, 'allowed_chat_ids'), [channel])
   const persistedTriggerKeywords = useMemo(() => readStringArrayConfig(channel, 'trigger_keywords'), [channel])
@@ -126,7 +118,6 @@ export function DesktopFeishuSettingsPanel({
     if (effectivePersonaID !== personaID) return true
     if (appID.trim() !== persistedAppID) return true
     if (domain !== persistedDomain) return true
-    if (defaultModel !== persistedDefaultModel) return true
     if (!sameItems(persistedAllowedUserIDs, effectiveAllowedUserIDs)) return true
     if (!sameItems(persistedAllowedChatIDs, effectiveAllowedChatIDs)) return true
     if (!sameItems(persistedTriggerKeywords, effectiveTriggerKeywords)) return true
@@ -137,7 +128,6 @@ export function DesktopFeishuSettingsPanel({
     appID,
     appSecretDraft,
     channel,
-    defaultModel,
     domain,
     effectiveAllowedChatIDs,
     effectiveAllowedUserIDs,
@@ -149,7 +139,6 @@ export function DesktopFeishuSettingsPanel({
     persistedAllowedChatIDs,
     persistedAllowedUserIDs,
     persistedAppID,
-    persistedDefaultModel,
     persistedDomain,
     persistedTriggerKeywords,
     verificationTokenDraft,
@@ -188,8 +177,7 @@ export function DesktopFeishuSettingsPanel({
         allowed_chat_ids: effectiveAllowedChatIDs,
         trigger_keywords: effectiveTriggerKeywords,
       }
-      if (defaultModel.trim()) configJSON.default_model = defaultModel.trim()
-      else delete configJSON.default_model
+      delete configJSON.default_model
       if (verificationTokenDraft.trim()) configJSON.verification_token = verificationTokenDraft.trim()
       if (encryptKeyDraft.trim()) configJSON.encrypt_key = encryptKeyDraft.trim()
 
@@ -361,22 +349,6 @@ export function DesktopFeishuSettingsPanel({
                 disabled={saving}
                 onChange={(value) => {
                   setPersonaID(value)
-                  setSaved(false)
-                }}
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[var(--c-text-secondary)]">
-                {ds.connectorDefaultModel}
-              </label>
-              <ModelDropdown
-                value={defaultModel}
-                options={modelOptions}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                disabled={saving}
-                onChange={(value) => {
-                  setDefaultModel(value)
                   setSaved(false)
                 }}
               />

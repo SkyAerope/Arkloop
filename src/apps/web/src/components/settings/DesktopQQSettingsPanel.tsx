@@ -60,7 +60,6 @@ export function DesktopQQSettingsPanel({
   const [allowedUserInput, setAllowedUserInput] = useState('')
   const [allowedGroupIDs, setAllowedGroupIDs] = useState(readStringArrayConfig(channel, 'allowed_group_ids'))
   const [allowedGroupInput, setAllowedGroupInput] = useState('')
-  const [defaultModel, setDefaultModel] = useState((channel?.config_json?.default_model as string | undefined) ?? '')
   const [bindCode, setBindCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
   const [bindings, setBindings] = useState<ChannelBindingResponse[]>([])
@@ -88,7 +87,6 @@ export function DesktopQQSettingsPanel({
     setAllowedUserInput('')
     setAllowedGroupIDs(readStringArrayConfig(channel, 'allowed_group_ids'))
     setAllowedGroupInput('')
-    setDefaultModel((channel?.config_json?.default_model as string | undefined) ?? '')
     setOnebotWSUrl((channel?.config_json?.onebot_ws_url as string | undefined) ?? '')
     setOnebotHTTPUrl((channel?.config_json?.onebot_http_url as string | undefined) ?? '')
     setOnebotToken((channel?.config_json?.onebot_token as string | undefined) ?? '')
@@ -123,7 +121,6 @@ export function DesktopQQSettingsPanel({
     () => resolvePersonaID(personas, channel?.persona_id),
     [personas, channel?.persona_id],
   )
-  const persistedDefaultModel = (channel?.config_json?.default_model as string | undefined) ?? ''
   const persistedOnebotWSUrl = (channel?.config_json?.onebot_ws_url as string | undefined) ?? ''
   const persistedOnebotHTTPUrl = (channel?.config_json?.onebot_http_url as string | undefined) ?? ''
   const persistedOnebotToken = (channel?.config_json?.onebot_token as string | undefined) ?? ''
@@ -133,7 +130,6 @@ export function DesktopQQSettingsPanel({
     if (effectivePersonaID !== personaID) return true
     if (!sameItems(persistedAllowedUserIDs, effectiveAllowedUserIDs)) return true
     if (!sameItems(persistedAllowedGroupIDs, effectiveAllowedGroupIDs)) return true
-    if (defaultModel !== persistedDefaultModel) return true
     if (onebotWSUrl !== persistedOnebotWSUrl) return true
     if (onebotHTTPUrl !== persistedOnebotHTTPUrl) return true
     if (onebotToken !== persistedOnebotToken) return true
@@ -141,7 +137,6 @@ export function DesktopQQSettingsPanel({
     return false
   }, [
     channel,
-    defaultModel,
     effectiveAllowedUserIDs,
     effectiveAllowedGroupIDs,
     effectivePersonaID,
@@ -149,7 +144,6 @@ export function DesktopQQSettingsPanel({
     personaID,
     persistedAllowedUserIDs,
     persistedAllowedGroupIDs,
-    persistedDefaultModel,
     onebotWSUrl,
     onebotHTTPUrl,
     onebotToken,
@@ -202,8 +196,7 @@ export function DesktopQQSettingsPanel({
         allowed_user_ids: nextAllowedUserIDs,
         allowed_group_ids: nextAllowedGroupIDs,
       }
-      if (defaultModel.trim()) configJSON.default_model = defaultModel.trim()
-      else delete configJSON.default_model
+      delete configJSON.default_model
       if (onebotWSUrl.trim()) configJSON.onebot_ws_url = onebotWSUrl.trim()
       else delete configJSON.onebot_ws_url
       if (onebotHTTPUrl.trim()) configJSON.onebot_http_url = onebotHTTPUrl.trim()
@@ -462,21 +455,6 @@ export function DesktopQQSettingsPanel({
               />
             </div>
 
-            <div className="md:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[var(--c-text-secondary)]">
-                {ds.connectorDefaultModel}
-              </label>
-              <ModelDropdown
-                value={defaultModel}
-                options={modelOptions}
-                placeholder={ds.connectorDefaultModelPlaceholder}
-                disabled={saving}
-                onChange={(value) => {
-                  setDefaultModel(value)
-                  setSaved(false)
-                }}
-              />
-            </div>
           </div>
         </div>
       </div>
