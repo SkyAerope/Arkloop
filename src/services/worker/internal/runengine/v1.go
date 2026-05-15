@@ -661,7 +661,13 @@ func (e *EngineV1) resolveCompactMaintenanceRoute(
 		if advanced == nil {
 			advanced = map[string]any{}
 		}
-		advanced["context_window_tokens"] = float64(contextWindowTokens)
+		catalog, _ := advanced["available_catalog"].(map[string]any)
+		catalog = cloneMap(catalog)
+		if catalog == nil {
+			catalog = map[string]any{}
+		}
+		catalog["context_length_override"] = float64(contextWindowTokens)
+		advanced["available_catalog"] = catalog
 		selected.Route.AdvancedJSON = advanced
 	}
 

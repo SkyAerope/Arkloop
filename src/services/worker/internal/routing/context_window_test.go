@@ -17,16 +17,16 @@ func TestRouteContextWindowTokens(t *testing.T) {
 	if n := RouteContextWindowTokens(rule); n != 200000 {
 		t.Fatalf("got %d", n)
 	}
-	if RouteContextWindowTokens(ProviderRouteRule{}) != 0 {
-		t.Fatal("expected 0 when empty")
+	if n := RouteContextWindowTokens(ProviderRouteRule{}); n != DefaultContextWindowTokens {
+		t.Fatalf("expected default context window when empty, got %d", n)
 	}
-	if RouteContextWindowTokens(ProviderRouteRule{AdvancedJSON: map[string]any{}}) != 0 {
-		t.Fatal("expected 0 when no catalog")
+	if n := RouteContextWindowTokens(ProviderRouteRule{AdvancedJSON: map[string]any{}}); n != DefaultContextWindowTokens {
+		t.Fatalf("expected default context window when no catalog, got %d", n)
 	}
 	if n := RouteContextWindowTokens(ProviderRouteRule{
 		AdvancedJSON: map[string]any{"context_window_tokens": float64(999)},
-	}); n != 0 {
-		t.Fatalf("top-level key ignored, got %d", n)
+	}); n != DefaultContextWindowTokens {
+		t.Fatalf("top-level key ignored, expected default, got %d", n)
 	}
 }
 

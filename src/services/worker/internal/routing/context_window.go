@@ -1,7 +1,11 @@
 package routing
 
-// RouteContextWindowTokens 读取 advanced_json.available_catalog.context_length（tokens）。
-// 未配置时返回 0，由上层使用平台 fallback。
+const DefaultContextWindowTokens = 128000
+
+// RouteContextWindowTokens 读取路由的有效上下文窗口（tokens）。
 func RouteContextWindowTokens(rule ProviderRouteRule) int {
-	return RouteModelCapabilities(rule).ContextLength
+	if n := RouteModelCapabilities(rule).ContextLength; n > 0 {
+		return n
+	}
+	return DefaultContextWindowTokens
 }

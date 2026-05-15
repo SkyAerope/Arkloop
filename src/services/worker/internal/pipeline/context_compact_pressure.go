@@ -30,6 +30,7 @@ type ContextCompactPressureStats struct {
 	TargetChunkCount                 int
 	PreviousReplacementCount         int
 	SingleAtomPartial                bool
+	NoRewriteReason                  string
 }
 
 // ApplyContextCompactPressure 用 gemini-cli 风格口径估算当前上下文压力。
@@ -86,6 +87,9 @@ func ApplyContextCompactPressureFields(payload map[string]any, stats ContextComp
 	}
 	if stats.SingleAtomPartial {
 		payload["single_atom_partial"] = true
+	}
+	if strings.TrimSpace(stats.NoRewriteReason) != "" {
+		payload["no_rewrite_reason"] = strings.TrimSpace(stats.NoRewriteReason)
 	}
 }
 

@@ -3221,6 +3221,8 @@ func desktopRouting(
 
 		rc.Gateway = gateway
 		rc.SelectedRoute = decision.Selected
+		contextWindowTokens := routing.RouteContextWindowTokens(decision.Selected.Route)
+		rc.ContextWindowTokens = contextWindowTokens
 		if rc.Temperature == nil {
 			rc.Temperature = routing.RouteDefaultTemperature(decision.Selected.Route)
 		}
@@ -3247,7 +3249,7 @@ func desktopRouting(
 				"model":          rc.SelectedRoute.Route.Model,
 				"provider":       string(rc.SelectedRoute.Credential.ProviderKind),
 				"byok":           false,
-				"context_window": routing.RouteContextWindowTokens(rc.SelectedRoute.Route),
+				"context_window": contextWindowTokens,
 			})
 		}
 

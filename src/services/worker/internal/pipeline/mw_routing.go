@@ -275,7 +275,8 @@ func NewRoutingMiddleware(
 
 		rc.Gateway = gateway
 		rc.SelectedRoute = selected
-		rc.ContextWindowTokens = routing.RouteContextWindowTokens(selected.Route)
+		contextWindowTokens := routing.RouteContextWindowTokens(selected.Route)
+		rc.ContextWindowTokens = contextWindowTokens
 		if rc.Temperature == nil {
 			rc.Temperature = routing.RouteDefaultTemperature(selected.Route)
 		}
@@ -295,7 +296,7 @@ func NewRoutingMiddleware(
 			"model":          selected.Route.Model,
 			"provider":       string(selected.Credential.ProviderKind),
 			"byok":           byokEnabled,
-			"context_window": routing.RouteContextWindowTokens(selected.Route),
+			"context_window": contextWindowTokens,
 		})
 
 		return next(ctx, rc)

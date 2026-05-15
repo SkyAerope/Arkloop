@@ -1495,7 +1495,7 @@ func (l *Loop) runTurnWithRetry(
 				return currentInputOversizeTurnResult(emitter, currentInputErr), nil
 			}
 			if !recovered {
-				if llm.RequestPayloadTooLarge(payloadBytes) {
+				if llm.RequestExceedsLimits(payloadBytes, estimatedTokens, contextWindowTokens) {
 					return preflightOversizeTurnResult(emitter, payloadBytes, estimatedTokens, contextWindowTokens), nil
 				}
 				break
@@ -1506,7 +1506,7 @@ func (l *Loop) runTurnWithRetry(
 			}
 			rewrittenTokens := estimateTurnRequestLimitTokens(runCtx, rewritten)
 			if rewrittenBytes >= payloadBytes && rewrittenTokens >= estimatedTokens {
-				if llm.RequestPayloadTooLarge(rewrittenBytes) {
+				if llm.RequestExceedsLimits(rewrittenBytes, rewrittenTokens, contextWindowTokens) {
 					return preflightOversizeTurnResult(emitter, rewrittenBytes, rewrittenTokens, contextWindowTokens), nil
 				}
 				break
@@ -1514,7 +1514,7 @@ func (l *Loop) runTurnWithRetry(
 			currentRequest = rewritten
 			preflightRecovered = true
 			if preflightRound >= 8 {
-				if llm.RequestPayloadTooLarge(rewrittenBytes) {
+				if llm.RequestExceedsLimits(rewrittenBytes, rewrittenTokens, contextWindowTokens) {
 					return preflightOversizeTurnResult(emitter, rewrittenBytes, rewrittenTokens, contextWindowTokens), nil
 				}
 				break
@@ -1655,7 +1655,7 @@ func maybeRecoverOversizeRequest(
 	currentInputErr, currentInputTooLarge := pipeline.IsCurrentInputOversizeError(rewriteErr)
 	phase := "completed"
 	stillOversize := false
-	if rewriteErr == nil && stats.RewriteApplied {
+	if rewriteErr == nil {
 		stillOversize = llm.RequestExceedsLimits(
 			stats.RequestBytesAfterRewrite,
 			pipeline.EstimateRequestContextTokens(runCtx.PipelineRC, rewritten),
@@ -1667,10 +1667,10 @@ func maybeRecoverOversizeRequest(
 		phase = "current_input_too_large"
 	case rewriteErr != nil:
 		phase = "llm_failed"
-	case stillOversize:
-		phase = "still_oversize"
 	case !stats.RewriteApplied:
 		phase = "no_rewrite"
+	case stillOversize:
+		phase = "still_oversize"
 	}
 	ev := emitter.Emit("run.context_compact", map[string]any{
 		"op":                           "rewrite",
@@ -1704,6 +1704,9 @@ func maybeRecoverOversizeRequest(
 	}
 	if rewriteErr != nil {
 		ev.DataJSON["llm_error"] = rewriteErr.Error()
+	}
+	if strings.TrimSpace(stats.NoRewriteReason) != "" {
+		ev.DataJSON["no_rewrite_reason"] = strings.TrimSpace(stats.NoRewriteReason)
 	}
 	if err := yield(ev); err != nil {
 		return request, false, nil, err

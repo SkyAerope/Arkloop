@@ -69,6 +69,7 @@ type OversizeRewriteStats struct {
 	RequestBytesAfterRewrite   int
 	MinimalRequestBytes        int
 	CurrentInputTooLarge       bool
+	NoRewriteReason            string
 }
 
 type CurrentInputOversizeError struct {
@@ -525,6 +526,7 @@ func RewriteOversizeRequestWithOptions(
 		stats.RequestTokensAfterRewrite,
 		contextWindowTokens,
 	) {
+		stats.NoRewriteReason = "within_local_limits"
 		return rewritten, stats, nil
 	}
 
@@ -540,6 +542,8 @@ func RewriteOversizeRequestWithOptions(
 		stats.PreviousReplacementCount = compactStats.PreviousReplacementCount
 		stats.SingleAtomPartial = compactStats.SingleAtomPartial
 		stats.RequestBytesAfterRewrite = compactStats.ContextEstimateTokens
+	} else {
+		stats.NoRewriteReason = compactStats.NoRewriteReason
 	}
 
 	stats.RequestBytesAfterRewrite, err = requestEstimate(rewritten)
@@ -560,10 +564,12 @@ func rewriteOversizeRequestWithPersistedReplacement(
 ) (llm.Request, ContextCompactPressureStats, bool, error) {
 	stats := ComputeContextCompactPressure(EstimateRequestContextTokens(rc, request), anchor)
 	if rc == nil || rc.DB == nil || rc.Gateway == nil || rc.SelectedRoute == nil {
+		stats.NoRewriteReason = "compact_unavailable"
 		return request, stats, false, nil
 	}
 	window := ResolveRunContextWindowTokens(rc)
 	if window <= 0 {
+		stats.NoRewriteReason = "context_window_unavailable"
 		return request, stats, false, nil
 	}
 	current := request
@@ -576,6 +582,7 @@ func rewriteOversizeRequestWithPersistedReplacement(
 		currentEstimateTokens := EstimateRequestContextTokens(rc, current)
 		stats = ComputeContextCompactPressure(currentEstimateTokens, anchor)
 		if !forceCompact && !llm.RequestExceedsLimits(currentBytes, currentEstimateTokens, window) {
+			stats.NoRewriteReason = "within_local_limits"
 			return current, stats, changedAny, nil
 		}
 		next, roundStats, changed, err := persistEmergencyReplacementRound(ctx, rc, current, anchor, round, forceCompact)
@@ -583,6 +590,7 @@ func rewriteOversizeRequestWithPersistedReplacement(
 			return request, stats, changedAny, err
 		}
 		if !changed {
+			stats.NoRewriteReason = roundStats.NoRewriteReason
 			return current, stats, changedAny, nil
 		}
 		current = next
@@ -602,6 +610,7 @@ func persistEmergencyReplacementRound(
 ) (llm.Request, ContextCompactPressureStats, bool, error) {
 	stats := ComputeContextCompactPressure(EstimateRequestContextTokens(rc, request), anchor)
 	if rc == nil || rc.DB == nil || rc.Gateway == nil || rc.SelectedRoute == nil {
+		stats.NoRewriteReason = "compact_unavailable"
 		return request, stats, false, nil
 	}
 	releaseLock, err := CompactThreadCompactionLock(ctx, rc.Run.ThreadID)
@@ -610,7 +619,12 @@ func persistEmergencyReplacementRound(
 	}
 	defer releaseLock()
 	basePrefixCount := compactRequestBasePrefixCount(request.Messages, rc.Messages)
-	if basePrefixCount <= 0 || len(rc.ThreadContextFrontier) == 0 {
+	if basePrefixCount <= 0 {
+		stats.NoRewriteReason = "history_prefix_unmapped"
+		return request, stats, false, nil
+	}
+	if len(rc.ThreadContextFrontier) == 0 {
+		stats.NoRewriteReason = "empty_frontier"
 		return request, stats, false, nil
 	}
 	tx, err := rc.DB.BeginTx(ctx, pgx.TxOptions{})
@@ -631,6 +645,7 @@ func persistEmergencyReplacementRound(
 		return request, stats, false, err
 	}
 	if len(canonical.Frontier) == 0 {
+		stats.NoRewriteReason = "empty_canonical_frontier"
 		return request, stats, false, nil
 	}
 	selection, ok := selectPersistFrontierWindowForPressure(rc, canonical.Frontier, stats.ContextPressureTokens)
@@ -638,6 +653,7 @@ func persistEmergencyReplacementRound(
 		selection, ok = selectProviderForcedFrontierWindow(rc, canonical.Frontier)
 	}
 	if !ok {
+		stats.NoRewriteReason = "no_selection"
 		return request, stats, false, nil
 	}
 	if hostMode == "desktop" {
@@ -661,6 +677,7 @@ func persistEmergencyReplacementRound(
 	}
 	summary = strings.TrimSpace(summary)
 	if summary == "" || len(usedNodes) == 0 {
+		stats.NoRewriteReason = "empty_summary"
 		return request, stats, false, nil
 	}
 	persistNodes := mapSelectedAtomsToPersistFrontierNodes(usedNodes, canonical.Frontier)
@@ -679,6 +696,7 @@ func persistEmergencyReplacementRound(
 		return request, stats, false, err
 	}
 	if !ok {
+		stats.NoRewriteReason = "empty_replacement_plan"
 		return request, stats, false, nil
 	}
 	replacementsRepo := data.ThreadContextReplacementsRepository{}

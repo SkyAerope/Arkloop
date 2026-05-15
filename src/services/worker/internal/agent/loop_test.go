@@ -1529,7 +1529,7 @@ func TestAgentLoopPreflightOversizeRewritesBeforeFirstProviderRequest(t *testing
 	}
 }
 
-func TestAgentLoopPreflightTokenWindowRewritesBeforeFirstProviderRequest(t *testing.T) {
+func TestAgentLoopPreflightTokenWindowBlocksProviderWhenRewriteUnavailable(t *testing.T) {
 	primary := &oversizeSuccessGateway{phase: llm.OversizePhasePreflight}
 	compact := &compactSummaryGateway{}
 	loop := NewLoop(primary, nil)
@@ -1574,8 +1574,8 @@ func TestAgentLoopPreflightTokenWindowRewritesBeforeFirstProviderRequest(t *test
 	if compact.calls != 0 {
 		t.Fatalf("expected token-gated preflight compaction retired, got %d", compact.calls)
 	}
-	if primary.calls != 1 {
-		t.Fatalf("expected provider call to proceed without preflight compact, got %d", primary.calls)
+	if primary.calls != 0 {
+		t.Fatalf("expected token-gated preflight failure before provider call, got %d", primary.calls)
 	}
 	if !hasEventType(got, "run.context_compact") {
 		t.Fatalf("expected rewrite status event, got %#v", got)
@@ -1583,6 +1583,15 @@ func TestAgentLoopPreflightTokenWindowRewritesBeforeFirstProviderRequest(t *test
 	first := firstEventOfType(got, "run.context_compact")
 	if phase, _ := first.DataJSON["phase"].(string); phase != "no_rewrite" {
 		t.Fatalf("expected no_rewrite phase, got %#v", first.DataJSON)
+	}
+	if reason, _ := first.DataJSON["no_rewrite_reason"].(string); reason != "compact_unavailable" {
+		t.Fatalf("expected compact_unavailable reason, got %#v", first.DataJSON)
+	}
+	if stillOversize, _ := first.DataJSON["request_still_oversize"].(bool); !stillOversize {
+		t.Fatalf("expected request_still_oversize, got %#v", first.DataJSON)
+	}
+	if got[len(got)-1].Type != "run.failed" {
+		t.Fatalf("expected final run.failed, got %s", got[len(got)-1].Type)
 	}
 }
 

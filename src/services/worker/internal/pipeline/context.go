@@ -169,7 +169,7 @@ type RunContext struct {
 	// -- RoutingMiddleware 写入 --
 	Gateway       llm.Gateway
 	SelectedRoute *routing.SelectedProviderRoute
-	// ContextWindowTokens 保存当前主路由解析出的 context window；0 表示未提供，由后续走 fallback。
+	// ContextWindowTokens 保存当前主路由解析出的有效 context window。
 	ContextWindowTokens int
 	// RoutingByokEnabled 与 RoutingMiddleware 中 feature.byok_enabled 一致，供后续按 selector 解析路由使用。
 	RoutingByokEnabled bool
