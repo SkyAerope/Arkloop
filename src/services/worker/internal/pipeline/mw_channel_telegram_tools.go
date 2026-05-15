@@ -22,7 +22,7 @@ type ChannelTelegramToolsDeps struct {
 }
 
 // NewChannelTelegramToolsMiddleware 在 Telegram Channel 的 run 上注入 telegram_react / telegram_reply / telegram_send_file。
-// 群聊场景下额外注入 group_history_search 并移除 conversation_search（隐私隔离）。
+// 群聊场景下额外注入 group_history_search 并移除跨线程 conversation_search。
 func NewChannelTelegramToolsMiddleware(loader channel_telegram.TokenLoader, telegram *telegrambot.Client, opts ...ChannelTelegramToolsDeps) RunMiddleware {
 	var dep ChannelTelegramToolsDeps
 	if len(opts) > 0 {
@@ -69,7 +69,7 @@ func NewChannelTelegramToolsMiddleware(loader channel_telegram.TokenLoader, tele
 			extraSpecs = append(extraSpecs, channel_telegram.SendFileAgentSpec)
 		}
 
-		// 群聊场景：注入 group_history_search，移除 conversation_search
+		// 群聊场景：注入 group_history_search，移除跨线程 conversation_search。
 		if IsTelegramGroupLikeConversation(rc.ChannelContext.ConversationType) && dep.GroupSearchExec != nil {
 			const groupTool = "group_history_search"
 			if _, blocked := deny[groupTool]; !blocked {

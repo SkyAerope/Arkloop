@@ -444,6 +444,16 @@ var registry = []ToolMeta{
 			"This is keyword search, not semantic search, and costs no model tokens.",
 	},
 	{
+		Name:      "conversation_context",
+		Group:     GroupMemory,
+		Label:     "Conversation context",
+		ShortDesc: "inspect compacted context for the current thread",
+		LLMDescription: "inspect compacted conversation context for the current thread. " +
+			"Use action=\"status\" to see compacted-context counts, action=\"search\" to keyword-search compact summaries or raw context chunks, " +
+			"action=\"describe\" with replacement_id to inspect one compact summary, and action=\"expand\" with replacement_id to retrieve the direct source chunks or child summaries behind it. " +
+			"Only use replacement_id values returned by this tool or shown in <conversation_summary> context.",
+	},
+	{
 		Name:      "group_history_search",
 		Group:     GroupMemory,
 		Label:     "Group history search",

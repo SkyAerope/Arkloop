@@ -192,6 +192,7 @@ func ResolveBuiltin(input ResolveInput) BuiltinAvailability {
 	}
 	if input.HasConversationSearch {
 		available["conversation_search"] = struct{}{}
+		available["conversation_context"] = struct{}{}
 	}
 	if input.HasGroupHistorySearch {
 		available["group_history_search"] = struct{}{}

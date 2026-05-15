@@ -1,8 +1,11 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -320,6 +323,7 @@ func renderCanonicalThreadMessages(
 		frontier = append(frontier, FrontierNode{
 			Kind:            FrontierNodeReplacement,
 			NodeID:          replacement.ID,
+			Layer:           replacement.Layer,
 			StartContextSeq: replacement.StartContextSeq,
 			EndContextSeq:   replacement.EndContextSeq,
 			StartThreadSeq:  replacement.StartThreadSeq,
@@ -363,6 +367,7 @@ func renderCanonicalThreadMessagesFromGraph(
 		frontier = append(frontier, FrontierNode{
 			Kind:            FrontierNodeReplacement,
 			NodeID:          replacement.Record.ID,
+			Layer:           replacement.Record.Layer,
 			StartContextSeq: replacement.StartContextSeq,
 			EndContextSeq:   replacement.EndContextSeq,
 			StartThreadSeq:  replacement.Record.StartThreadSeq,
@@ -472,7 +477,7 @@ func renderCanonicalThreadMessagesFromFrontier(
 		}
 		entries = append(entries, canonicalThreadContextEntry{
 			AnchorKey:       replacementAnchorKey(node.NodeID),
-			Message:         makeThreadContextReplacementMessage(summary),
+			Message:         makeThreadContextReplacementMessageWithHandle(summary, node),
 			ThreadMessageID: uuid.Nil,
 			StartThreadSeq:  node.StartThreadSeq,
 			EndThreadSeq:    node.EndThreadSeq,
@@ -737,4 +742,29 @@ func makeThreadContextReplacementMessage(summary string) llm.Message {
 		Phase:   &phase,
 		Content: []llm.TextPart{{Text: strings.TrimSpace(summary)}},
 	}
+}
+
+func makeThreadContextReplacementMessageWithHandle(summary string, node FrontierNode) llm.Message {
+	trimmed := strings.TrimSpace(summary)
+	if node.NodeID == uuid.Nil {
+		return makeThreadContextReplacementMessage(trimmed)
+	}
+	return makeThreadContextReplacementMessage(fmt.Sprintf(
+		"<conversation_summary replacement_id=\"%s\" layer=\"%d\" start_context_seq=\"%d\" end_context_seq=\"%d\" start_thread_seq=\"%d\" end_thread_seq=\"%d\">\n%s\n</conversation_summary>",
+		node.NodeID.String(),
+		node.Layer,
+		node.StartContextSeq,
+		node.EndContextSeq,
+		node.StartThreadSeq,
+		node.EndThreadSeq,
+		escapeCompactSummaryXML(trimmed),
+	))
+}
+
+func escapeCompactSummaryXML(summary string) string {
+	var buf bytes.Buffer
+	if err := xml.EscapeText(&buf, []byte(summary)); err != nil {
+		return strings.ReplaceAll(summary, "]]>", "]]&gt;")
+	}
+	return buf.String()
 }

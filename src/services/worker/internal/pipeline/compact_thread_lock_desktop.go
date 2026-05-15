@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"arkloop/services/worker/internal/data"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -20,9 +21,9 @@ func compactThreadCompactionAdvisoryXactLock(_ context.Context, _ pgx.Tx, _ uuid
 
 // CompactThreadCompactionLock acquires an exclusive file lock for the given thread.
 // This ensures only one compact operation runs at a time per thread.
-func CompactThreadCompactionLock(ctx context.Context, threadID uuid.UUID) (func(), error) {
+func CompactThreadCompactionLock(ctx context.Context, db data.DB, threadID uuid.UUID) (data.DB, func(), error) {
 	if threadID == uuid.Nil {
-		return func() {}, nil
+		return db, func() {}, nil
 	}
 
 	rundir := os.Getenv("ARKLOOP_RUNDIR")
@@ -32,19 +33,19 @@ func CompactThreadCompactionLock(ctx context.Context, threadID uuid.UUID) (func(
 	lockDir := filepath.Join(rundir, "compact_locks")
 
 	if err := os.MkdirAll(lockDir, 0755); err != nil {
-		return nil, fmt.Errorf("create lock dir: %w", err)
+		return nil, nil, fmt.Errorf("create lock dir: %w", err)
 	}
 
 	lockFile := filepath.Join(lockDir, threadID.String()+".lock")
 	f, err := os.OpenFile(lockFile, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
-		return nil, fmt.Errorf("open lock file: %w", err)
+		return nil, nil, fmt.Errorf("open lock file: %w", err)
 	}
 
 	releaseLock, err := lockDesktopFile(ctx, f)
 	if err != nil {
 		f.Close()
-		return nil, err
+		return nil, nil, err
 	}
 
 	cleanup := func() {
@@ -53,5 +54,5 @@ func CompactThreadCompactionLock(ctx context.Context, threadID uuid.UUID) (func(
 		os.Remove(lockFile)
 	}
 
-	return cleanup, nil
+	return db, cleanup, nil
 }

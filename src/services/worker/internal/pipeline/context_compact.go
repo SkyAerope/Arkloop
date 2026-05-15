@@ -613,10 +613,15 @@ func persistEmergencyReplacementRound(
 		stats.NoRewriteReason = "compact_unavailable"
 		return request, stats, false, nil
 	}
-	releaseLock, err := CompactThreadCompactionLock(ctx, rc.Run.ThreadID)
+	lockDB, releaseLock, err := CompactThreadCompactionLock(ctx, rc.DB, rc.Run.ThreadID)
 	if err != nil {
 		return request, stats, false, err
 	}
+	originalDB := rc.DB
+	rc.DB = lockDB
+	defer func() {
+		rc.DB = originalDB
+	}()
 	defer releaseLock()
 	basePrefixCount := compactRequestBasePrefixCount(request.Messages, rc.Messages)
 	if basePrefixCount <= 0 {
@@ -981,10 +986,15 @@ func ExecuteContextCompactMaintenanceJob(
 	if rc == nil || rc.DB == nil || rc.Gateway == nil || rc.SelectedRoute == nil {
 		return nil
 	}
-	releaseLock, err := CompactThreadCompactionLock(ctx, rc.Run.ThreadID)
+	lockDB, releaseLock, err := CompactThreadCompactionLock(ctx, rc.DB, rc.Run.ThreadID)
 	if err != nil {
 		return err
 	}
+	originalDB := rc.DB
+	rc.DB = lockDB
+	defer func() {
+		rc.DB = originalDB
+	}()
 	defer releaseLock()
 	if failures := compactConsecutiveFailures(ctx, rc.DB, rc.Run.AccountID, rc.Run.ThreadID); failures >= maxConsecutiveCompactFailures {
 		appendErr := appendContextCompactRunEvent(ctx, rc.DB, eventsRepo, rc, map[string]any{

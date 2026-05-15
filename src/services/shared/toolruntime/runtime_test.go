@@ -122,6 +122,7 @@ func TestResolveBuiltinUsesEnvAndProviders(t *testing.T) {
 		"browser",
 		"close_agent",
 		"continue_process",
+		"conversation_context",
 		"conversation_search",
 		"create_artifact",
 		"document_write",

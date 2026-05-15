@@ -14,6 +14,7 @@ import (
 	"arkloop/services/worker/internal/tools"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -31,19 +32,23 @@ type searchRepository interface {
 }
 
 type ToolExecutor struct {
-	db   data.DesktopDB
-	repo searchRepository
+	db        data.DesktopDB
+	contextDB contextDB
+	repo      searchRepository
 }
 
 func NewToolExecutor(db data.DesktopDB, repo searchRepository) *ToolExecutor {
 	if repo == nil {
 		repo = data.MessagesRepository{}
 	}
-	return &ToolExecutor{db: db, repo: repo}
+	return &ToolExecutor{db: db, contextDB: db, repo: repo}
 }
 
-func (e *ToolExecutor) Execute(ctx context.Context, _ string, args map[string]any, execCtx tools.ExecutionContext, _ string) tools.ExecutionResult {
+func (e *ToolExecutor) Execute(ctx context.Context, toolName string, args map[string]any, execCtx tools.ExecutionContext, _ string) tools.ExecutionResult {
 	started := time.Now()
+	if toolName == ContextAgentSpec.Name {
+		return executeContextTool(ctx, args, execCtx, started, e.contextDB)
+	}
 	if execCtx.AccountID == nil || execCtx.UserID == nil {
 		return executionError(errorIdentityMissing, "account_id and user_id are required", started)
 	}
@@ -137,4 +142,8 @@ func durationMs(started time.Time) int {
 		return 0
 	}
 	return ms
+}
+
+type contextDB interface {
+	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
 }

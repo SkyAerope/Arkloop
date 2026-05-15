@@ -18,13 +18,14 @@ type ChannelQQToolsDeps struct {
 }
 
 // NewChannelQQToolsMiddleware 在 QQ Channel 的 run 上注入 qq_react / qq_reply / qq_send_file。
-// 群聊场景下额外注入 group_history_search 并移除 conversation_search。
+// 群聊场景下额外注入 group_history_search 并移除跨线程 conversation_search。
 func NewChannelQQToolsMiddleware(deps ChannelQQToolsDeps) RunMiddleware {
 	return func(ctx context.Context, rc *RunContext, next RunHandler) error {
 		if deps.ConfigLoader == nil || rc == nil || rc.ChannelContext == nil {
 			return next(ctx, rc)
 		}
-		if !strings.EqualFold(strings.TrimSpace(rc.ChannelContext.ChannelType), "qq") {
+		channelType := strings.ToLower(strings.TrimSpace(rc.ChannelContext.ChannelType))
+		if channelType != "qq" && channelType != "qqbot" {
 			return next(ctx, rc)
 		}
 
@@ -35,35 +36,39 @@ func NewChannelQQToolsMiddleware(deps ChannelQQToolsDeps) RunMiddleware {
 			}
 		}
 
-		exec := channel_qq.NewExecutor(deps.ConfigLoader)
 		var extraSpecs []tools.AgentToolSpec
 
-		if _, blocked := deny[channel_qq.ToolReact]; !blocked {
-			rc.ToolExecutors[channel_qq.ToolReact] = exec
-			rc.AllowlistSet[channel_qq.ToolReact] = struct{}{}
-			rc.ToolSpecs = append(rc.ToolSpecs, channel_qq.ReactLlmSpec)
-			extraSpecs = append(extraSpecs, channel_qq.ReactAgentSpec)
-		}
-		if _, blocked := deny[channel_qq.ToolReply]; !blocked {
-			rc.ToolExecutors[channel_qq.ToolReply] = exec
-			rc.AllowlistSet[channel_qq.ToolReply] = struct{}{}
-			rc.ToolSpecs = append(rc.ToolSpecs, channel_qq.ReplyLlmSpec)
-			extraSpecs = append(extraSpecs, channel_qq.ReplyAgentSpec)
-		}
-		if _, blocked := deny[channel_qq.ToolSendFile]; !blocked {
-			rc.ToolExecutors[channel_qq.ToolSendFile] = exec
-			rc.AllowlistSet[channel_qq.ToolSendFile] = struct{}{}
-			rc.ToolSpecs = append(rc.ToolSpecs, channel_qq.SendFileLlmSpec)
-			extraSpecs = append(extraSpecs, channel_qq.SendFileAgentSpec)
+		if channelType == "qq" {
+			exec := channel_qq.NewExecutor(deps.ConfigLoader)
+			if _, blocked := deny[channel_qq.ToolReact]; !blocked {
+				rc.ToolExecutors[channel_qq.ToolReact] = exec
+				rc.AllowlistSet[channel_qq.ToolReact] = struct{}{}
+				rc.ToolSpecs = append(rc.ToolSpecs, channel_qq.ReactLlmSpec)
+				extraSpecs = append(extraSpecs, channel_qq.ReactAgentSpec)
+			}
+			if _, blocked := deny[channel_qq.ToolReply]; !blocked {
+				rc.ToolExecutors[channel_qq.ToolReply] = exec
+				rc.AllowlistSet[channel_qq.ToolReply] = struct{}{}
+				rc.ToolSpecs = append(rc.ToolSpecs, channel_qq.ReplyLlmSpec)
+				extraSpecs = append(extraSpecs, channel_qq.ReplyAgentSpec)
+			}
+			if _, blocked := deny[channel_qq.ToolSendFile]; !blocked {
+				rc.ToolExecutors[channel_qq.ToolSendFile] = exec
+				rc.AllowlistSet[channel_qq.ToolSendFile] = struct{}{}
+				rc.ToolSpecs = append(rc.ToolSpecs, channel_qq.SendFileLlmSpec)
+				extraSpecs = append(extraSpecs, channel_qq.SendFileAgentSpec)
+			}
 		}
 
-		if isQQGroupConversation(rc.ChannelContext.ConversationType) && deps.GroupSearchExec != nil {
-			const groupTool = "group_history_search"
-			if _, blocked := deny[groupTool]; !blocked {
-				rc.ToolExecutors[groupTool] = deps.GroupSearchExec
-				rc.AllowlistSet[groupTool] = struct{}{}
-				rc.ToolSpecs = append(rc.ToolSpecs, deps.GroupSearchSpec)
-				extraSpecs = append(extraSpecs, conversationtool.GroupSearchAgentSpec)
+		if isQQGroupConversation(rc.ChannelContext.ConversationType) {
+			if deps.GroupSearchExec != nil {
+				const groupTool = "group_history_search"
+				if _, blocked := deny[groupTool]; !blocked {
+					rc.ToolExecutors[groupTool] = deps.GroupSearchExec
+					rc.AllowlistSet[groupTool] = struct{}{}
+					rc.ToolSpecs = append(rc.ToolSpecs, deps.GroupSearchSpec)
+					extraSpecs = append(extraSpecs, conversationtool.GroupSearchAgentSpec)
+				}
 			}
 			delete(rc.AllowlistSet, "conversation_search")
 		}

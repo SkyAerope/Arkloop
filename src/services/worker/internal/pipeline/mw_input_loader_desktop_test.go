@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"arkloop/services/shared/database/sqliteadapter"
 	"arkloop/services/shared/database/sqlitepgx"
 	"arkloop/services/worker/internal/data"
+	"arkloop/services/worker/internal/llm"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -86,9 +88,7 @@ func TestLoadRunInputsDesktopBoundsFreshChannelHistoryAtThreadTail(t *testing.T)
 	if len(loaded.ThreadContextFrontier) == 0 || loaded.ThreadContextFrontier[0].SourceText != "future summary" {
 		t.Fatalf("expected replacement prefix, got frontier=%#v", loaded.ThreadContextFrontier)
 	}
-	if loaded.Messages[0].Role != "user" || loaded.Messages[0].Content[0].Text != "future summary" {
-		t.Fatalf("unexpected replacement message: %#v", loaded.Messages[0])
-	}
+	assertDesktopReplacementSummaryMessage(t, loaded.Messages[0], "future summary")
 	if loaded.Messages[0].Phase == nil || *loaded.Messages[0].Phase != compactSyntheticPhase {
 		t.Fatalf("unexpected replacement phase: %#v", loaded.Messages[0].Phase)
 	}
@@ -247,7 +247,7 @@ func TestLoadRunInputsDesktopResolvesChannelHistoryUpperBoundFromLedger(t *testi
 	if len(loaded.Messages) != 2 {
 		t.Fatalf("expected 2 bounded prompt messages, got %d", len(loaded.Messages))
 	}
-	if loaded.Messages[0].Content[0].Text != "future summary" ||
+	if !strings.Contains(loaded.Messages[0].Content[0].Text, "future summary") ||
 		loaded.Messages[1].Content[0].Text != "two" {
 		t.Fatalf("unexpected bounded contents: %#v", loaded.Messages)
 	}
@@ -338,7 +338,7 @@ func TestLoadRunInputsDesktopSkipsSnapshotWhenChannelUpperBoundMissing(t *testin
 	if len(loaded.Messages) != 3 {
 		t.Fatalf("expected replacement plus visible history tail, got %d", len(loaded.Messages))
 	}
-	if loaded.Messages[0].Content[0].Text != "future summary" ||
+	if !strings.Contains(loaded.Messages[0].Content[0].Text, "future summary") ||
 		loaded.Messages[1].Content[0].Text != "two" ||
 		loaded.Messages[2].Content[0].Text != "future assistant" {
 		t.Fatalf("unexpected downgrade contents: %#v", loaded.Messages)
@@ -437,4 +437,20 @@ func insertDesktopReplacementPrefix(
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func assertDesktopReplacementSummaryMessage(t *testing.T, msg llm.Message, summary string) {
+	t.Helper()
+	if msg.Role != "system" {
+		t.Fatalf("unexpected replacement role: %#v", msg)
+	}
+	if len(msg.Content) == 0 {
+		t.Fatalf("replacement message has no content: %#v", msg)
+	}
+	text := msg.Content[0].Text
+	if !strings.Contains(text, "<conversation_summary ") ||
+		!strings.Contains(text, `replacement_id="`) ||
+		!strings.Contains(text, summary) {
+		t.Fatalf("unexpected replacement message: %#v", msg)
+	}
 }

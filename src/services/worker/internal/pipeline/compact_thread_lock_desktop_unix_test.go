@@ -15,14 +15,14 @@ func TestCompactThreadCompactionLockDesktopUnixReleasesFlock(t *testing.T) {
 	t.Setenv("ARKLOOP_RUNDIR", t.TempDir())
 
 	threadID := uuid.New()
-	releaseFirst, err := CompactThreadCompactionLock(context.Background(), threadID)
+	_, releaseFirst, err := CompactThreadCompactionLock(context.Background(), nil, threadID)
 	if err != nil {
 		t.Fatalf("acquire first lock: %v", err)
 	}
 
 	blockedCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if releaseSecond, err := CompactThreadCompactionLock(blockedCtx, threadID); err == nil {
+	if _, releaseSecond, err := CompactThreadCompactionLock(blockedCtx, nil, threadID); err == nil {
 		releaseSecond()
 		releaseFirst()
 		t.Fatal("second lock acquired while first lock was held")
@@ -30,7 +30,7 @@ func TestCompactThreadCompactionLockDesktopUnixReleasesFlock(t *testing.T) {
 
 	releaseFirst()
 
-	releaseSecond, err := CompactThreadCompactionLock(context.Background(), threadID)
+	_, releaseSecond, err := CompactThreadCompactionLock(context.Background(), nil, threadID)
 	if err != nil {
 		t.Fatalf("acquire after release: %v", err)
 	}
