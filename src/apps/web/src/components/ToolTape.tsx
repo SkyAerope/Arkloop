@@ -20,7 +20,8 @@ export function ShortcutHint({ binding, className }: ShortcutHintProps) {
         <kbd
           key={`${part}-${index}`}
           className={[
-            'inline-flex h-[18px] w-[18px] items-center justify-center bg-[var(--c-bg-deep)] text-[12px] font-[600] leading-[18px] text-[var(--c-text-secondary)]',
+            'inline-flex h-[18px] items-center justify-center bg-[var(--c-bg-deep)] text-[12px] font-[600] leading-[18px] text-[var(--c-text-secondary)]',
+            part.length > 1 ? 'min-w-[18px] px-1' : 'w-[18px]',
             keycapRadiusClass(index, keys.length),
           ].join(' ')}
         >
