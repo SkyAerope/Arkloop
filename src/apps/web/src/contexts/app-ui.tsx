@@ -560,7 +560,7 @@ export function AppUIProvider({ children }: { children: ReactNode }) {
       }
       if (matchesShortcut(e, SHORTCUTS.toggleRightPanel)) {
         e.preventDefault()
-        setRightPanelOpen((open) => !open)
+        triggerTitleBarRightPanelClick()
         return
       }
       if (matchesShortcut(e, SHORTCUTS.toggleSidebar)) {
@@ -570,7 +570,7 @@ export function AppUIProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [settingsOpen, openSettings, closeSettings, openSearchOverlay, toggleSidebar])
+  }, [settingsOpen, openSettings, closeSettings, openSearchOverlay, triggerTitleBarRightPanelClick, toggleSidebar])
 
   useEffect(() => {
     if (!(desktop && settingsOpen)) return

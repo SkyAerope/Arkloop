@@ -1,9 +1,9 @@
-import { act } from 'react'
+import { act, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AppUIProvider, useSettingsUI, useSidebarUI } from '../contexts/app-ui'
+import { AppUIProvider, useSettingsUI, useSidebarUI, useTitleBarRightPanelUI } from '../contexts/app-ui'
 import { AuthContextBridge, type AuthContextValue } from '../contexts/auth'
 import { DesktopTitleBar } from '../components/DesktopTitleBar'
 import { LocaleProvider } from '../contexts/LocaleContext'
@@ -40,6 +40,30 @@ function SettingsProbe() {
     <div>
       <span data-testid="settings-open">{settingsOpen ? 'open' : 'closed'}</span>
       <span data-testid="settings-tab">{settingsInitialTab}</span>
+    </div>
+  )
+}
+
+function RightPanelShortcutProbe() {
+  const { rightPanelOpen, setRightPanelOpen } = useSidebarUI()
+  const { setTitleBarRightPanelClick } = useTitleBarRightPanelUI()
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    setTitleBarRightPanelClick(() => {
+      setVisible((open) => !open)
+    })
+    return () => setTitleBarRightPanelClick(null)
+  }, [setTitleBarRightPanelClick])
+
+  useEffect(() => {
+    setRightPanelOpen(visible)
+  }, [visible, setRightPanelOpen])
+
+  return (
+    <div>
+      <span data-testid="right-panel-visible">{visible ? 'open' : 'closed'}</span>
+      <span data-testid="right-panel-icon">{rightPanelOpen ? 'open' : 'closed'}</span>
     </div>
   )
 }
@@ -220,6 +244,52 @@ describe('AppUIProvider sidebar state', () => {
     })
 
     expect(container.querySelector('[data-testid="settings-open"]')?.textContent).toBe('closed')
+
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('右侧面板快捷键复用标题栏回调路径', async () => {
+    desktopMock.isDesktop.mockReturnValue(false)
+    Object.defineProperty(window.navigator, 'platform', {
+      configurable: true,
+      value: 'Win32',
+    })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/']}>
+          <AuthContextBridge value={authValue}>
+            <AppUIProvider>
+              <RightPanelShortcutProbe />
+            </AppUIProvider>
+          </AuthContextBridge>
+        </MemoryRouter>,
+      )
+    })
+
+    expect(container.querySelector('[data-testid="right-panel-visible"]')?.textContent).toBe('closed')
+    expect(container.querySelector('[data-testid="right-panel-icon"]')?.textContent).toBe('closed')
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'b',
+        code: 'KeyB',
+        altKey: true,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }))
+    })
+
+    expect(container.querySelector('[data-testid="right-panel-visible"]')?.textContent).toBe('open')
+    expect(container.querySelector('[data-testid="right-panel-icon"]')?.textContent).toBe('open')
 
     act(() => {
       root.unmount()
