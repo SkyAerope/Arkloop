@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"image"
 	"image/color"
-	"image/jpeg"
 	"image/png"
 	"testing"
 )
@@ -30,41 +29,15 @@ func decodeTestImage(t *testing.T, data []byte) image.Image {
 	return img
 }
 
-func TestPrepareModelInputImageAddsTopBanner(t *testing.T) {
+func TestPrepareModelInputImagePreservesSmallImageWithKey(t *testing.T) {
 	source := solidPNG(320, 180, color.RGBA{R: 240, G: 40, B: 40, A: 255})
 
 	out, mime := PrepareModelInputImage(source, "image/png", "attachments/account/thread/image.jpg")
-	if mime != "image/jpeg" {
+	if !bytes.Equal(out, source) {
+		t.Fatal("expected original bytes for image within prompt dimensions")
+	}
+	if mime != "image/png" {
 		t.Fatalf("unexpected mime: %q", mime)
-	}
-
-	img := decodeTestImage(t, out)
-	if got := img.Bounds().Dy(); got != 180+modelInputBannerHeight {
-		t.Fatalf("unexpected height: %d", got)
-	}
-
-	top := color.RGBAModel.Convert(img.At(4, 4)).(color.RGBA)
-	if top.R < 240 || top.G < 240 || top.B < 240 {
-		t.Fatalf("expected white banner, got %#v", top)
-	}
-
-	body := color.RGBAModel.Convert(img.At(10, modelInputBannerHeight+10)).(color.RGBA)
-	if body.R < 180 || body.G > 120 || body.B > 120 {
-		t.Fatalf("expected original image body to remain visible, got %#v", body)
-	}
-
-	nonWhite := 0
-	for y := 0; y < modelInputBannerHeight; y++ {
-		for x := 0; x < img.Bounds().Dx(); x++ {
-			px := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
-			if px.R < 220 || px.G < 220 || px.B < 220 {
-				nonWhite++
-				break
-			}
-		}
-	}
-	if nonWhite == 0 {
-		t.Fatal("expected banner text pixels in top area")
 	}
 }
 
@@ -92,33 +65,15 @@ func TestPrepareModelInputImageDecodeFailureFallsBack(t *testing.T) {
 	}
 }
 
-func TestPrepareModelInputImageBannerUsesOriginalImageOffset(t *testing.T) {
-	img := image.NewRGBA(image.Rect(0, 0, 40, 30))
-	img.Set(5, 6, color.RGBA{R: 1, G: 2, B: 3, A: 255})
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
-		t.Fatalf("encode jpeg: %v", err)
-	}
-
-	out, _ := PrepareModelInputImage(buf.Bytes(), "image/jpeg", "attachments/a/b/c.jpg")
-	rendered := decodeTestImage(t, out)
-	got := color.RGBAModel.Convert(rendered.At(5, modelInputBannerHeight+6)).(color.RGBA)
-	if got.R > 30 || got.G > 30 || got.B > 30 {
-		t.Fatalf("expected dark original pixel below banner, got %#v", got)
-	}
-}
-
-func TestPrepareModelInputImage_RecompressesAfterBanner(t *testing.T) {
+func TestPrepareModelInputImageResizesLargeImage(t *testing.T) {
 	source := makePNG(4000, 3000)
-	if len(source) <= modelInputMaxBytes {
-		t.Skip("test PNG not large enough")
-	}
 
 	out, mime := PrepareModelInputImage(source, "image/png", "attachments/account/thread/image.png")
-	if mime != "image/jpeg" {
+	if mime != "image/png" {
 		t.Fatalf("unexpected mime: %q", mime)
 	}
-	if len(out) > modelInputMaxBytes {
-		t.Fatalf("expected model input image <= %d bytes, got %d", modelInputMaxBytes, len(out))
+	img := decodeTestImage(t, out)
+	if b := img.Bounds(); b.Dx() > maxPromptImageDimension || b.Dy() > maxPromptImageDimension {
+		t.Fatalf("resized image should fit within %d, got %dx%d", maxPromptImageDimension, b.Dx(), b.Dy())
 	}
 }

@@ -11,7 +11,7 @@ import (
 var AgentSpec = tools.AgentToolSpec{
 	Name:        "read",
 	Version:     "1",
-	Description: "read file content or image attachments and return text output",
+	Description: "read file content or attach images as model-visible input",
 	RiskLevel:   tools.RiskLevelLow,
 	SideEffects: false,
 }
@@ -56,7 +56,7 @@ var LlmSpec = llm.ToolSpec{
 			},
 			"prompt": map[string]any{
 				"type":        "string",
-				"description": "required for image sources; what to analyze in the image",
+				"description": "required for remote_url provider reads; optional for model-visible image attachments",
 			},
 			"offset": map[string]any{
 				"type":        "integer",
@@ -68,7 +68,7 @@ var LlmSpec = llm.ToolSpec{
 			},
 			"max_bytes": map[string]any{
 				"type":        "integer",
-				"description": fmt.Sprintf("maximum image size in bytes for image sources (default %d)", defaultMaxBytes),
+				"description": fmt.Sprintf("maximum source image size in bytes for image sources (default %d)", defaultMaxBytes),
 				"default":     defaultMaxBytes,
 				"minimum":     1,
 				"maximum":     defaultMaxBytes,

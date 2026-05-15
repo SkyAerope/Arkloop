@@ -36,9 +36,6 @@ func makePNG(w, h int) []byte {
 
 func TestProcessImage_SmallImagePassthrough(t *testing.T) {
 	data := makeJPEG(100, 100, 90)
-	if len(data) > maxBytes {
-		t.Fatal("test setup: small image exceeds threshold")
-	}
 	out, mime := ProcessImage(data, "image/jpeg")
 	if !bytes.Equal(out, data) {
 		t.Error("small image should be returned unchanged")
@@ -49,8 +46,7 @@ func TestProcessImage_SmallImagePassthrough(t *testing.T) {
 }
 
 func TestProcessImage_GIFPassthrough(t *testing.T) {
-	// 构造一个超过阈值的假 GIF 数据
-	data := make([]byte, maxBytes+1)
+	data := make([]byte, 1024)
 	copy(data, []byte("GIF89a"))
 	out, mime := ProcessImage(data, "image/gif")
 	if !bytes.Equal(out, data) {
@@ -62,7 +58,7 @@ func TestProcessImage_GIFPassthrough(t *testing.T) {
 }
 
 func TestProcessImage_DecodeFallback(t *testing.T) {
-	data := make([]byte, maxBytes+1)
+	data := make([]byte, 1024)
 	data[0] = 0xFF // 非法图片数据
 	out, mime := ProcessImage(data, "image/jpeg")
 	if !bytes.Equal(out, data) {
@@ -74,48 +70,53 @@ func TestProcessImage_DecodeFallback(t *testing.T) {
 }
 
 func TestProcessImage_LargeJPEGCompressed(t *testing.T) {
-	// 3000x3000 应该触发缩放 + 压缩
 	data := makeJPEG(3000, 3000, 100)
-	if len(data) <= maxBytes {
-		t.Skip("test image not large enough to trigger compression")
-	}
 	out, mime := ProcessImage(data, "image/jpeg")
 	if mime != "image/jpeg" {
 		t.Errorf("output should be JPEG, got %s", mime)
 	}
-	if len(out) > maxBytes {
-		t.Errorf("output should be <= %d bytes, got %d", maxBytes, len(out))
-	}
 	if len(out) >= len(data) {
 		t.Errorf("output should be smaller than input: %d >= %d", len(out), len(data))
+	}
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if b := img.Bounds(); b.Dx() > maxPromptImageDimension || b.Dy() > maxPromptImageDimension {
+		t.Fatalf("resized image should fit within %d, got %dx%d", maxPromptImageDimension, b.Dx(), b.Dy())
 	}
 }
 
 func TestProcessImage_LargePNGCompressed(t *testing.T) {
 	data := makePNG(4000, 3000)
-	if len(data) <= maxBytes {
-		t.Skip("test PNG not large enough")
-	}
 	out, mime := ProcessImage(data, "image/png")
-	if mime != "image/jpeg" {
-		t.Errorf("output should be JPEG, got %s", mime)
+	if mime != "image/png" {
+		t.Errorf("output should preserve PNG, got %s", mime)
 	}
 	if len(out) >= len(data) {
 		t.Errorf("output should be smaller than input")
 	}
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if b := img.Bounds(); b.Dx() > maxPromptImageDimension || b.Dy() > maxPromptImageDimension {
+		t.Fatalf("resized image should fit within %d, got %dx%d", maxPromptImageDimension, b.Dx(), b.Dy())
+	}
 }
 
-func TestProcessModelInputImage_UsesTighterBudget(t *testing.T) {
+func TestProcessModelInputImage_UsesPromptDimensionBudget(t *testing.T) {
 	data := makePNG(4000, 3000)
-	if len(data) <= modelInputMaxBytes {
-		t.Skip("test PNG not large enough")
-	}
 	out, mime := ProcessModelInputImage(data, "image/png")
-	if mime != "image/jpeg" {
-		t.Errorf("output should be JPEG, got %s", mime)
+	if mime != "image/png" {
+		t.Errorf("output should preserve PNG, got %s", mime)
 	}
-	if len(out) > modelInputMaxBytes {
-		t.Errorf("output should be <= %d bytes, got %d", modelInputMaxBytes, len(out))
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if b := img.Bounds(); b.Dx() > maxPromptImageDimension || b.Dy() > maxPromptImageDimension {
+		t.Fatalf("resized image should fit within %d, got %dx%d", maxPromptImageDimension, b.Dx(), b.Dy())
 	}
 }
 
@@ -130,12 +131,12 @@ func TestScaleToFit_NoOpWhenSmall(t *testing.T) {
 
 func TestScaleToFit_ScalesLargeImage(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 4000, 2000))
-	result := scaleToFit(img, 2048)
+	result := scaleToFit(img, maxPromptImageDimension)
 	b := result.Bounds()
-	if b.Dx() > 2048 || b.Dy() > 2048 {
-		t.Errorf("scaled image should fit within 2048, got %dx%d", b.Dx(), b.Dy())
+	if b.Dx() > maxPromptImageDimension || b.Dy() > maxPromptImageDimension {
+		t.Errorf("scaled image should fit within %d, got %dx%d", maxPromptImageDimension, b.Dx(), b.Dy())
 	}
-	if b.Dx() != 2048 {
-		t.Errorf("longer side should be 2048, got %d", b.Dx())
+	if b.Dx() != maxPromptImageDimension {
+		t.Errorf("longer side should be %d, got %d", maxPromptImageDimension, b.Dx())
 	}
 }

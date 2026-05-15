@@ -3,64 +3,90 @@ package imageutil
 import (
 	"bytes"
 	"image"
+	_ "image/gif"
 	"image/jpeg"
-	_ "image/png"
+	"image/png"
+	"strings"
 
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
 
 const (
-	maxBytes           = 500 * 1024
-	modelInputMaxBytes = 128 * 1024
-	minDim             = 512
+	maxPromptImageDimension = 2048
 )
 
-// 每轮尝试的 (长边上限, JPEG质量)
-var compressSteps = []struct {
-	dim     int
-	quality int
-}{
-	{2048, 85},
-	{1536, 75},
-	{1024, 70},
-	{768, 65},
-}
-
-// ProcessImage 对超过阈值的图片执行缩放+JPEG 压缩。
-// GIF 和解码失败的图片原样返回。
+// ProcessImage keeps prompt images readable: preserve supported images when
+// already within the model-facing dimension cap, otherwise resize by dimension.
 func ProcessImage(data []byte, mimeType string) ([]byte, string) {
-	return processImageWithLimit(data, mimeType, maxBytes)
+	return processImageForPrompt(data, mimeType)
 }
 
-// ProcessModelInputImage keeps images under a tighter budget before they are
-// embedded into model requests, where base64 inflation is expensive.
+// ProcessModelInputImage uses the same image-preserving path as ProcessImage.
 func ProcessModelInputImage(data []byte, mimeType string) ([]byte, string) {
-	return processImageWithLimit(data, mimeType, modelInputMaxBytes)
+	return processImageForPrompt(data, mimeType)
 }
 
-func processImageWithLimit(data []byte, mimeType string, limit int) ([]byte, string) {
-	if len(data) <= limit {
+func processImageForPrompt(data []byte, mimeType string) ([]byte, string) {
+	if len(data) == 0 {
 		return data, mimeType
 	}
-	if mimeType == "image/gif" {
+	if normalizeImageMimeType(mimeType) == "image/gif" {
 		return data, mimeType
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return data, mimeType
 	}
 
-	var out []byte
-	for _, step := range compressSteps {
-		scaled := scaleToFit(img, step.dim)
-		out = encodeJPEG(scaled, step.quality)
-		if len(out) <= limit {
-			return out, "image/jpeg"
-		}
+	if format == "gif" {
+		return data, "image/gif"
 	}
-	return out, "image/jpeg"
+
+	normalizedMime := mimeTypeForFormat(format, mimeType)
+	if fitsPromptDimensions(img) && canPreserveSourceBytes(format) {
+		return data, normalizedMime
+	}
+
+	scaled := scaleToFit(img, maxPromptImageDimension)
+	out, outMime, err := encodePromptImage(scaled, format)
+	if err != nil {
+		return data, mimeType
+	}
+	return out, outMime
+}
+
+func fitsPromptDimensions(img image.Image) bool {
+	bounds := img.Bounds()
+	return bounds.Dx() <= maxPromptImageDimension && bounds.Dy() <= maxPromptImageDimension
+}
+
+func canPreserveSourceBytes(format string) bool {
+	switch format {
+	case "jpeg", "png", "webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func mimeTypeForFormat(format, fallback string) string {
+	switch format {
+	case "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "gif":
+		return "image/gif"
+	case "webp":
+		return "image/webp"
+	default:
+		if normalized := normalizeImageMimeType(fallback); strings.HasPrefix(normalized, "image/") {
+			return normalized
+		}
+		return fallback
+	}
 }
 
 func scaleToFit(img image.Image, maxDim int) image.Image {
@@ -90,8 +116,29 @@ func scaleToFit(img image.Image, maxDim int) image.Image {
 	return dst
 }
 
-func encodeJPEG(img image.Image, quality int) []byte {
+func encodePromptImage(img image.Image, sourceFormat string) ([]byte, string, error) {
+	switch sourceFormat {
+	case "png":
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, "", err
+		}
+		return buf.Bytes(), "image/png", nil
+	case "jpeg":
+		return encodeJPEG(img, 85)
+	default:
+		return encodeJPEG(img, 85)
+	}
+}
+
+func encodeJPEG(img image.Image, quality int) ([]byte, string, error) {
 	var buf bytes.Buffer
-	_ = jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality})
-	return buf.Bytes()
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), "image/jpeg", nil
+}
+
+func normalizeImageMimeType(mimeType string) string {
+	return strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
 }

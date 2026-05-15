@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -165,16 +166,6 @@ func (e *Executor) executeFilePath(
 	toolCallID string,
 	started time.Time,
 ) tools.ExecutionResult {
-	if parsed.Prompt != "" || parsed.TimeoutOverride != nil || parsed.MaxBytes != defaultMaxBytes {
-		return tools.ExecutionResult{
-			Error: &tools.ExecutionError{
-				ErrorClass: errorArgsInvalid,
-				Message:    "file_path source does not accept prompt/max_bytes/timeout_ms",
-			},
-			DurationMs: durationMs(started),
-		}
-	}
-
 	filePath := parsed.Source.FilePath
 	backend := fileops.ResolveBackend(execCtx.RuntimeSnapshot, execCtx.WorkDir, execCtx.RunID.String(), resolveAccountID(execCtx), execCtx.ProfileRef, execCtx.WorkspaceRef)
 
@@ -188,6 +179,20 @@ func (e *Executor) executeFilePath(
 	}
 	if info.IsDir {
 		return fileErrorResult(fmt.Sprintf("path is a directory: %s", filePath), started)
+	}
+
+	if isImageFilePath(filePath) {
+		return e.executeFilePathImage(ctx, parsed, execCtx, toolCallID, backend, info, started)
+	}
+
+	if parsed.Prompt != "" || parsed.TimeoutOverride != nil || parsed.MaxBytes != defaultMaxBytes {
+		return tools.ExecutionResult{
+			Error: &tools.ExecutionError{
+				ErrorClass: errorArgsInvalid,
+				Message:    "text file_path source does not accept prompt/max_bytes/timeout_ms",
+			},
+			DurationMs: durationMs(started),
+		}
 	}
 
 	normPath := backend.NormalizePath(filePath)
@@ -255,6 +260,69 @@ func (e *Executor) executeFilePath(
 	}
 	return tools.ExecutionResult{
 		ResultJSON: resultJSON,
+		DurationMs: durationMs(started),
+	}
+}
+
+func (e *Executor) executeFilePathImage(
+	ctx context.Context,
+	parsed parsedArgs,
+	execCtx tools.ExecutionContext,
+	toolCallID string,
+	backend fileops.Backend,
+	info fileops.FileInfo,
+	started time.Time,
+) tools.ExecutionResult {
+	filePath := parsed.Source.FilePath
+	if info.Size > int64(parsed.MaxBytes) {
+		return tools.ExecutionResult{
+			Error: &tools.ExecutionError{
+				ErrorClass: errorTooLarge,
+				Message:    fmt.Sprintf("image file too large (%d bytes, max %d)", info.Size, parsed.MaxBytes),
+				Details:    map[string]any{"file_path": filePath, "bytes": info.Size, "max_bytes": parsed.MaxBytes},
+			},
+			DurationMs: durationMs(started),
+		}
+	}
+
+	tools.TrackPhase(execCtx, toolCallID, "backend.read_image")
+	data, err := backend.ReadFile(ctx, filePath)
+	if err != nil {
+		return fileErrorResult(fmt.Sprintf("read failed: %s", err.Error()), started)
+	}
+
+	mimeType := detectImageFileMimeType(filePath, data)
+	if !isSupportedImageMime(mimeType) {
+		return tools.ExecutionResult{
+			Error: &tools.ExecutionError{
+				ErrorClass: errorUnsupportedMedia,
+				Message:    fmt.Sprintf("unsupported image media type: %s", mimeType),
+				Details:    map[string]any{"file_path": filePath, "mime_type": mimeType},
+			},
+			DurationMs: durationMs(started),
+		}
+	}
+
+	processed, processedMime := imageutil.ProcessImage(data, mimeType)
+	normPath := backend.NormalizePath(filePath)
+	runID := execCtx.RunID.String()
+	if e.Tracker != nil {
+		e.Tracker.RecordReadForRun(runID, normPath)
+		e.Tracker.RecordReadState(runID, normPath, info.ModTime.UnixNano(), 1, 1)
+	}
+
+	return tools.ExecutionResult{
+		ResultJSON: map[string]any{
+			"source_kind":    string(parsed.Source.Kind),
+			"file_path":      filePath,
+			"mime_type":      processedMime,
+			"bytes":          len(processed),
+			"original_bytes": len(data),
+			"image_attached": true,
+		},
+		ContentParts: []tools.ContentAttachment{
+			{MimeType: processedMime, Data: processed},
+		},
 		DurationMs: durationMs(started),
 	}
 }
@@ -331,6 +399,39 @@ func (e *Executor) executeMessageAttachment(
 			{MimeType: image.MimeType, Data: image.Bytes, AttachmentKey: parsed.Source.AttachmentKey},
 		},
 		DurationMs: durationMs(started),
+	}
+}
+
+func isImageFilePath(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".webp", ".gif":
+		return true
+	default:
+		return false
+	}
+}
+
+func detectImageFileMimeType(path string, data []byte) string {
+	if len(data) > 0 {
+		detected := sniffMimeType(data)
+		if isSupportedImageMime(detected) {
+			return detected
+		}
+		if detected != "" && detected != "application/octet-stream" {
+			return detected
+		}
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "application/octet-stream"
 	}
 }
 

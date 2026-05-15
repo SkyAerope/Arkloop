@@ -12,8 +12,6 @@ import (
 	"arkloop/services/shared/messagecontent"
 )
 
-const testBannerHeight = 100
-
 func makeVisionTestPNG(t *testing.T, w, h int) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -76,13 +74,13 @@ func TestPartDataURLAnnotatesAttachmentKeyImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("partDataURL failed: %v", err)
 	}
-	if !strings.HasPrefix(dataURL, "data:image/jpeg;base64,") {
+	if !strings.HasPrefix(dataURL, "data:image/png;base64,") {
 		t.Fatalf("unexpected data url prefix: %q", dataURL[:24])
 	}
 
 	img := decodeDataURLPayload(t, dataURL)
-	if got := img.Bounds().Dy(); got != 180+testBannerHeight {
-		t.Fatalf("unexpected annotated height: %d", got)
+	if got := img.Bounds().Dy(); got != 180 {
+		t.Fatalf("unexpected image height: %d", got)
 	}
 }
 
@@ -109,7 +107,7 @@ func TestPrepareRequestModelInputImagesReusesPreparedImage(t *testing.T) {
 		t.Fatal("expected prepared image")
 	}
 	prepared := part.modelInputImage
-	if !strings.HasPrefix(prepared.DataURL, "data:image/jpeg;base64,") {
+	if !strings.HasPrefix(prepared.DataURL, "data:image/png;base64,") {
 		t.Fatalf("unexpected data url prefix: %q", prepared.DataURL[:24])
 	}
 
@@ -282,12 +280,12 @@ func TestToAnthropicMessagesAnnotatesUserImage(t *testing.T) {
 		t.Fatalf("unexpected block count: %#v", blocks)
 	}
 	source := blocks[2]["source"].(map[string]any)
-	if source["media_type"] != "image/jpeg" {
+	if source["media_type"] != "image/png" {
 		t.Fatalf("unexpected media type: %#v", source["media_type"])
 	}
 	img := decodeInlineDataPayload(t, source["data"].(string))
-	if got := img.Bounds().Dy(); got != 160+testBannerHeight {
-		t.Fatalf("unexpected annotated height: %d", got)
+	if got := img.Bounds().Dy(); got != 160 {
+		t.Fatalf("unexpected image height: %d", got)
 	}
 }
 
@@ -325,8 +323,8 @@ func TestToAnthropicMessagesAnnotatesToolResultImage(t *testing.T) {
 	content := wrapper["content"].([]map[string]any)
 	source := content[1]["source"].(map[string]any)
 	img := decodeInlineDataPayload(t, source["data"].(string))
-	if got := img.Bounds().Dy(); got != 140+testBannerHeight {
-		t.Fatalf("unexpected annotated height: %d", got)
+	if got := img.Bounds().Dy(); got != 140 {
+		t.Fatalf("unexpected image height: %d", got)
 	}
 }
 
@@ -344,13 +342,16 @@ func TestGeminiUserPartsAnnotatesAttachmentKeyImage(t *testing.T) {
 		t.Fatalf("geminiUserParts failed: %v", err)
 	}
 
-	inline := parts[0]["inlineData"].(map[string]any)
-	if inline["mimeType"] != "image/jpeg" {
+	if got := parts[0]["text"]; got != "[attachment_key:attachments/acc/thread/image.jpg]" {
+		t.Fatalf("unexpected attachment key text: %#v", got)
+	}
+	inline := parts[1]["inlineData"].(map[string]any)
+	if inline["mimeType"] != "image/png" {
 		t.Fatalf("unexpected mime type: %#v", inline["mimeType"])
 	}
 	img := decodeInlineDataPayload(t, inline["data"].(string))
-	if got := img.Bounds().Dy(); got != 150+testBannerHeight {
-		t.Fatalf("unexpected annotated height: %d", got)
+	if got := img.Bounds().Dy(); got != 150 {
+		t.Fatalf("unexpected image height: %d", got)
 	}
 }
 
@@ -387,7 +388,7 @@ func TestToGeminiContentsAnnotatesToolImage(t *testing.T) {
 	toolParts := contents[1]["parts"].([]map[string]any)
 	inline := toolParts[1]["inlineData"].(map[string]any)
 	img := decodeInlineDataPayload(t, inline["data"].(string))
-	if got := img.Bounds().Dy(); got != 120+testBannerHeight {
-		t.Fatalf("unexpected annotated height: %d", got)
+	if got := img.Bounds().Dy(); got != 120 {
+		t.Fatalf("unexpected image height: %d", got)
 	}
 }

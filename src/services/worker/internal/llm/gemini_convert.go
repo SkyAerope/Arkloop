@@ -185,6 +185,11 @@ func geminiUserParts(content []ContentPart) ([]map[string]any, error) {
 			if err != nil {
 				return nil, fmt.Errorf("image part missing data")
 			}
+			if p.Attachment != nil {
+				if key := strings.TrimSpace(p.Attachment.Key); key != "" {
+					parts = append(parts, map[string]any{"text": "[attachment_key:" + key + "]"})
+				}
+			}
 			parts = append(parts, map[string]any{
 				"inlineData": map[string]any{
 					"mimeType": mimeType,

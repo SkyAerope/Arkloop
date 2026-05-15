@@ -118,6 +118,44 @@ func TestReadFilePathSource(t *testing.T) {
 	}
 }
 
+func TestReadFilePathImageSourceReturnsImagePart(t *testing.T) {
+	tracker := fileops.NewFileTracker()
+	executor := NewToolExecutorWithTracker(tracker)
+
+	workDir := t.TempDir()
+	path := filepath.Join(workDir, "sample.png")
+	if err := os.WriteFile(path, testPNGBytes(t), 0o644); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+
+	runID := uuid.New()
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":      "file_path",
+			"file_path": "sample.png",
+		},
+	}, tools.ExecutionContext{RunID: runID, WorkDir: workDir}, "")
+
+	if result.Error != nil {
+		t.Fatalf("unexpected error: %+v", result.Error)
+	}
+	if got := result.ResultJSON["source_kind"]; got != "file_path" {
+		t.Fatalf("unexpected source kind: %#v", got)
+	}
+	if got := result.ResultJSON["image_attached"]; got != true {
+		t.Fatalf("expected image_attached=true, got %#v", got)
+	}
+	if len(result.ContentParts) != 1 {
+		t.Fatalf("expected one image content part, got %d", len(result.ContentParts))
+	}
+	if got := result.ContentParts[0].MimeType; got != "image/png" {
+		t.Fatalf("unexpected mime type: %q", got)
+	}
+	if !tracker.HasBeenReadForRun(runID.String(), fileops.TrackingKey(workDir, "./sample.png")) {
+		t.Fatal("expected file tracker to record image read for the current run")
+	}
+}
+
 func TestReadCleanupRunClearsTrackerState(t *testing.T) {
 	tracker := fileops.NewFileTracker()
 	executor := NewToolExecutorWithTracker(tracker)
