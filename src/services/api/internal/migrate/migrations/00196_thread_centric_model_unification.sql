@@ -116,5 +116,15 @@ UPDATE threads
                   || jsonb_build_object('default_model', config_json->>'chat_model')
  WHERE config_json ? 'chat_model';
 
+UPDATE threads
+   SET config_json = config_json - 'heartbeat_enabled' - 'heartbeat_interval_minutes' - 'heartbeat_model'
+ WHERE config_json ? 'heartbeat_enabled' OR config_json ? 'heartbeat_interval_minutes' OR config_json ? 'heartbeat_model';
+
+UPDATE scheduled_triggers AS st
+   SET model = '',
+       resolve_model_at_runtime = FALSE
+ WHERE st.trigger_kind = 'heartbeat'
+   AND st.thread_id IS NOT NULL;
+
 ALTER TABLE scheduled_triggers
     DROP COLUMN IF EXISTS resolve_model_at_runtime;

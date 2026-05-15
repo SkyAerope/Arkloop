@@ -293,6 +293,7 @@ func (e *Executor) setModel(ctx context.Context, threadID uuid.UUID, model strin
 	if _, err := e.db.Exec(ctx,
 		`UPDATE scheduled_triggers
 			    SET model = $1,
+			        resolve_model_at_runtime = ($1 = ''),
 			        updated_at = $2
 			  WHERE thread_id = $3`,
 		model,

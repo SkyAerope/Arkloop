@@ -228,4 +228,25 @@ UPDATE threads
    )
  WHERE json_type(config_json, '$.chat_model') IS NOT NULL;
 
+UPDATE threads
+   SET config_json = json_remove(
+       json_remove(
+           json_remove(
+               COALESCE(config_json, '{}'),
+               '$.heartbeat_enabled'
+           ),
+           '$.heartbeat_interval_minutes'
+       ),
+       '$.heartbeat_model'
+   )
+ WHERE json_type(config_json, '$.heartbeat_enabled') IS NOT NULL
+    OR json_type(config_json, '$.heartbeat_interval_minutes') IS NOT NULL
+    OR json_type(config_json, '$.heartbeat_model') IS NOT NULL;
+
+UPDATE scheduled_triggers
+   SET model = '',
+       resolve_model_at_runtime = 0
+ WHERE trigger_kind = 'heartbeat'
+   AND thread_id IS NOT NULL;
+
 ALTER TABLE scheduled_triggers DROP COLUMN resolve_model_at_runtime;
