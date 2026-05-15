@@ -302,16 +302,9 @@ func (e *Executor) executeFilePathImage(
 			DurationMs: durationMs(started),
 		}
 	}
-	decodedMime, ok := imageutil.DecodeImageMimeType(data, mimeType)
-	if !ok {
-		return tools.ExecutionResult{
-			Error: &tools.ExecutionError{
-				ErrorClass: errorUnsupportedMedia,
-				Message:    "image file is empty or cannot be decoded",
-				Details:    map[string]any{"file_path": filePath, "mime_type": mimeType},
-			},
-			DurationMs: durationMs(started),
-		}
+	decodedMime, decodeErr := validateDecodedImage(data, mimeType, map[string]any{"file_path": filePath})
+	if decodeErr != nil {
+		return tools.ExecutionResult{Error: decodeErr, DurationMs: durationMs(started)}
 	}
 	mimeType = decodedMime
 
@@ -366,6 +359,11 @@ func (e *Executor) executeMessageAttachment(
 			DurationMs: durationMs(started),
 		}
 	}
+	decodedMime, decodeErr := validateDecodedImage(image.Bytes, image.MimeType, map[string]any{"attachment_key": parsed.Source.AttachmentKey})
+	if decodeErr != nil {
+		return tools.ExecutionResult{Error: decodeErr, DurationMs: durationMs(started)}
+	}
+	image.MimeType = decodedMime
 	image.Bytes, image.MimeType = imageutil.ProcessImage(image.Bytes, image.MimeType)
 
 	provider, providerErr := e.resolveProvider(execCtx)
@@ -447,6 +445,22 @@ func detectImageFileMimeType(path string, data []byte) string {
 	}
 }
 
+func validateDecodedImage(data []byte, mimeType string, details map[string]any) (string, *tools.ExecutionError) {
+	decodedMime, ok := imageutil.DecodeImageMimeType(data, mimeType)
+	if ok {
+		return decodedMime, nil
+	}
+	out := map[string]any{"mime_type": mimeType}
+	for key, value := range details {
+		out[key] = value
+	}
+	return "", &tools.ExecutionError{
+		ErrorClass: errorUnsupportedMedia,
+		Message:    "image data is empty or cannot be decoded",
+		Details:    out,
+	}
+}
+
 func (e *Executor) executeRemoteURL(
 	ctx context.Context,
 	parsed parsedArgs,
@@ -486,6 +500,11 @@ func (e *Executor) executeRemoteURL(
 			DurationMs: durationMs(started),
 		}
 	}
+	decodedMime, decodeErr := validateDecodedImage(image.Bytes, image.MimeType, map[string]any{"source_url": image.FinalURL})
+	if decodeErr != nil {
+		return tools.ExecutionResult{Error: decodeErr, DurationMs: durationMs(started)}
+	}
+	image.MimeType = decodedMime
 	image.Bytes, image.MimeType = imageutil.ProcessImage(image.Bytes, image.MimeType)
 
 	description, err := provider.DescribeImage(runCtx, DescribeImageRequest{

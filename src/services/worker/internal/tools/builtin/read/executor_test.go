@@ -236,6 +236,37 @@ func TestReadRemoteURLSource(t *testing.T) {
 	}
 }
 
+func TestReadRemoteURLSourceRejectsInvalidImageData(t *testing.T) {
+	t.Setenv(sharedoutbound.AllowLoopbackHTTPEnv, "true")
+
+	provider := &fakeProvider{}
+	executor := NewToolExecutorWithProvider(provider)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("not-an-image"))
+	}))
+	defer server.Close()
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind": "remote_url",
+			"url":  server.URL + "/broken.png",
+		},
+		"prompt": "describe this image",
+	}, tools.ExecutionContext{}, "")
+
+	if result.Error == nil {
+		t.Fatal("expected invalid remote image data to be rejected")
+	}
+	if result.Error.ErrorClass != errorUnsupportedMedia {
+		t.Fatalf("unexpected error class: %s", result.Error.ErrorClass)
+	}
+	if len(provider.req.Bytes) != 0 {
+		t.Fatal("provider should not receive invalid image bytes")
+	}
+}
+
 func TestReadMessageAttachmentSource(t *testing.T) {
 	provider := &fakeProvider{
 		resp: DescribeImageResponse{
@@ -294,6 +325,49 @@ func TestReadMessageAttachmentSource(t *testing.T) {
 	}
 	if len(result.ContentParts[0].Data) == 0 {
 		t.Fatal("expected image bytes in content part")
+	}
+}
+
+func TestReadMessageAttachmentSourceRejectsInvalidImageData(t *testing.T) {
+	provider := &fakeProvider{}
+	executor := NewToolExecutorWithProvider(provider)
+	key := "threads/thread-a/attachments/1/broken.png"
+
+	rc := &fakePipelineRunContext{
+		messages: []llm.Message{
+			{
+				Role: "user",
+				Content: []llm.ContentPart{
+					{
+						Type: "image",
+						Attachment: &messagecontent.AttachmentRef{
+							Key:      key,
+							Filename: "broken.png",
+							MimeType: "image/png",
+						},
+						Data: []byte("not-an-image"),
+					},
+				},
+			},
+		},
+	}
+
+	result := executor.Execute(context.Background(), "read", map[string]any{
+		"source": map[string]any{
+			"kind":           "message_attachment",
+			"attachment_key": key,
+		},
+		"prompt": "what is in this attachment",
+	}, tools.ExecutionContext{PipelineRC: rc}, "")
+
+	if result.Error == nil {
+		t.Fatal("expected invalid attachment image data to be rejected")
+	}
+	if result.Error.ErrorClass != errorUnsupportedMedia {
+		t.Fatalf("unexpected error class: %s", result.Error.ErrorClass)
+	}
+	if len(provider.req.Bytes) != 0 {
+		t.Fatal("provider should not receive invalid image bytes")
 	}
 }
 

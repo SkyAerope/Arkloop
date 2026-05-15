@@ -2976,8 +2976,9 @@ func pressureAnchorFromCompleted(data map[string]any) *pipeline.ContextCompactPr
 	}
 }
 
-// maxToolResultHistoryChars is the soft cap on total accumulated tool result text
-// sent in a single LLM request. At ~4 chars/token this is ≈20K tokens.
+// maxToolResultHistoryChars is the soft cap on accumulated tool result payload
+// sent in a single LLM request. Text counts as bytes; binary parts count as
+// base64-size bytes.
 // Oldest tool results are compacted first when the cap is exceeded.
 var maxToolResultHistoryChars = 80_000
 
@@ -2994,9 +2995,7 @@ func compactToolResultsWithState(messages []llm.Message, state *toolResultReplac
 	prepared := applyStoredToolResultReplacements(messages, state)
 	for _, m := range prepared {
 		if m.Role == "tool" {
-			for _, p := range m.Content {
-				total += len(p.Text)
-			}
+			total += toolResultHistorySize(m)
 		}
 	}
 	if total <= maxToolResultHistoryChars {
@@ -3014,10 +3013,7 @@ func compactToolResultsWithState(messages []llm.Message, state *toolResultReplac
 		if out[i].Role != "tool" {
 			continue
 		}
-		msgSize := 0
-		for _, p := range out[i].Content {
-			msgSize += len(p.Text)
-		}
+		msgSize := toolResultHistorySize(out[i])
 		if msgSize == 0 {
 			continue
 		}
@@ -3025,6 +3021,18 @@ func compactToolResultsWithState(messages []llm.Message, state *toolResultReplac
 		excess -= msgSize
 	}
 	return out
+}
+
+func toolResultHistorySize(m llm.Message) int {
+	total := 0
+	for _, p := range m.Content {
+		total += len(p.Text)
+		total += len(p.ExtractedText)
+		if len(p.Data) > 0 {
+			total += ((len(p.Data) + 2) / 3) * 4
+		}
+	}
+	return total
 }
 
 func applyStoredToolResultReplacements(messages []llm.Message, state *toolResultReplacementState) []llm.Message {
@@ -3107,17 +3115,9 @@ func buildCompactedToolStubText(m llm.Message) string {
 	return string(text)
 }
 
-// compactedContentParts replaces the first text part with stubText
-// while preserving non-text parts (images, attachments).
+// compactedContentParts replaces the tool result with a text-only stub.
 func compactedContentParts(original []llm.ContentPart, stubText string) []llm.ContentPart {
-	parts := make([]llm.ContentPart, 0, len(original))
-	parts = append(parts, llm.ContentPart{Text: stubText, TrustSource: original[0].TrustSource})
-	for _, p := range original[1:] {
-		if p.Kind() != "text" {
-			parts = append(parts, p)
-		}
-	}
-	return parts
+	return []llm.ContentPart{{Text: stubText, TrustSource: original[0].TrustSource}}
 }
 
 // extractToolCallIDFromText attempts to extract a tool_call_id from malformed JSON.

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -2057,6 +2058,28 @@ func TestCompactToolResultsWithStateKeepsReplacementStableAcrossTurns(t *testing
 	second := compactToolResultsWithState([]llm.Message{original}, state)
 	if got := joinTestMessageText(second[0]); !strings.Contains(got, `"compacted":true`) {
 		t.Fatalf("expected stable compacted stub on second pass, got %q", got)
+	}
+}
+
+func TestCompactToolResultsDropsImageParts(t *testing.T) {
+	oldLimit := maxToolResultHistoryChars
+	maxToolResultHistoryChars = 40
+	defer func() { maxToolResultHistoryChars = oldLimit }()
+
+	original := llm.Message{
+		Role: "tool",
+		Content: []llm.ContentPart{
+			{Text: `{"tool_call_id":"call_1","tool_name":"read","result":{"image_attached":true}}`},
+			{Type: messagecontent.PartTypeImage, Data: bytes.Repeat([]byte{1}, 80)},
+		},
+	}
+
+	got := compactToolResults([]llm.Message{original})
+	if len(got[0].Content) != 1 {
+		t.Fatalf("expected compacted tool result to drop image parts, got %d parts", len(got[0].Content))
+	}
+	if !strings.Contains(got[0].Content[0].Text, `"compacted":true`) {
+		t.Fatalf("expected compacted stub, got %q", got[0].Content[0].Text)
 	}
 }
 
