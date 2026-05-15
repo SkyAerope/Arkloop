@@ -33,10 +33,18 @@ func NewChannelTelegramToolsMiddleware(loader channel_telegram.TokenLoader, tele
 	}
 
 	return func(ctx context.Context, rc *RunContext, next RunHandler) error {
-		if dep.TokenLoader == nil || rc == nil || rc.ChannelContext == nil {
+		if rc == nil || rc.ChannelContext == nil {
 			return next(ctx, rc)
 		}
 		if !strings.EqualFold(strings.TrimSpace(rc.ChannelContext.ChannelType), "telegram") {
+			return next(ctx, rc)
+		}
+
+		isGroup := IsTelegramGroupLikeConversation(rc.ChannelContext.ConversationType)
+		if isGroup {
+			delete(rc.AllowlistSet, "conversation_search")
+		}
+		if dep.TokenLoader == nil {
 			return next(ctx, rc)
 		}
 
@@ -70,7 +78,7 @@ func NewChannelTelegramToolsMiddleware(loader channel_telegram.TokenLoader, tele
 		}
 
 		// 群聊场景：注入 group_history_search，移除跨线程 conversation_search。
-		if IsTelegramGroupLikeConversation(rc.ChannelContext.ConversationType) && dep.GroupSearchExec != nil {
+		if isGroup && dep.GroupSearchExec != nil {
 			const groupTool = "group_history_search"
 			if _, blocked := deny[groupTool]; !blocked {
 				rc.ToolExecutors[groupTool] = dep.GroupSearchExec

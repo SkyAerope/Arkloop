@@ -27,6 +27,18 @@ func testProviderRequestEstimate(req llm.Request) (int, error) {
 	return len(raw), nil
 }
 
+func TestEstimateRequestContextTokensCountsCompactSyntheticSystemMessages(t *testing.T) {
+	phase := compactSyntheticPhase
+	estimate := EstimateRequestContextTokens(nil, llm.Request{Messages: []llm.Message{
+		{Role: "system", Content: []llm.TextPart{{Text: strings.Repeat("system ", 100)}}},
+		{Role: "system", Phase: &phase, Content: []llm.TextPart{{Text: strings.Repeat("compact ", 100)}}},
+	}})
+
+	if estimate <= 1 {
+		t.Fatalf("expected compact synthetic message to count, got %d", estimate)
+	}
+}
+
 type stubCompactGateway struct {
 	summary string
 	calls   int

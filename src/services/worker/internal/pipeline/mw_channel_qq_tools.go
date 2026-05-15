@@ -21,11 +21,19 @@ type ChannelQQToolsDeps struct {
 // 群聊场景下额外注入 group_history_search 并移除跨线程 conversation_search。
 func NewChannelQQToolsMiddleware(deps ChannelQQToolsDeps) RunMiddleware {
 	return func(ctx context.Context, rc *RunContext, next RunHandler) error {
-		if deps.ConfigLoader == nil || rc == nil || rc.ChannelContext == nil {
+		if rc == nil || rc.ChannelContext == nil {
 			return next(ctx, rc)
 		}
 		channelType := strings.ToLower(strings.TrimSpace(rc.ChannelContext.ChannelType))
 		if channelType != "qq" && channelType != "qqbot" {
+			return next(ctx, rc)
+		}
+
+		isGroup := isQQGroupConversation(rc.ChannelContext.ConversationType)
+		if isGroup {
+			delete(rc.AllowlistSet, "conversation_search")
+		}
+		if deps.ConfigLoader == nil {
 			return next(ctx, rc)
 		}
 
@@ -60,7 +68,7 @@ func NewChannelQQToolsMiddleware(deps ChannelQQToolsDeps) RunMiddleware {
 			}
 		}
 
-		if isQQGroupConversation(rc.ChannelContext.ConversationType) {
+		if isGroup {
 			if deps.GroupSearchExec != nil {
 				const groupTool = "group_history_search"
 				if _, blocked := deny[groupTool]; !blocked {

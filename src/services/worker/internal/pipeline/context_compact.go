@@ -1222,11 +1222,12 @@ func EstimateRequestContextTokens(rc *RunContext, request llm.Request) int {
 	return estimate
 }
 
-// compactApproxNonSystemMessagePressure 与 compactApproxMessagePressure 相同，但跳过 role="system"
+// compactApproxNonSystemMessagePressure 与 compactApproxMessagePressure 相同，但跳过
+// 普通 system prompt；compact synthetic summary 是真实 provider context，必须计入。
 func compactApproxNonSystemMessagePressure(msgs []llm.Message) int {
 	total := 0
 	for _, m := range msgs {
-		if m.Role == "system" {
+		if m.Role == "system" && !isCompactSyntheticMessage(m) {
 			continue
 		}
 		total += approxTokensFromText(messageText(m))
@@ -1240,6 +1241,10 @@ func compactApproxNonSystemMessagePressure(msgs []llm.Message) int {
 		}
 	}
 	return total
+}
+
+func isCompactSyntheticMessage(msg llm.Message) bool {
+	return msg.Phase != nil && strings.TrimSpace(*msg.Phase) == compactSyntheticPhase
 }
 
 func EstimateProviderRequestBytesForRunContext(ctx context.Context, rc *RunContext, request llm.Request) (int, error) {

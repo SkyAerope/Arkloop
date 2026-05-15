@@ -51,7 +51,6 @@ func CompactThreadCompactionLock(ctx context.Context, db data.DB, threadID uuid.
 	cleanup := func() {
 		releaseLock()
 		f.Close()
-		os.Remove(lockFile)
 	}
 
 	return db, cleanup, nil

@@ -97,3 +97,34 @@ func TestChannelTelegramToolsMiddlewareRespectsDenylist(t *testing.T) {
 		t.Fatalf("handler: %v", err)
 	}
 }
+
+func TestChannelTelegramToolsMiddlewareGroupAlwaysRemovesConversationSearch(t *testing.T) {
+	rc := &RunContext{
+		ChannelContext: &ChannelContext{
+			ChannelType:      "telegram",
+			ConversationType: "group",
+		},
+		ToolRegistry:  tools.NewRegistry(),
+		ToolExecutors: map[string]tools.Executor{},
+		AllowlistSet: map[string]struct{}{
+			"conversation_search":  {},
+			"conversation_context": {},
+		},
+	}
+
+	h := Build([]RunMiddleware{
+		NewChannelTelegramToolsMiddleware(nil, nil),
+	}, func(_ context.Context, rc *RunContext) error {
+		if _, ok := rc.AllowlistSet["conversation_search"]; ok {
+			t.Fatal("conversation_search should be removed in group chat")
+		}
+		if _, ok := rc.AllowlistSet["conversation_context"]; !ok {
+			t.Fatal("conversation_context should remain available for current thread")
+		}
+		return nil
+	})
+
+	if err := h(context.Background(), rc); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+}
