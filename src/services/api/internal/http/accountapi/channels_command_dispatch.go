@@ -67,6 +67,10 @@ type ChannelCommandResolver struct {
 	// nil = skip admin check.
 	IsGroupAdmin func(ctx context.Context) bool
 
+	// IsBoundAdmin checks if the sender is linked to this channel.
+	// In IM channel groups, a linked channel identity is an Arkloop channel admin.
+	IsBoundAdmin func(ctx context.Context) bool
+
 	// ResolveStartPayload extracts the /start deep link payload (e.g., "bind_xxx").
 	// Return "" for channels without deep link support.
 	ResolveStartPayload func() string
@@ -101,6 +105,9 @@ func DispatchChannelCommand(
 	cmd, ok := slashCommandBase(strings.TrimSpace(commandText), "")
 	if !ok {
 		return false, "", nil, nil, uuid.Nil, nil
+	}
+	if !isPrivate && channelCommandRequiresAdmin(cmd) && !resolveChannelCommandAdmin(ctx, resolver) {
+		return true, "无权限。", nil, nil, uuid.Nil, nil
 	}
 
 	// Resolve projectID
@@ -141,6 +148,9 @@ func DispatchChannelCommand(
 		return true, replyText, prefResult, nil, uuid.Nil, err
 
 	case strings.HasPrefix(cmd, "/heartbeat"):
+		if isPrivate {
+			return true, "请在群聊中使用 /heartbeat。", nil, nil, uuid.Nil, nil
+		}
 		threadID, err := resolveThreadID()
 		if err != nil {
 			return true, "", nil, nil, uuid.Nil, err
@@ -212,8 +222,7 @@ func DispatchChannelCommand(
 		return true, "已请求停止当前任务。", nil, nil, activeRun.ID, nil
 
 	case cmd == "/help":
-		helpText := "/start — 查看连接状态\n/bind <code> — 绑定你的账号\n/new — 开启新会话\n/reset — 重置会话\n/stop — 停止当前任务\n/status — 查看当前状态\n/model [name] — View or switch model\n/think [level] — View or set thinking intensity\n/models — 列出所有可用模型\n/persona — 切换当前 persona\n/heartbeat on/off — 设置心跳\n/help — 显示此帮助"
-		return true, helpText, nil, nil, uuid.Nil, nil
+		return true, channelCommandHelpText(isPrivate), nil, nil, uuid.Nil, nil
 
 	case cmd == "/start":
 		if resolver.ResolveStartPayload != nil {
@@ -377,4 +386,32 @@ func DispatchChannelCommand(
 	default:
 		return false, "", nil, nil, uuid.Nil, nil
 	}
+}
+
+func channelCommandRequiresAdmin(cmd string) bool {
+	switch {
+	case cmd == "/new", cmd == "/reset", cmd == "/stop", cmd == "/status", cmd == "/model", cmd == "/models", cmd == "/persona":
+		return true
+	case strings.HasPrefix(cmd, "/think"), strings.HasPrefix(cmd, "/heartbeat"):
+		return true
+	default:
+		return false
+	}
+}
+
+func resolveChannelCommandAdmin(ctx context.Context, resolver ChannelCommandResolver) bool {
+	if resolver.IsBoundAdmin != nil {
+		return resolver.IsBoundAdmin(ctx)
+	}
+	if resolver.IsGroupAdmin != nil {
+		return resolver.IsGroupAdmin(ctx)
+	}
+	return true
+}
+
+func channelCommandHelpText(isPrivate bool) string {
+	if !isPrivate {
+		return "/start@bot — 查看连接状态\n/bind@bot <code> — 绑定你的账号\n/new@bot — 开启新会话\n/reset@bot — 重置会话\n/stop@bot — 停止当前任务\n/status@bot — 查看当前状态\n/model@bot [name] — View or switch model\n/think@bot [level] — View or set thinking intensity\n/models@bot — 列出所有可用模型\n/persona@bot — 切换当前 persona\n/heartbeat@bot on/off — 设置心跳\n/help@bot — 显示此帮助"
+	}
+	return "/start — 查看连接状态\n/bind <code> — 绑定你的账号\n/new — 开启新会话\n/reset — 重置会话\n/stop — 停止当前任务\n/status — 查看当前状态\n/model [name] — View or switch model\n/think [level] — View or set thinking intensity\n/models — 列出所有可用模型\n/persona — 切换当前 persona\n/help — 显示此帮助"
 }

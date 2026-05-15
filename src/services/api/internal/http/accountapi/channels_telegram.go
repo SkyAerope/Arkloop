@@ -342,8 +342,12 @@ func shouldSendTelegramImmediateTyping(incoming *telegramIncomingMessage) bool {
 	if incoming == nil || !incoming.HasContent() {
 		return false
 	}
-	cmd, ok := slashCommandBase(strings.TrimSpace(incoming.CommandText), "")
+	rawCommand := strings.TrimSpace(incoming.CommandText)
+	cmd, ok := slashCommandBase(rawCommand, "")
 	if ok && strings.HasPrefix(cmd, "/heartbeat") {
+		return false
+	}
+	if strings.HasPrefix(strings.ToLower(rawCommand), "/heartbeat@") {
 		return false
 	}
 	return incoming.ShouldCreateRun()
@@ -1007,6 +1011,43 @@ func slashCommandBase(text, botUsername string) (cmd string, ok bool) {
 		}
 	}
 	return parts[0], true
+}
+
+func adaptTelegramGroupCommandText(text, botUsername string) (cmd string, commandText string, ok bool) {
+	text = strings.ReplaceAll(text, "／", "/")
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "/") {
+		return "", "", false
+	}
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return "", "", false
+	}
+	cleanBot := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(botUsername, "@")))
+	if cleanBot == "" {
+		return "", "", false
+	}
+	parts := strings.SplitN(fields[0], "@", 2)
+	if len(parts) == 2 {
+		cleanTarget := strings.ToLower(strings.TrimSpace(parts[1]))
+		if cleanTarget != cleanBot {
+			return "", "", false
+		}
+		fields[0] = strings.TrimSpace(parts[0])
+		return fields[0], strings.Join(fields, " "), true
+	}
+	if len(fields) < 2 || !telegramStandaloneMentionMatches(fields[1], cleanBot) {
+		return "", "", false
+	}
+	fields[0] = strings.TrimSpace(parts[0])
+	fields = append(fields[:1], fields[2:]...)
+	return fields[0], strings.Join(fields, " "), true
+}
+
+func telegramStandaloneMentionMatches(value, cleanBot string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.TrimPrefix(value, "@")
+	return cleanBot != "" && value == cleanBot
 }
 
 func (c telegramConnector) handleTelegramEditedMessage(
@@ -1888,6 +1929,18 @@ func allowTelegramPrivateChannelLink(
 	return channelIdentityLinksRepo.WithTx(tx).HasLink(ctx, channelID, identity.ID)
 }
 
+func telegramChannelIdentityIsBound(ctx context.Context, tx pgx.Tx, channelID uuid.UUID, identity data.ChannelIdentity, repo *data.ChannelIdentityLinksRepository) bool {
+	if repo == nil || channelID == uuid.Nil || identity.ID == uuid.Nil {
+		return false
+	}
+	linked, err := repo.WithTx(tx).HasLink(ctx, channelID, identity.ID)
+	if err != nil {
+		slog.WarnContext(ctx, "telegram_bound_admin_check_failed", "error", err, "channel_id", channelID, "identity_id", identity.ID)
+		return false
+	}
+	return linked
+}
+
 func telegramLinkBootstrapAllowed(commandText string) bool {
 	parts := strings.Fields(strings.TrimSpace(commandText))
 	if len(parts) == 0 {
@@ -2236,6 +2289,27 @@ func (c telegramConnector) handleTelegramCallbackQuery(
 		return nil
 	}
 
+	identity, err := c.channelIdentitiesRepo.GetByChannelAndSubject(ctx, ch.ChannelType, fmt.Sprintf("%d", cb.From.ID))
+	if err != nil {
+		return err
+	}
+	if identity == nil {
+		return nil
+	}
+	if isTelegramGroupLikeChatType(cb.Message.Chat.Type) {
+		if c.channelIdentityLinksRepo == nil {
+			return nil
+		}
+		linked, err := c.channelIdentityLinksRepo.HasLink(ctx, ch.ID, identity.ID)
+		if err != nil {
+			slog.WarnContext(ctx, "telegram_callback_bound_admin_check_failed", "error", err, "channel_id", ch.ID, "identity_id", identity.ID)
+			return nil
+		}
+		if !linked {
+			return nil
+		}
+	}
+
 	// dismiss: 移除按钮，保留原消息文本。
 	if cbData == "dismiss" {
 		if c.telegramClient != nil && strings.TrimSpace(token) != "" {
@@ -2301,15 +2375,6 @@ func (c telegramConnector) handleTelegramCallbackQuery(
 			})
 			editCancel()
 		}
-		return nil
-	}
-
-	// 查找发送者的 ChannelIdentity，直接更新偏好。
-	identity, err := c.channelIdentitiesRepo.GetByChannelAndSubject(ctx, ch.ChannelType, fmt.Sprintf("%d", cb.From.ID))
-	if err != nil {
-		return err
-	}
-	if identity == nil {
 		return nil
 	}
 

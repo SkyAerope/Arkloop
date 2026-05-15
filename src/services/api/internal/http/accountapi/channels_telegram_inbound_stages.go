@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -217,17 +216,12 @@ func (c telegramConnector) persistTelegramInboundStageA(
 	}
 
 	if !incoming.IsPrivate() && isTelegramGroupLikeChatType(incoming.ChatType) && c.channelGroupThreadsRepo != nil {
-		cmd, ok := slashCommandBase(strings.TrimSpace(incoming.CommandText), cfg.BotUsername)
+		cmd, cmdText, ok := adaptTelegramGroupCommandText(strings.TrimSpace(incoming.CommandText), cfg.BotUsername)
 		if ok {
-			cmdText := incoming.CommandText
 			if cmd == "/reset" {
 				cmdText = "/new"
 			}
-			// Use groupIdentity for heartbeat/status/models/persona, user identity for others
 			commandIdentity := identity
-			if groupIdentity != nil && (strings.HasPrefix(cmd, "/heartbeat") || cmd == "/status" || cmd == "/models" || cmd == "/persona" || cmd == "/model" || strings.HasPrefix(cmd, "/think")) {
-				commandIdentity = *groupIdentity
-			}
 			handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 				ctx, tx, ch, *persona, commandIdentity,
 				cmdText, false, incoming.PlatformChatID,
@@ -239,19 +233,8 @@ func (c telegramConnector) persistTelegramInboundStageA(
 					ResolveHeartbeatIdentity: func(ctx context.Context, tx pgx.Tx) (*data.ChannelIdentity, error) {
 						return groupIdentity, nil
 					},
-					IsGroupAdmin: func(ctx context.Context) bool {
-						if c.telegramClient == nil || strings.TrimSpace(token) == "" {
-							return true
-						}
-						tgUserID, _ := strconv.ParseInt(incoming.PlatformUserID, 10, 64)
-						member, err := c.telegramClient.GetChatMember(ctx, token, telegrambot.GetChatMemberRequest{
-							ChatID: incoming.PlatformChatID,
-							UserID: tgUserID,
-						})
-						if err != nil || member == nil {
-							return false
-						}
-						return member.Status == "creator" || member.Status == "administrator"
+					IsBoundAdmin: func(ctx context.Context) bool {
+						return telegramChannelIdentityIsBound(ctx, tx, ch.ID, identity, c.channelIdentityLinksRepo)
 					},
 					BindCode: func() string {
 						parts := strings.Fields(cmdText)

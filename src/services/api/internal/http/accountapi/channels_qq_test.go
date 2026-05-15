@@ -1,6 +1,7 @@
 package accountapi
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -38,6 +39,44 @@ func TestTelegramCommandBaseWorksForQQ(t *testing.T) {
 	}
 }
 
+func TestAdaptTelegramGroupCommandTextRequiresBotMention(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		bot      string
+		wantCmd  string
+		wantText string
+		wantOK   bool
+	}{
+		{"bare command ignored", "/help", "arkloopbot", "", "", false},
+		{"matching mention accepted", "/help@arkloopbot", "arkloopbot", "/help", "/help", true},
+		{"attached mention with args accepted", "/model@arkloopbot gpt-5", "arkloopbot", "/model", "/model gpt-5", true},
+		{"space mention accepted", "/help @arkloopbot", "arkloopbot", "/help", "/help", true},
+		{"space mention with args accepted", "/model @arkloopbot gpt-5", "arkloopbot", "/model", "/model gpt-5", true},
+		{"bind command strips space mention", "/bind @arkloopbot abc123", "arkloopbot", "/bind", "/bind abc123", true},
+		{"matching mention with at prefix", "/models@arkloopbot", "@arkloopbot", "/models", "/models", true},
+		{"other bot ignored", "/help@otherbot", "arkloopbot", "", "", false},
+		{"space mention other bot ignored", "/help @otherbot", "arkloopbot", "", "", false},
+		{"missing bot username ignored", "/help@arkloopbot", "", "", "", false},
+		{"full width slash accepted", "／new@arkloopbot", "arkloopbot", "/new", "/new", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, commandText, ok := adaptTelegramGroupCommandText(tt.text, tt.bot)
+			if ok != tt.wantOK {
+				t.Fatalf("adaptTelegramGroupCommandText(%q, %q) ok = %v, want %v", tt.text, tt.bot, ok, tt.wantOK)
+			}
+			if cmd != tt.wantCmd {
+				t.Fatalf("adaptTelegramGroupCommandText(%q, %q) cmd = %q, want %q", tt.text, tt.bot, cmd, tt.wantCmd)
+			}
+			if commandText != tt.wantText {
+				t.Fatalf("adaptTelegramGroupCommandText(%q, %q) commandText = %q, want %q", tt.text, tt.bot, commandText, tt.wantText)
+			}
+		})
+	}
+}
+
 func TestTelegramLinkBootstrapAllowedCoversQQCommands(t *testing.T) {
 	tests := []struct {
 		text string
@@ -61,6 +100,24 @@ func TestTelegramLinkBootstrapAllowedCoversQQCommands(t *testing.T) {
 				t.Fatalf("telegramLinkBootstrapAllowed(%q) = %v, want %v", tt.text, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestChannelCommandHelpTextUsesGroupMentions(t *testing.T) {
+	groupHelp := channelCommandHelpText(false)
+	if !strings.Contains(groupHelp, "/help@bot") || !strings.Contains(groupHelp, "/models@bot") {
+		t.Fatalf("group help should show targeted commands: %q", groupHelp)
+	}
+	if strings.Contains(groupHelp, "\n/models —") {
+		t.Fatalf("group help should not show bare management commands: %q", groupHelp)
+	}
+
+	privateHelp := channelCommandHelpText(true)
+	if strings.Contains(privateHelp, "@bot") {
+		t.Fatalf("private help should not show targeted commands: %q", privateHelp)
+	}
+	if strings.Contains(privateHelp, "/heartbeat") {
+		t.Fatalf("private help should not include heartbeat: %q", privateHelp)
 	}
 }
 

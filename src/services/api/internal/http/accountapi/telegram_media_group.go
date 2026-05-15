@@ -239,6 +239,24 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 
 	if incoming.IsPrivate() {
 		trimmedCommandText := strings.TrimSpace(incoming.CommandText)
+		allowedPrivateLink, err := allowTelegramPrivateChannelLink(ctx, tx, ch.ID, identity, trimmedCommandText, c.channelIdentityLinksRepo)
+		if err != nil {
+			return err
+		}
+		if !allowedPrivateLink {
+			if err := tx.Commit(ctx); err != nil {
+				return err
+			}
+			if c.telegramClient != nil && strings.TrimSpace(token) != "" {
+				sendCtx, sendCancel := context.WithTimeout(ctx, telegramRemoteRequestTimeout)
+				_, _ = c.telegramClient.SendMessage(sendCtx, token, telegrambot.SendMessageRequest{
+					ChatID: incoming.PlatformChatID,
+					Text:   "当前账号未关联此接入。请使用 /bind <code> 关联。",
+				})
+				sendCancel()
+			}
+			return nil
+		}
 		handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 			ctx, tx, ch, *persona, identity,
 			trimmedCommandText, true, incoming.PlatformChatID,
@@ -308,17 +326,13 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 		}
 	}
 	if !incoming.IsPrivate() && isTelegramGroupLikeChatType(incoming.ChatType) && c.channelGroupThreadsRepo != nil {
-		cmd, ok := slashCommandBase(strings.TrimSpace(incoming.CommandText), botUsername)
+		cmd, cmdText, ok := adaptTelegramGroupCommandText(strings.TrimSpace(incoming.CommandText), botUsername)
 		if ok {
-			cmdText := incoming.CommandText
 			if cmd == "/reset" {
 				cmdText = "/new"
 			}
 			groupIdentity, _ := c.channelIdentitiesRepo.WithTx(tx).Upsert(ctx, ch.ChannelType, incoming.PlatformChatID, nil, nil, nil)
 			commandIdentity := identity
-			if groupIdentity.ID != uuid.Nil && (strings.HasPrefix(cmd, "/heartbeat") || cmd == "/status" || cmd == "/models" || cmd == "/persona" || cmd == "/model" || strings.HasPrefix(cmd, "/think")) {
-				commandIdentity = groupIdentity
-			}
 			handled, replyText, prefResult, personaResult, cancelRunID, err := DispatchChannelCommand(
 				ctx, tx, ch, *persona, commandIdentity,
 				cmdText, false, incoming.PlatformChatID,
@@ -333,19 +347,8 @@ func (c telegramConnector) processTelegramMediaGroupMerged(
 						}
 						return nil, nil
 					},
-					IsGroupAdmin: func(ctx context.Context) bool {
-						if c.telegramClient == nil || strings.TrimSpace(token) == "" {
-							return true
-						}
-						tgUserID, _ := strconv.ParseInt(incoming.PlatformUserID, 10, 64)
-						member, err := c.telegramClient.GetChatMember(ctx, token, telegrambot.GetChatMemberRequest{
-							ChatID: incoming.PlatformChatID,
-							UserID: tgUserID,
-						})
-						if err != nil || member == nil {
-							return false
-						}
-						return member.Status == "creator" || member.Status == "administrator"
+					IsBoundAdmin: func(ctx context.Context) bool {
+						return telegramChannelIdentityIsBound(ctx, tx, ch.ID, identity, c.channelIdentityLinksRepo)
 					},
 					BindCode: func() string {
 						parts := strings.Fields(cmdText)

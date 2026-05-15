@@ -577,12 +577,13 @@ func TestUpdateTelegramChannelStripsDefaultModel(t *testing.T) {
 func TestTelegramHeartbeatModelRejectsInvalidSelectorWithoutPersisting(t *testing.T) {
 	env := setupTelegramChannelsTestEnv(t, telegrambot.NewClient("https://api.telegram.org", nil))
 	channel := createActiveTelegramChannel(t, env, "bot-token", []string{"10001"}, "")
+	seedTelegramBoundIdentity(t, env, channel, "10001")
 
 	payload := map[string]any{
 		"message": map[string]any{
 			"message_id": 51,
 			"date":       1710000000,
-			"text":       "/heartbeat model bad^selector",
+			"text":       "/heartbeat@arkloopbot model bad^selector",
 			"chat": map[string]any{
 				"id":   -100123,
 				"type": "group",
@@ -671,12 +672,13 @@ func TestTelegramHeartbeatOnCreatesScheduledTriggerImmediately(t *testing.T) {
 	env := setupTelegramChannelsTestEnv(t, telegrambot.NewClient("https://api.telegram.org", nil))
 	seedTelegramSelectorRoute(t, env, "demo-cred", "gpt-5-mini")
 	channel := createActiveTelegramChannel(t, env, "bot-token", []string{"10001"}, "")
+	seedTelegramBoundIdentity(t, env, channel, "10001")
 
 	setModelPayload := map[string]any{
 		"message": map[string]any{
 			"message_id": 61,
 			"date":       1710000000,
-			"text":       "/heartbeat model demo-cred^gpt-5-mini",
+			"text":       "/heartbeat@arkloopbot model demo-cred^gpt-5-mini",
 			"chat": map[string]any{
 				"id":   -100456,
 				"type": "group",
@@ -703,7 +705,7 @@ func TestTelegramHeartbeatOnCreatesScheduledTriggerImmediately(t *testing.T) {
 		"message": map[string]any{
 			"message_id": 62,
 			"date":       1710000060,
-			"text":       "/heartbeat on",
+			"text":       "/heartbeat@arkloopbot on",
 			"chat": map[string]any{
 				"id":   -100456,
 				"type": "group",
@@ -749,12 +751,13 @@ func TestTelegramHeartbeatOnCreatesScheduledTriggerImmediately(t *testing.T) {
 func TestUpdateTelegramChannelInactiveDeletesScheduledTriggerImmediately(t *testing.T) {
 	env := setupTelegramChannelsTestEnv(t, telegrambot.NewClient("https://api.telegram.org", nil))
 	channel := createActiveTelegramChannel(t, env, "bot-token", []string{"10001"}, "")
+	seedTelegramBoundIdentity(t, env, channel, "10001")
 
 	enablePayload := map[string]any{
 		"message": map[string]any{
 			"message_id": 71,
 			"date":       1710000000,
-			"text":       "/heartbeat on",
+			"text":       "/heartbeat@arkloopbot on",
 			"chat": map[string]any{
 				"id":   -100789,
 				"type": "group",
@@ -794,12 +797,13 @@ func TestUpdateTelegramChannelInactiveDeletesScheduledTriggerImmediately(t *test
 func TestDeleteTelegramChannelDeletesScheduledTriggerImmediately(t *testing.T) {
 	env := setupTelegramChannelsTestEnv(t, telegrambot.NewClient("https://api.telegram.org", nil))
 	channel := createActiveTelegramChannel(t, env, "bot-token", []string{"10001"}, "")
+	seedTelegramBoundIdentity(t, env, channel, "10001")
 
 	enablePayload := map[string]any{
 		"message": map[string]any{
 			"message_id": 81,
 			"date":       1710000000,
-			"text":       "/heartbeat on",
+			"text":       "/heartbeat@arkloopbot on",
 			"chat": map[string]any{
 				"id":   -100987,
 				"type": "group",
@@ -1755,6 +1759,60 @@ func TestTelegramWebhookGroupBurstPromotesPassiveAndMergesFollowup(t *testing.T)
 	}
 	if followupDispatchAfter < extendedDispatchAfter {
 		t.Fatalf("expected followup message in same pending window, got followup=%d base=%d", followupDispatchAfter, extendedDispatchAfter)
+	}
+}
+
+func TestTelegramPrivateMediaGroupCommandDeniedWithoutBind(t *testing.T) {
+	var sendMessages []telegrambot.SendMessageRequest
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		if strings.Contains(r.URL.Path, "sendMessage") {
+			var body telegrambot.SendMessageRequest
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+				sendMessages = append(sendMessages, body)
+			}
+		}
+		_, _ = io.WriteString(w, `{"ok":true,"result":true}`)
+	}))
+	defer server.Close()
+
+	env := setupTelegramChannelsTestEnv(t, telegrambot.NewClient(server.URL, server.Client()))
+	channel := createActiveTelegramChannel(t, env, "bot-token", []string{"10001"}, "")
+	headers := map[string]string{"X-Telegram-Bot-Api-Secret-Token": derefString(t, channel.WebhookSecret)}
+
+	payload := map[string]any{
+		"message": map[string]any{
+			"message_id":     281,
+			"date":           1710001000,
+			"caption":        "/models",
+			"media_group_id": "private-mg-281",
+			"photo": []map[string]any{
+				{"file_id": "photo-281-a", "file_size": 64, "width": 32, "height": 32},
+			},
+			"chat": map[string]any{
+				"id":   10001,
+				"type": "private",
+			},
+			"from": map[string]any{
+				"id":         10001,
+				"is_bot":     false,
+				"first_name": "Alice",
+			},
+		},
+	}
+	resp := doJSONAccount(env.handler, nethttp.MethodPost, "/v1/channels/telegram/"+channel.ID.String()+"/webhook", payload, headers)
+	if resp.Code != nethttp.StatusOK {
+		t.Fatalf("media group command webhook status: %d %s", resp.Code, resp.Body.String())
+	}
+
+	time.Sleep(900 * time.Millisecond)
+
+	assertCountAccount(t, env.pool, `SELECT COUNT(*) FROM channel_dm_threads`, 0)
+	assertCountAccount(t, env.pool, `SELECT COUNT(*) FROM runs`, 0)
+	if len(sendMessages) != 1 {
+		t.Fatalf("expected one rejection message, got %#v", sendMessages)
+	}
+	if strings.TrimSpace(sendMessages[0].Text) != "当前账号未关联此接入。请使用 /bind <code> 关联。" {
+		t.Fatalf("unexpected rejection text: %q", sendMessages[0].Text)
 	}
 }
 
@@ -3077,7 +3135,7 @@ func TestTelegramWebhookGroupNewDeniedWithoutBind(t *testing.T) {
 		"message": map[string]any{
 			"message_id": 13,
 			"date":       1710000002,
-			"text":       "/new",
+			"text":       "/new@arkloopbot",
 			"chat": map[string]any{
 				"id":    -20001,
 				"type":  "supergroup",
@@ -3095,6 +3153,57 @@ func TestTelegramWebhookGroupNewDeniedWithoutBind(t *testing.T) {
 		t.Fatalf("/new webhook status: %d %s", resp.Code, resp.Body.String())
 	}
 	assertCountAccount(t, env.pool, `SELECT COUNT(*) FROM channel_group_threads`, 1)
+}
+
+func TestTelegramGroupCallbackDismissDeniedWithoutBind(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		paths = append(paths, r.URL.Path)
+		_, _ = io.WriteString(w, `{"ok":true,"result":true}`)
+	}))
+	defer server.Close()
+
+	env := setupTelegramChannelsTestEnv(t, telegrambot.NewClient(server.URL, server.Client()))
+	channel := createActiveTelegramChannel(t, env, "bot-token", []string{"10001"}, "")
+
+	identitiesRepo, err := data.NewChannelIdentitiesRepository(env.pool)
+	if err != nil {
+		t.Fatalf("channel identities repo: %v", err)
+	}
+	displayName := "Alice"
+	if _, err := identitiesRepo.Upsert(context.Background(), channel.ChannelType, "10001", &displayName, nil, nil); err != nil {
+		t.Fatalf("upsert identity: %v", err)
+	}
+
+	payload := map[string]any{
+		"callback_query": map[string]any{
+			"id":   "callback-dismiss",
+			"data": "dismiss",
+			"from": map[string]any{
+				"id":         10001,
+				"is_bot":     false,
+				"first_name": "Alice",
+			},
+			"message": map[string]any{
+				"message_id": 91,
+				"date":       1710000000,
+				"text":       "Choose model.",
+				"chat": map[string]any{
+					"id":   -20001,
+					"type": "supergroup",
+				},
+			},
+		},
+	}
+	resp := doJSONAccount(env.handler, nethttp.MethodPost, "/v1/channels/telegram/"+channel.ID.String()+"/webhook", payload, map[string]string{"X-Telegram-Bot-Api-Secret-Token": derefString(t, channel.WebhookSecret)})
+	if resp.Code != nethttp.StatusOK {
+		t.Fatalf("callback webhook status: %d %s", resp.Code, resp.Body.String())
+	}
+	for _, path := range paths {
+		if strings.Contains(path, "editMessageReplyMarkup") {
+			t.Fatalf("unbound user should not dismiss group keyboard, paths=%#v", paths)
+		}
+	}
 }
 
 func TestTelegramWebhookGroupNewClearsBindingWhenBound(t *testing.T) {
@@ -3179,7 +3288,7 @@ func TestTelegramWebhookGroupNewClearsBindingWhenBound(t *testing.T) {
 		"message": map[string]any{
 			"message_id": 13,
 			"date":       1710000002,
-			"text":       "/new",
+			"text":       "/new@arkloopbot",
 			"chat": map[string]any{
 				"id":    -20001,
 				"type":  "supergroup",
@@ -3524,11 +3633,38 @@ func decodeJSONBodyAccount[T any](t *testing.T, raw []byte) T {
 
 func createActiveTelegramChannel(t *testing.T, env telegramChannelsTestEnv, botToken string, allowedUserIDs []string, defaultModel string) data.Channel {
 	t.Helper()
-	config := map[string]any{"private_allowed_user_ids": allowedUserIDs}
+	config := map[string]any{
+		"private_allowed_user_ids": allowedUserIDs,
+		"bot_username":             "arkloopbot",
+	}
 	if strings.TrimSpace(defaultModel) != "" {
 		config["default_model"] = strings.TrimSpace(defaultModel)
 	}
 	return createActiveTelegramChannelWithConfig(t, env, botToken, config)
+}
+
+func seedTelegramBoundIdentity(t *testing.T, env telegramChannelsTestEnv, channel data.Channel, platformUserID string) {
+	t.Helper()
+	identitiesRepo, err := data.NewChannelIdentitiesRepository(env.pool)
+	if err != nil {
+		t.Fatalf("channel identities repo: %v", err)
+	}
+	linksRepo, err := data.NewChannelIdentityLinksRepository(env.pool)
+	if err != nil {
+		t.Fatalf("channel identity links repo: %v", err)
+	}
+	displayName := "Alice"
+	ctx := context.Background()
+	identity, err := identitiesRepo.Upsert(ctx, channel.ChannelType, platformUserID, &displayName, nil, nil)
+	if err != nil {
+		t.Fatalf("upsert telegram identity: %v", err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE channel_identities SET user_id = $1 WHERE id = $2`, env.userID, identity.ID); err != nil {
+		t.Fatalf("mark telegram identity linked user: %v", err)
+	}
+	if _, err := linksRepo.Upsert(ctx, channel.ID, identity.ID); err != nil {
+		t.Fatalf("link telegram identity: %v", err)
+	}
 }
 
 func newTelegramConnectorForTest(t *testing.T, env telegramChannelsTestEnv, botClient *telegrambot.Client) telegramConnector {
