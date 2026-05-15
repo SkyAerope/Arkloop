@@ -381,6 +381,7 @@ func ComposeDesktopEngine(ctx context.Context, db data.DesktopDB, bus eventbus.E
 		desktopImpStore,
 		newDesktopImpressionRefresh(db, jobQueue),
 	))
+	hookRegistry.RegisterAfterThreadPersistHook(pipeline.NewContextCompactMaintenanceObserver(jobQueue))
 	routingLoader := routing.NewDesktopSQLiteRoutingLoader(
 		func(ctx context.Context) (routing.ProviderRoutingConfig, error) {
 			return loadDesktopRoutingConfig(ctx, db)

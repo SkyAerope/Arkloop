@@ -1472,7 +1472,7 @@ func (l *Loop) runTurnWithRetry(
 			if runCtx.PipelineRC != nil {
 				contextWindowTokens = pipeline.ResolveRunContextWindowTokens(runCtx.PipelineRC)
 			}
-			estimatedTokens := estimateTurnRequestLimitTokens(runCtx, currentRequest)
+			estimatedTokens := estimateTurnRequestPressureTokens(runCtx, currentRequest)
 			if !llm.RequestExceedsLimits(payloadBytes, estimatedTokens, contextWindowTokens) {
 				break
 			}
@@ -1504,7 +1504,7 @@ func (l *Loop) runTurnWithRetry(
 			if err != nil {
 				return requestEstimatorFailureTurnResult(emitter, err), nil
 			}
-			rewrittenTokens := estimateTurnRequestLimitTokens(runCtx, rewritten)
+			rewrittenTokens := estimateTurnRequestPressureTokens(runCtx, rewritten)
 			if rewrittenBytes >= payloadBytes && rewrittenTokens >= estimatedTokens {
 				if llm.RequestExceedsLimits(rewrittenBytes, rewrittenTokens, contextWindowTokens) {
 					return preflightOversizeTurnResult(emitter, rewrittenBytes, rewrittenTokens, contextWindowTokens), nil
@@ -1556,7 +1556,7 @@ func (l *Loop) runTurnWithRetry(
 				if estimateErr != nil {
 					return requestEstimatorFailureTurnResult(emitter, estimateErr), nil
 				}
-				rewrittenTokens := estimateTurnRequestLimitTokens(runCtx, rewritten)
+				rewrittenTokens := estimateTurnRequestPressureTokens(runCtx, rewritten)
 				if llm.RequestExceedsLimits(rewrittenBytes, rewrittenTokens, contextWindowTokens) {
 					return preflightOversizeTurnResult(emitter, rewrittenBytes, rewrittenTokens, contextWindowTokens), nil
 				}
@@ -1576,7 +1576,7 @@ func (l *Loop) runTurnWithRetry(
 				return preflightOversizeTurnResult(
 					emitter,
 					payloadBytes,
-					estimateTurnRequestLimitTokens(runCtx, currentRequest),
+					estimateTurnRequestPressureTokens(runCtx, currentRequest),
 					contextWindowTokens,
 				), nil
 			}
@@ -1656,9 +1656,10 @@ func maybeRecoverOversizeRequest(
 	phase := "completed"
 	stillOversize := false
 	if rewriteErr == nil {
+		rewrittenPressureTokens := estimateTurnRequestPressureTokens(runCtx, rewritten)
 		stillOversize = llm.RequestExceedsLimits(
 			stats.RequestBytesAfterRewrite,
-			pipeline.EstimateRequestContextTokens(runCtx.PipelineRC, rewritten),
+			rewrittenPressureTokens,
 			pipeline.ResolveRunContextWindowTokens(runCtx.PipelineRC),
 		)
 	}
@@ -2120,7 +2121,8 @@ func (l *Loop) runSingleTurn(
 				"tool_calls":     traceTurnToolCalls(toolCalls),
 			})
 		}
-		if completedTurnIsEmpty(strings.Join(assistantChunks, ""), assistantMessage, toolCalls, toolResults) {
+		if completedTurnIsEmpty(strings.Join(assistantChunks, ""), assistantMessage, toolCalls, toolResults) &&
+			!requestEndsWithDeliveredChannelToolResult(request) {
 			if runCtx.RolloutRecorder != nil {
 				appendRollout(ctx, runCtx.RolloutRecorder, MakeTurnEnd(turnIndex))
 			}
@@ -2817,6 +2819,12 @@ func estimateTurnRequestLimitTokens(runCtx RunContext, request llm.Request) int 
 	return raw
 }
 
+func estimateTurnRequestPressureTokens(runCtx RunContext, request llm.Request) int {
+	estimate := estimateTurnRequestLimitTokens(runCtx, request)
+	stats := pipeline.ComputeContextCompactPressure(estimate, currentContextCompactAnchor(runCtx))
+	return stats.ContextPressureTokens
+}
+
 func attachContextPressureAnchor(data map[string]any, requestEstimateTokens int) {
 	if data == nil || requestEstimateTokens < 0 {
 		return
@@ -2922,6 +2930,44 @@ func completedTurnIsEmpty(
 		}
 	}
 	return true
+}
+
+func requestEndsWithDeliveredChannelToolResult(request llm.Request) bool {
+	if len(request.Messages) == 0 {
+		return false
+	}
+	last := request.Messages[len(request.Messages)-1]
+	if strings.TrimSpace(last.Role) != "tool" {
+		return false
+	}
+	var payload struct {
+		ToolName string         `json:"tool_name"`
+		Result   map[string]any `json:"result"`
+		Error    any            `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(messagePromptText(last))), &payload); err != nil {
+		return false
+	}
+	if payload.Error != nil || payload.Result == nil {
+		return false
+	}
+	if ok, _ := payload.Result["ok"].(bool); !ok {
+		return false
+	}
+	switch llm.CanonicalToolName(payload.ToolName) {
+	case "telegram_react", "telegram_send_file":
+		return true
+	default:
+		return false
+	}
+}
+
+func messagePromptText(msg llm.Message) string {
+	var b strings.Builder
+	for _, part := range msg.Content {
+		b.WriteString(llm.PartPromptText(part))
+	}
+	return b.String()
 }
 
 func assistantMessageHasState(parts []llm.ContentPart) bool {

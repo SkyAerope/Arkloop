@@ -39,6 +39,22 @@ func TestEstimateRequestContextTokensCountsCompactSyntheticSystemMessages(t *tes
 	}
 }
 
+func TestCompactRequestBasePrefixCountSkipsRequestPrefix(t *testing.T) {
+	prefix := []llm.Message{
+		{Role: "system", Content: []llm.TextPart{{Text: "system"}}},
+	}
+	base := []llm.Message{
+		{Role: "user", Content: []llm.TextPart{{Text: "first"}}},
+		{Role: "assistant", Content: []llm.TextPart{{Text: "second"}}},
+	}
+	request := append(append([]llm.Message{}, prefix...), base...)
+	request = append(request, llm.Message{Role: "tool", Content: []llm.TextPart{{Text: "tail"}}})
+
+	if got := compactRequestBasePrefixCount(request, base); got != len(prefix)+len(base) {
+		t.Fatalf("expected request prefix count %d, got %d", len(prefix)+len(base), got)
+	}
+}
+
 type stubCompactGateway struct {
 	summary string
 	calls   int

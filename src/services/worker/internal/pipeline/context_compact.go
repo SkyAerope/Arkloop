@@ -521,9 +521,10 @@ func RewriteOversizeRequestWithOptions(
 		return request, stats, err
 	}
 	stats.RequestTokensAfterRewrite = EstimateRequestContextTokens(rc, rewritten)
+	rewritePressure := ComputeContextCompactPressure(stats.RequestTokensAfterRewrite, anchor).ContextPressureTokens
 	if !forceCompact && !llm.RequestExceedsLimits(
 		stats.RequestBytesAfterRewrite,
-		stats.RequestTokensAfterRewrite,
+		rewritePressure,
 		contextWindowTokens,
 	) {
 		stats.NoRewriteReason = "within_local_limits"
@@ -581,7 +582,7 @@ func rewriteOversizeRequestWithPersistedReplacement(
 		}
 		currentEstimateTokens := EstimateRequestContextTokens(rc, current)
 		stats = ComputeContextCompactPressure(currentEstimateTokens, anchor)
-		if !forceCompact && !llm.RequestExceedsLimits(currentBytes, currentEstimateTokens, window) {
+		if !forceCompact && !llm.RequestExceedsLimits(currentBytes, stats.ContextPressureTokens, window) {
 			stats.NoRewriteReason = "within_local_limits"
 			return current, stats, changedAny, nil
 		}
@@ -917,14 +918,21 @@ func compactRequestBasePrefixCount(requestMessages []llm.Message, baseMessages [
 		return 0
 	}
 	if len(baseMessages) > len(requestMessages) {
-		return len(requestMessages)
+		return 0
 	}
-	for i := 0; i < len(baseMessages); i++ {
-		if !compactMessagesEquivalentForPrefix(baseMessages[i], requestMessages[i]) {
-			return len(baseMessages)
+	for offset := 0; offset <= len(requestMessages)-len(baseMessages); offset++ {
+		matched := true
+		for i := 0; i < len(baseMessages); i++ {
+			if !compactMessagesEquivalentForPrefix(baseMessages[i], requestMessages[offset+i]) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return offset + len(baseMessages)
 		}
 	}
-	return len(baseMessages)
+	return 0
 }
 
 func compactMessagesEquivalentForPrefix(left llm.Message, right llm.Message) bool {

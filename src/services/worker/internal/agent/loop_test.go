@@ -676,6 +676,73 @@ func TestAgentLoopTelegramReactSuccessContinuesToNextLlmCall(t *testing.T) {
 	assertHasEvent(t, got, "tool.result")
 }
 
+func TestAgentLoopTelegramReactEmptyFollowupCompletesWithoutRetry(t *testing.T) {
+	registry := tools.NewRegistry()
+	if err := registry.Register(channeltelegram.ReactAgentSpec); err != nil {
+		t.Fatalf("register telegram_react failed: %v", err)
+	}
+
+	allowlist := tools.AllowlistFromNames([]string{channeltelegram.ToolReact})
+	policy := tools.NewPolicyEnforcer(registry, allowlist)
+	executor := tools.NewDispatchingExecutor(registry, policy)
+	if err := executor.Bind(channeltelegram.ToolReact, stubToolExecutor{
+		result: tools.ExecutionResult{
+			ResultJSON: map[string]any{"ok": true, "message_id": "7625"},
+		},
+	}); err != nil {
+		t.Fatalf("bind telegram_react failed: %v", err)
+	}
+
+	gateway := &scriptedTurnsGateway{turns: [][]llm.StreamEvent{
+		{
+			llm.ToolCall{
+				ToolCallID:    "tg_react_1",
+				ToolName:      channeltelegram.ToolReact,
+				ArgumentsJSON: map[string]any{"emoji": "👀", "message_id": "7625"},
+			},
+			llm.StreamRunCompleted{},
+		},
+		{
+			llm.StreamRunCompleted{LlmCallID: "empty-after-react"},
+		},
+	}}
+	loop := NewLoop(gateway, executor)
+	emitter := events.NewEmitter("trace")
+
+	var got []events.RunEvent
+	err := loop.Run(
+		context.Background(),
+		RunContext{
+			RunID:               uuid.New(),
+			TraceID:             "trace",
+			InputJSON:           map[string]any{},
+			ReasoningIterations: 3,
+			LlmRetryMaxAttempts: 3,
+			LlmRetryBaseDelayMs: 1,
+			ToolExecutor:        executor,
+			CancelSignal:        func() bool { return false },
+		},
+		llm.Request{Model: "stub"},
+		emitter,
+		func(ev events.RunEvent) error {
+			got = append(got, ev)
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("loop.Run failed: %v", err)
+	}
+	if gateway.calls != 2 {
+		t.Fatalf("expected one follow-up call after react, got %d", gateway.calls)
+	}
+	if hasEventType(got, "run.llm.retry") {
+		t.Fatalf("expected no retry after delivered reaction, got %#v", got)
+	}
+	if got[len(got)-1].Type != "run.completed" {
+		t.Fatalf("expected final run.completed, got %s", got[len(got)-1].Type)
+	}
+}
+
 func TestAssistantControlTokenFilterStripsSplitEndTurn(t *testing.T) {
 	filter := assistantControlTokenFilter{}
 
@@ -1724,7 +1791,7 @@ func TestAgentLoopPreflightCurrentInputOversizeFailsWithoutProviderCall(t *testi
 	}
 }
 
-func TestAgentLoopPreflightUsesRawEstimateInsteadOfAnchoredPressure(t *testing.T) {
+func TestAgentLoopPreflightUsesAnchoredPressure(t *testing.T) {
 	primary := &oversizeSuccessGateway{phase: llm.OversizePhasePreflight}
 	compact := &compactSummaryGateway{}
 	loop := NewLoop(primary, nil)
@@ -1762,14 +1829,19 @@ func TestAgentLoopPreflightUsesRawEstimateInsteadOfAnchoredPressure(t *testing.T
 	if err != nil {
 		t.Fatalf("loop.Run failed: %v", err)
 	}
-	if primary.calls != 1 {
-		t.Fatalf("expected provider to be called once when raw estimate fits, got %d", primary.calls)
+	if primary.calls != 0 {
+		t.Fatalf("expected anchored pressure to block provider call, got %d", primary.calls)
 	}
 	if compact.calls != 0 {
 		t.Fatalf("expected compact gateway not to be called, got %d", compact.calls)
 	}
-	if got[len(got)-1].Type != "run.completed" {
-		t.Fatalf("expected final run.completed, got %s", got[len(got)-1].Type)
+	if got[len(got)-1].Type != "run.failed" {
+		t.Fatalf("expected final run.failed, got %s", got[len(got)-1].Type)
+	}
+	details, _ := got[len(got)-1].DataJSON["details"].(map[string]any)
+	estimatedTokens, _ := anyToInt64(details["estimated_tokens"])
+	if estimatedTokens <= 1000 {
+		t.Fatalf("expected estimated_tokens to use anchored pressure, got %#v", details)
 	}
 }
 
